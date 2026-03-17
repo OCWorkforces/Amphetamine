@@ -17,7 +17,7 @@ function render(errorMessage?: string): void {
       <span class="settings-title">Settings</span>
     </div>
     <div class="settings-hero">
-      <div class="settings-hero-icon">🎥</div>
+      <div class="settings-hero-icon">⚡</div>
       <div class="settings-hero-text">
         <div class="settings-hero-name">Amphetamine</div>
         <div class="settings-hero-desc">Keep your Mac awake</div>
