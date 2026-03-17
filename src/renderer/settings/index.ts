@@ -3,6 +3,7 @@ import type { AppSettings } from "../../shared/types.js";
 
 let settings: AppSettings = {
   launchAtLogin: false,
+  preventSleep: false,
 };
 let isSaving = false;
 let saveIndicatorTimer: ReturnType<typeof setTimeout> | null = null;

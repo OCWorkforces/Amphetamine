@@ -17,7 +17,11 @@ describe("tray module exports", () => {
       }),
       Menu: { buildFromTemplate: vi.fn().mockReturnValue({}) },
       shell: { openExternal: vi.fn().mockResolvedValue(undefined) },
-      app: { quit: vi.fn(), showAboutPanel: vi.fn() },
+      app: {
+        quit: vi.fn(),
+        showAboutPanel: vi.fn(),
+        getPath: vi.fn().mockReturnValue("/tmp/test-user-data"),
+      },
       nativeImage: {
         createFromPath: vi
           .fn()
@@ -29,6 +33,18 @@ describe("tray module exports", () => {
         this.on = vi.fn();
       }),
     }));
+    vi.mock("../../src/main/settings.js", () => ({
+      getSettings: vi
+        .fn()
+        .mockReturnValue({ launchAtLogin: false, preventSleep: false }),
+      updateSettings: vi
+        .fn()
+        .mockReturnValue({ launchAtLogin: false, preventSleep: false }),
+    }));
+    vi.mock("../../src/main/power-saver.js", () => ({
+      syncPreventSleep: vi.fn(),
+    }));
+  });
 
   it("exports setupTray function", async () => {
     const trayModule = await import("../../src/main/tray.js");

@@ -7,6 +7,7 @@ import { registerIpcHandlers } from "./ipc.js";
 import { getPackageInfo } from "./utils/packageInfo.js";
 import { getSettings } from "./settings.js";
 import { syncAutoLaunch } from "./auto-launch.js";
+import { syncPreventSleep, stopPreventingSleep } from "./power-saver.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -103,6 +104,7 @@ app.whenReady().then(() => {
   // Sync auto-launch setting on startup
   const settings = getSettings();
   syncAutoLaunch(settings.launchAtLogin);
+  syncPreventSleep(settings.preventSleep);
 });
 
 app.on("window-all-closed", () => {
@@ -112,7 +114,7 @@ app.on("window-all-closed", () => {
 
 app.on("before-quit", () => {
   // Allow quit from tray menu
-  if (mainWindow) {
+  stopPreventingSleep();
   if (mainWindow) {
     mainWindow.destroy();
   }

@@ -1,7 +1,9 @@
 import { app } from "electron";
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "fs";
 import { join } from "path";
-import { DEFAULT_SETTINGS } from "../shared/types.js";
+import {
+  DEFAULT_SETTINGS,
+} from "../shared/types.js";
 import type { AppSettings } from "../shared/types.js";
 
 let settingsCache: AppSettings = { ...DEFAULT_SETTINGS };
@@ -36,6 +38,10 @@ export function loadSettings(): AppSettings {
         typeof parsed.launchAtLogin === "boolean"
           ? parsed.launchAtLogin
           : DEFAULT_SETTINGS.launchAtLogin,
+      preventSleep:
+        typeof parsed.preventSleep === "boolean"
+          ? parsed.preventSleep
+          : DEFAULT_SETTINGS.preventSleep,
     };
     return settingsCache;
   } catch {
@@ -62,9 +68,12 @@ export function updateSettings(partial: Partial<AppSettings>): AppSettings {
     ...settingsCache,
   };
 
-  // Only apply known properties
   if (typeof partial.launchAtLogin === "boolean") {
     merged.launchAtLogin = partial.launchAtLogin;
+  }
+
+  if (typeof partial.preventSleep === "boolean") {
+    merged.preventSleep = partial.preventSleep;
   }
   // Save and update cache
   saveSettings(merged);

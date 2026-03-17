@@ -138,7 +138,7 @@ describe("settings", () => {
       const result = updateSettings({ launchAtLogin: true });
 
       // Verify unknown property wasn't added to result
-      expect(Object.keys(result).sort()).toEqual(["launchAtLogin"].sort());
+      expect(Object.keys(result).sort()).toEqual(["launchAtLogin", "preventSleep"].sort());
     });
 
     it("updates launchAtLogin correctly", () => {

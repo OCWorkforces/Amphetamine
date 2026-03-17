@@ -11,7 +11,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { createSettingsWindow } from "./settings-window.js";
-
+import { getSettings, updateSettings } from "./settings.js";
+import { syncPreventSleep } from "./power-saver.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 let tray: Tray | null = null;
@@ -81,6 +82,17 @@ export function setupTray(mainWindow: BrowserWindow): void {
   // Left-click → static context menu
   tray.on("click", () => {
     const template: MenuItemConstructorOptions[] = [
+      { type: "separator" },
+      {
+        label: "Prevent Sleep",
+        type: "checkbox",
+        checked: getSettings().preventSleep,
+        click: (menuItem) => {
+          const enabled = menuItem.checked;
+          updateSettings({ preventSleep: enabled });
+          syncPreventSleep(enabled);
+        },
+      },
       { type: "separator" },
       { label: "Settings...", click: () => createSettingsWindow() },
       { label: "About", click: () => showAbout(mainWindow) },

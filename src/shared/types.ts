@@ -41,9 +41,12 @@ export type IpcResponse<K extends IpcChannel> = IpcChannelMap[K]["response"];
 export interface AppSettings {
   /** Whether to launch the app at login (auto-start on system restart) */
   launchAtLogin: boolean;
+  /** Whether to prevent the Mac from sleeping */
+  preventSleep: boolean;
 }
 
 /** Default settings values */
 export const DEFAULT_SETTINGS: AppSettings = {
   launchAtLogin: false,
+  preventSleep: false,
 };
