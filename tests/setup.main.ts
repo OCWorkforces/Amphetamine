@@ -75,5 +75,9 @@ app: {
       setTemplateImage: vi.fn(),
     }),
   },
+  powerSaveBlocker: {
+    start: vi.fn().mockReturnValue(1),
+    stop: vi.fn(),
+    isStarted: vi.fn().mockReturnValue(true),
   },
 }))
