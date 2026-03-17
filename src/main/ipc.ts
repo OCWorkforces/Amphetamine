@@ -12,16 +12,8 @@ import {
   type IpcRequest,
   type IpcResponse,
 } from "../shared/types.js";
-import {
-  getCalendarEventsResult,
-  requestCalendarPermission,
-  getCalendarPermissionStatus,
-} from "./calendar.js";
 
 import { getSettings, updateSettings } from "./settings.js";
-import { restartScheduler } from "./scheduler.js";
-import { isAllowedMeetUrl } from "./utils/url-validation.js";
-import { syncAutoLaunch } from "./auto-launch.js";
 
 /** Accepted URL origins for IPC senders (renderer served from file:// or localhost in dev) */
 const ALLOWED_ORIGINS = new Set([
@@ -70,53 +62,6 @@ function typedHandle<K extends keyof IpcChannelMap>(
 }
 
 export function registerIpcHandlers(win: BrowserWindow): void {
-  // Calendar
-  typedHandle(
-    IPC_CHANNELS.CALENDAR_GET_EVENTS,
-    async (
-      event,
-    ): Promise<IpcResponse<typeof IPC_CHANNELS.CALENDAR_GET_EVENTS>> => {
-      if (!validateSender(event)) return { error: "unauthorized" };
-      try {
-        return await getCalendarEventsResult();
-      } catch (err) {
-        console.error("[ipc] CALENDAR_GET_EVENTS error:", err);
-        return { error: err instanceof Error ? err.message : String(err) };
-      }
-    },
-  );
-
-  typedHandle(
-    IPC_CHANNELS.CALENDAR_REQUEST_PERMISSION,
-    async (
-      event,
-    ): Promise<
-      IpcResponse<typeof IPC_CHANNELS.CALENDAR_REQUEST_PERMISSION>
-    > => {
-      if (!validateSender(event)) return "denied";
-      try {
-        return await requestCalendarPermission();
-      } catch (err) {
-        console.error("[ipc] CALENDAR_REQUEST_PERMISSION error:", err);
-        return "denied";
-      }
-    },
-  );
-
-  typedHandle(
-    IPC_CHANNELS.CALENDAR_PERMISSION_STATUS,
-    async (
-      event,
-    ): Promise<IpcResponse<typeof IPC_CHANNELS.CALENDAR_PERMISSION_STATUS>> => {
-      if (!validateSender(event)) return "denied";
-      try {
-        return await getCalendarPermissionStatus();
-      } catch (err) {
-        console.error("[ipc] CALENDAR_PERMISSION_STATUS error:", err);
-        return "denied";
-      }
-    },
-  );
   // Window (uses ipcMain.on for fire-and-forget)
   ipcMain.on(
     IPC_CHANNELS.WINDOW_SET_HEIGHT,
@@ -147,7 +92,7 @@ export function registerIpcHandlers(win: BrowserWindow): void {
     ): Promise<IpcResponse<typeof IPC_CHANNELS.APP_OPEN_EXTERNAL>> => {
       if (!validateSender(event)) return;
       try {
-        if (typeof url === "string" && isAllowedMeetUrl(url)) {
+        if (typeof url === "string") {
           await shell.openExternal(url);
         }
       } catch (err) {
@@ -186,18 +131,7 @@ export function registerIpcHandlers(win: BrowserWindow): void {
     ): IpcResponse<typeof IPC_CHANNELS.SETTINGS_SET> => {
       if (!validateSender(event)) return getSettings();
       const updated = updateSettings(partial);
-      restartScheduler(); // Apply new timing immediately
-      
-      // Sync auto-launch if the setting changed
-      if (typeof partial.launchAtLogin === "boolean") {
-        syncAutoLaunch(partial.launchAtLogin);
-      }
-      
-      // Notify popover window to refresh if settings affect display
-      if (partial.showTomorrowMeetings !== undefined || partial.launchAtLogin !== undefined) {
-        win.webContents.send(IPC_CHANNELS.SETTINGS_CHANGED, updated);
-      }
-      
+      win.webContents.send(IPC_CHANNELS.SETTINGS_CHANGED, updated);
       return updated;
     },
   );

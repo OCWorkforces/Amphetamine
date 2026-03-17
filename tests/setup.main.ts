@@ -75,4 +75,5 @@ app: {
       setTemplateImage: vi.fn(),
     }),
   },
-}));
+  },
+}))

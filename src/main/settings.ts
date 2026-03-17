@@ -1,11 +1,7 @@
 import { app } from "electron";
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "fs";
 import { join } from "path";
-import {
-  DEFAULT_SETTINGS,
-  OPEN_BEFORE_MINUTES_MIN,
-  OPEN_BEFORE_MINUTES_MAX,
-} from "../shared/types.js";
+import { DEFAULT_SETTINGS } from "../shared/types.js";
 import type { AppSettings } from "../shared/types.js";
 
 let settingsCache: AppSettings = { ...DEFAULT_SETTINGS };
@@ -22,13 +18,6 @@ function ensureUserDataDir(): void {
   }
 }
 
-function clampOpenBeforeMinutes(value: number): number {
-  return Math.max(
-    OPEN_BEFORE_MINUTES_MIN,
-    Math.min(OPEN_BEFORE_MINUTES_MAX, value),
-  );
-}
-
 export function loadSettings(): AppSettings {
   const settingsPath = getSettingsPath();
 
@@ -43,19 +32,10 @@ export function loadSettings(): AppSettings {
 
     // Validate and construct settings object
     settingsCache = {
-      openBeforeMinutes: clampOpenBeforeMinutes(
-        typeof parsed.openBeforeMinutes === "number"
-          ? parsed.openBeforeMinutes
-          : DEFAULT_SETTINGS.openBeforeMinutes,
-      ),
       launchAtLogin:
         typeof parsed.launchAtLogin === "boolean"
           ? parsed.launchAtLogin
           : DEFAULT_SETTINGS.launchAtLogin,
-      showTomorrowMeetings:
-        typeof parsed.showTomorrowMeetings === "boolean"
-          ? parsed.showTomorrowMeetings
-          : DEFAULT_SETTINGS.showTomorrowMeetings,
     };
     return settingsCache;
   } catch {
@@ -83,20 +63,9 @@ export function updateSettings(partial: Partial<AppSettings>): AppSettings {
   };
 
   // Only apply known properties
-  if (typeof partial.openBeforeMinutes === "number") {
-    merged.openBeforeMinutes = clampOpenBeforeMinutes(
-      partial.openBeforeMinutes,
-    );
-  }
-
   if (typeof partial.launchAtLogin === "boolean") {
     merged.launchAtLogin = partial.launchAtLogin;
   }
-
-  if (typeof partial.showTomorrowMeetings === "boolean") {
-    merged.showTomorrowMeetings = partial.showTomorrowMeetings;
-  }
-
   // Save and update cache
   saveSettings(merged);
   settingsCache = { ...merged };
