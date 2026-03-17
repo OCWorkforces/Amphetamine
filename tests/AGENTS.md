@@ -6,17 +6,15 @@ Two-project Vitest workspace for Electron app testing. Main process uses Node en
 
 ```
 tests/
-├── setup.main.ts     # Electron API mocks (78 lines)
+├── setup.main.ts     # Electron API mocks
 ├── main/
-│   ├── scheduler.test.ts  # 449 lines — scheduler state machine
-│   ├── calendar.test.ts   # 360 lines — Swift output parsing
-│   ├── settings.test.ts   # ~180 lines — file I/O, launchAtLogin
-│   ├── tray.test.ts       # 183 lines — tray module
-│   ├── ipc.test.ts        # 102 lines — security validation
-│   └── meet-url.test.ts   # 140 lines — URL building
+│   ├── power-saver.test.ts  # powerSaveBlocker state machine
+│   ├── settings.test.ts     # file I/O, validation, defaults
+│   ├── tray.test.ts         # tray module, about window
+│   └── ipc.test.ts          # validateSender, origin check
 └── renderer/
-    ├── delegation.test.ts # 77 lines — event delegation
-    └── escape-html.test.ts # 71 lines — XSS protection
+    ├── delegation.test.ts  # event delegation on #app
+    └── escape-html.test.ts  # XSS protection
 ```
 
 ## CONFIGURATION
@@ -24,88 +22,54 @@ tests/
 ```typescript
 // vitest.workspace.ts
 projects: [
-  {
-    name: "main",
-    environment: "node",
-    include: ["tests/main/**/*.test.ts"],
-    setupFiles: ["./tests/setup.main.ts"],
-  },
-  {
-    name: "renderer",
-    environment: "jsdom",
-    include: ["tests/renderer/**/*.test.ts"],
-  },
+  { name: "main", environment: "node", include: ["tests/main/**/*.test.ts"], setupFiles: ["./tests/setup.main.ts"] },
+  { name: "renderer", environment: "jsdom", include: ["tests/renderer/**/*.test.ts"] },
 ];
 ```
 
-## MAIN PROCESS TESTS (104 tests total)
+## MAIN PROCESS TESTS (48 tests total)
 
 **Mock Pattern**:
 
 ```typescript
-vi.mock("electron", () => ({ shell, Notification, ... }));
-vi.mock("../../src/main/calendar.js", () => ({ getCalendarEventsResult: vi.fn() }));
-vi.mock("../../src/main/tray.js", () => ({ updateTrayTitle: vi.fn() }));
+vi.mock("electron", () => ({ shell, Notification, powerSaveBlocker, ... }));
+vi.resetModules() + dynamic import for fresh module state
 ```
 
-**Test Files**:
-
-| File              | Lines | Focus                                  |
-| ----------------- | ----- | -------------------------------------- |
-| scheduler.test.ts | 449   | State machine, race conditions, timers |
-| calendar.test.ts  | 360   | parseEvents, dedup, date filtering     |
-| settings.test.ts  | ~180  | File I/O, clamping, defaults, launchAtLogin |
-| tray.test.ts      | 183   | Tray title, time formatting            |
-| ipc.test.ts       | 102   | validateSender, isAllowedMeetUrl       |
-| meet-url.test.ts  | 140   | URL building with authuser             |
-
-**Scheduler Test Groups** (A-E labeled):
-
-| Group   | Focus                     |
-| ------- | ------------------------- |
-| A1-A7   | Event deletion/reschedule |
-| B8-B9   | Title/URL changes         |
-| C10-C13 | Race conditions           |
-| D14-D15 | Concurrent countdowns     |
-| E16-E18 | Error handling            |
+| File              | Focus                                          |
+| ----------------- | ---------------------------------------------- |
+| power-saver.test.ts| powerSaveBlocker: start/stop/isPreventingSleep   |
+| settings.test.ts  | File I/O, validation, defaults, cache behavior   |
+| tray.test.ts      | Tray icon, context menu, about window            |
+| ipc.test.ts       | validateSender, ALLOWED_ORIGINS                  |
 
 **Key Test Patterns**:
 
-- `vi.useFakeTimers()` + `vi.advanceTimersByTime()` for timer testing
-- All state maps cleared in `beforeEach`: `timers`, `firedEvents`, `scheduledEventData`, `countdownIntervals`
-- `updateTrayTitle` mock for tray behavior assertions
-- `vi.resetModules()` + dynamic import for fresh module state
+- `vi.hoisted()` + `vi.mock()` for Electron API mocking
+- `vi.resetModules()` + `await import(...)` for fresh module state per test
+- `vi.clearAllMocks()` in `beforeEach` with mock behavior re-applied after clear
+- `as any` type assertion allowed in test mocks only (3 instances in tray.test.ts)
 
-## RENDERER TESTS (148 lines)
+## RENDERER TESTS (15 tests)
 
-| File                | Lines | Focus                    | Tests |
-| ------------------- | ----- | ------------------------ | ----- |
-| delegation.test.ts  | 77    | Event delegation on #app | 4     |
-| escape-html.test.ts | 71    | XSS protection           | 11    |
-
-**Delegation tests**:
-
-- `data-action="refresh"` — trigger refresh
-- `data-action="join-meeting"` — extract `data-url` and navigate
-- Click outside action elements — no handler fired
-- Single listener survives multiple `innerHTML` replacements
-
-**XSS tests**:
-
-- HTML special chars escaped (`<`, `>`, `&`, `"`, `'`)
-- User content safe for innerHTML insertion
+| File                | Focus                    |
+| ------------------- | ------------------------ |
+| delegation.test.ts  | Event delegation on #app  |
+| escape-html.test.ts | XSS protection           |
 
 ## COMMANDS
 
 ```bash
-bun run test        # Run all tests once
-bun run test:watch  # Watch mode
+bun run test          # Run all tests once
+bun run test:watch    # Watch mode
+bun run test:coverage # With v8 coverage
 ```
 
 ## SETUP FILE
 
+Mocked Electron APIs in `tests/setup.main.ts`:
 - `app`: getVersion, quit, dock, isPackaged, whenReady, on, getPath
-- `BrowserWindow`: loadURL, show, hide, destroy, getBounds, setPosition, webContents
+- `BrowserWindow`: loadURL, show, hide, destroy, getBounds, setPosition, webContents, getAllWindows
 - `ipcMain`: handle, on, off
 - `Tray`: setToolTip, setTitle, on, getBounds, popUpContextMenu
-- `Menu`, `Notification`, `screen`, `nativeImage`
+- `Menu`, `screen`, `nativeImage`

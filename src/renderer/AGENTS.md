@@ -4,54 +4,46 @@ Electron renderer (web context). Vanilla TypeScript UI with native macOS popover
 
 ## FILES
 
-| File              | Role                                         |
-| ----------------- | -------------------------------------------- |
-| `index.ts`        | Main UI logic, state machine, event handlers |
-| `index.html`      | CSP-protected HTML template                  |
-| `env.d.ts`        | TypeScript declarations                      |
-| `styles/main.css` | Native macOS styling, dark mode support      |
-| `settings/`       | Settings window UI (separate entry)          |
-| `settings/index.ts` | Settings form logic, save indicator        |
-| `settings/index.html` | Settings HTML template                    |
+| File                  | Role                                         |
+| --------------------- | -------------------------------------------- |
+| `index.ts`            | Main popover UI (static status display)      |
+| `index.html`          | CSP-protected HTML template                  |
+| `env.d.ts`            | TypeScript declarations                      |
+| `styles/main.css`     | Native macOS styling, dark mode support      |
+| `settings/index.ts`   | Settings form logic, toggle handlers         |
+| `settings/index.html` | Settings HTML template                      |
 | `settings/styles.css` | Settings-specific styles (iOS-style toggles) |
 
-## STATE MACHINE
+## MAIN POPOVER UI
 
-```typescript
-// index.ts:5-10
-type AppState =
-  | { type: "loading" }
-  | { type: "no-permission"; retrying: boolean }
-  | { type: "no-events" }
-  | { type: "has-events"; events: MeetingEvent[] }
-  | { type: "error"; message: string };
-```
+Static status display — "Amphetamine is running" with version number. No state machine, no refresh loop.
+- Renders on `DOMContentLoaded`, measures content height, resizes window via `window.api.window.setHeight()`
+- Silent fail on error — shell still renders
+
+## SETTINGS WINDOW
+
+Separate renderer entry at `settings/`. Two toggles: Launch at Login, Prevent Sleep.
+- Uses native window chrome (`titleBarStyle: "hiddenInset"`)
+- Shows in Dock when open (tray-only app otherwise)
+- Singleton BrowserWindow (focus if already open)
+- Auto-saves on toggle change with "✓ Saved" indicator (1.5s fade)
+- `isSaving` guard prevents concurrent saves
 
 ## RENDERING PATTERN
 
 - No virtual DOM — direct `innerHTML` assignment
-- Template literal functions: `render()`, `renderBody()`, `renderFooter()`
-- Event binding: single delegated listener on `document`, set up once at init
-
-## AUTO-REFRESH
-
-- Interval: 5 minutes (`REFRESH_INTERVAL_MS`)
-- Timer stored in `refreshTimer`, cleared on re-init
+- No event delegation needed (main popover has no interactive elements)
+- Settings uses individual `addEventListener` per toggle
 
 ## API ACCESS
 
 ```typescript
-window.api.calendar.getEvents(); // → MeetingEvent[]
-window.api.calendar.requestPermission(); // → CalendarPermission
-window.api.calendar.getPermissionStatus(); // → CalendarPermission
-window.api.window.minimizeToTray(); // → void
-window.api.app.openExternal(url); // → void
-window.api.app.getVersion(); // → string
-window.api.settings.get(); // → AppSettings
-window.api.settings.set(partial); // → AppSettings
-window.api.settings.onChanged(callback); // → void (listen for changes)
-```
-window.api.settings.set(partial); // → AppSettings
+window.api.window.setHeight(height);        // → void (ipcMain.on, fire-and-forget)
+window.api.app.openExternal(url);          // → Promise<void>
+window.api.app.getVersion();               // → Promise<string>
+window.api.settings.get();                 // → Promise<AppSettings>
+window.api.settings.set(partial);         // → Promise<AppSettings>
+window.api.settings.onChanged(callback);  // → () => void (unsubscribe)
 ```
 
 ## CSS CONVENTIONS
@@ -63,42 +55,30 @@ window.api.settings.set(partial); // → AppSettings
 
 ## KEY CLASSES
 
-| Class                | Use                                      |
-| -------------------- | ---------------------------------------- |
-| `.state-screen`      | Loading/empty/error states               |
-| `.meeting-item`      | Meeting list row                         |
-| `.meeting-meta`      | Flex wrapper for time + badge + cal name |
-| `.btn-join`          | Join button (accent color)               |
-| `.meeting-time.soon` | Orange "In X min"                        |
-| `.meeting-time.now`  | Red "Starting now!"                      |
-| `.badge-auto`        | Auto-open indicator (⚡ blue badge)         |
-| `.hiding`            | Fade-out animation on close              |
+| Class                  | Use                                |
+| ---------------------- | ---------------------------------- |
+| `.state-screen`        | Status display in popover           |
+| `.state-icon`          | ⚡ icon                             |
+| `.state-title`         | "Amphetamine is running"           |
+| `.settings-titlebar`   | Settings window title bar           |
+| `.settings-hero`       | App icon + name + description       |
+| `.setting-row`         | Toggle row container                |
+| `.toggle-switch`       | iOS-style toggle switch wrapper     |
+| `.toggle-track`        | Toggle track element                |
+| `.toggle-thumb`        | Toggle thumb (sliding circle)       |
+| `.save-indicator`      | "✓ Saved" text (fades after 1.5s)  |
+| `.settings-footer`     | Copyright footer                    |
 
 ## SECURITY
 
-- CSP in `index.html`: `default-src 'self'; style-src 'self' 'unsafe-inline'`
-- HTML escaping via `escapeHtml()` for user content
-- `escapeHtml()` imported from `src/shared/utils/escape-html.ts`
+- CSP in `index.html`: `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:`
+- `escapeHtml()` available in `src/shared/utils/escape-html.ts` (not used in current UI since no user content rendered)
 
 ## TESTS
 
-**Location**: `tests/renderer/*.test.ts` (148 lines)
+**Location**: `tests/renderer/*.test.ts`
 
-**Delegation tests** (`delegation.test.ts`):
-- `[data-action="refresh"]` click handling
-- `[data-action="join-meeting"]` URL extraction
-- Click outside action elements (no trigger)
-- Single listener survives multiple renders
-
-**XSS tests** (`escape-html.test.ts`):
-- HTML special chars escaped (`<`, `>`, `&`, `"`, `'`)
-- User content safe for innerHTML insertion
-
-## SETTINGS WINDOW
-
-Separate renderer entry at `settings/`. Key differences from main UI:
-- Uses native window chrome (`titleBarStyle: "hiddenInset"`)
-- Shows in Dock when open (tray-only app otherwise)
-- Singleton BrowserWindow (focus if already open)
-- Auto-saves on dropdown change with "✓ Saved" indicator
-- iOS-style toggle switch for "Launch at Login" and "Show Tomorrow" options
+| File                | Focus                                          |
+| ------------------- | ---------------------------------------------- |
+| `delegation.test.ts` | Event delegation on `#app` (4 tests)            |
+| `escape-html.test.ts`| XSS protection (11 tests)                      |
