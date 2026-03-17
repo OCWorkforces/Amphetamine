@@ -146,7 +146,7 @@ async function main() {
   await sleep(500);
 
   console.log("[dev] Launching Electron...");
-  const electron = run("bun", ["x", "electron", ".", "--disable-gpu-sandbox"], {
+  const electron = run("bun", ["x", "electron", ".", "--disable-gpu-sandbox", "--log-level=3"], {
     ELECTRON_ENABLE_LOGGING: "1",
     VITE_DEV_SERVER_URL: `http://localhost:${DEV_SERVER_PORT}`,
   });
