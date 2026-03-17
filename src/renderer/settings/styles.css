@@ -51,15 +51,13 @@
 html,
 body {
   width: 520px;
-  height: 420px;
-  overflow: hidden;
+  height: 320px;
   background: transparent;
 }
 
 #app {
   width: 520px;
-  height: 420px;
-  background: var(--bg);
+  height: 320px;
   backdrop-filter: blur(20px) saturate(180%);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
   border: 1px solid var(--border);
