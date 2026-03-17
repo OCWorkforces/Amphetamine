@@ -42,6 +42,23 @@ function render(errorMessage?: string): void {
           </label>
         </div>
       </div>
+      <div class="setting-row setting-row--toggle">
+        <div class="setting-row-inner">
+          <label class="setting-label" for="prevent-sleep-toggle">
+            🔋 Prevent Sleep
+          </label>
+          <span class="setting-description">Keep your Mac awake while Amphetamine is running</span>
+        </div>
+        <div class="setting-control">
+          <span class="save-indicator" id="sleep-save-indicator"></span>
+          <label class="toggle-switch">
+            <input type="checkbox" id="prevent-sleep-toggle" class="toggle-input"${settings.preventSleep ? " checked" : ""} />
+            <span class="toggle-track">
+              <span class="toggle-thumb"></span>
+            </span>
+          </label>
+        </div>
+      </div>
     </div>
     <div class="settings-footer">
       <span class="settings-footer-text">Amphetamine &middot; &copy; ${new Date().getFullYear()}</span>
@@ -70,17 +87,29 @@ function showSaveIndicator(id: string, text: string): void {
 }
 
 function setupToggleListener(): void {
-  const toggle = document.getElementById(
+  const launchToggle = document.getElementById(
     "launch-at-login-toggle",
   ) as HTMLInputElement | null;
-  if (!toggle) return;
+  if (launchToggle) {
+    launchToggle.addEventListener("change", () => {
+      void saveSettings(
+        { launchAtLogin: launchToggle.checked },
+        "launch-save-indicator",
+      );
+    });
+  }
 
-  toggle.addEventListener("change", () => {
-    void saveSettings(
-      { launchAtLogin: toggle.checked },
-      "launch-save-indicator",
-    );
-  });
+  const sleepToggle = document.getElementById(
+    "prevent-sleep-toggle",
+  ) as HTMLInputElement | null;
+  if (sleepToggle) {
+    sleepToggle.addEventListener("change", () => {
+      void saveSettings(
+        { preventSleep: sleepToggle.checked },
+        "sleep-save-indicator",
+      );
+    });
+  }
 }
 
 async function saveSettings(
