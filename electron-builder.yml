@@ -1,0 +1,63 @@
+appId: com.ocworkforces.amphetamine
+productName: Amphetamine
+
+# === COMPRESSION ===
+# Use maximum compression for distribution builds
+compression: maximum
+
+directories:
+  output: dist
+  buildResources: build
+
+files:
+  - lib/**/*
+  - src/assets/**/*
+  - src/main/googlemeet-events.swift
+  - package.json
+  - assets/**/*
+  - '!**/*.map'
+  - '!**/node_modules'
+# Unpack Swift file from asar so swiftc can read it (external tools cannot read asar archives)
+asarUnpack:
+  - "src/main/googlemeet-events.swift"
+
+# === ELECTRON LOCALES ===
+# Only keep English (saves ~5-10MB)
+electronLanguages:
+  - en
+
+mac:
+  target:
+    - target: dmg
+      arch: arm64
+    - target: zip
+      arch: arm64
+  # ARM64-only: minimum macOS version aligns with Apple Silicon debut
+  minimumSystemVersion: "11.0.0"
+  # No universal build - don't merge ASARs
+  mergeASARs: false
+  hardenedRuntime: false
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.inherit.plist
+  extendInfo:
+    LSUIElement: true
+    NSCalendarsFullAccessUsageDescription: Amphetamine needs calendar access to find your Google Meet events.
+    NSAppleEventsUsageDescription: Amphetamine uses AppleScript to read your calendar events.
+  notarize: false
+
+# === DMG-SPECIFIC ===
+dmg:
+  # Use LZFSE compression (best for macOS 10.11+/arm64)
+  format: ULFO
+  # Shrink to minimum size
+  shrink: true
+  # Don't sign DMG (not required, causes notarization issues)
+  sign: false
+
+afterPack: build/after-pack.cjs
+afterSign: build/notarize.cjs
+
+nsis:
+  oneClick: false
+  perMachine: true

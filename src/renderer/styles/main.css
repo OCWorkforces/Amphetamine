@@ -1,0 +1,344 @@
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  --bg: rgba(246, 246, 246, 0.92);
+  --surface: rgba(255, 255, 255, 0.8);
+  --border: rgba(0, 0, 0, 0.08);
+  --text-primary: #1d1d1f;
+  --text-secondary: #6e6e73;
+  --text-tertiary: #aeaeb2;
+  --accent: #007aff;
+  --accent-hover: #0051d3;
+  --danger: #ff3b30;
+  --soon: #ff9500;
+  --radius: 10px;
+  --shadow: 0 4px 24px rgba(0,0,0,0.18);
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: rgba(30, 30, 30, 0.92);
+    --surface: rgba(45, 45, 45, 0.8);
+    --border: rgba(255, 255, 255, 0.08);
+    --text-primary: #f5f5f7;
+    --text-secondary: #98989d;
+    --text-tertiary: #636366;
+    --accent: #0a84ff;
+    --accent-hover: #409cff;
+    --danger: #ff453a;
+    --soon: #ff9f0a;
+  }
+}
+
+html, body {
+  width: 360px;
+  height: 100%;
+  overflow: hidden;
+  background: transparent;
+}
+
+#app {
+  width: 360px;
+  min-height: 220px;
+  background: var(--bg);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: opacity 150ms ease, transform 150ms ease, height 200ms ease;
+}
+
+
+/* ---- Body ---- */
+.body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 28px 0 8px;
+  scrollbar-width: none;
+}
+
+.body::-webkit-scrollbar { display: none; }
+
+/* ---- State screens ---- */
+.state-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 24px;
+  text-align: center;
+  gap: 10px;
+  min-height: 200px;
+}
+
+.state-icon {
+  font-size: 36px;
+  line-height: 1;
+}
+
+.state-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.state-desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  max-width: 240px;
+}
+
+.btn-primary {
+  margin-top: 6px;
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 7px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, opacity 0.15s;
+}
+
+.btn-primary:hover { background: var(--accent-hover); }
+.btn-primary:active { opacity: 0.8; }
+.btn-primary:disabled { opacity: 0.5; cursor: default; }
+
+/* ---- Meeting list ---- */
+.section-header {
+  padding: 6px 16px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.meeting-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 16px;
+  border-radius: 8px;
+  margin: 0 6px;
+  cursor: default;
+  transition: background 0.1s;
+  position: relative;
+}
+
+.meeting-item:hover {
+  background: var(--surface);
+}
+
+.meeting-item-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.meeting-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.meeting-cal {
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
+.meeting-time {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.meeting-time.soon {
+  color: var(--soon);
+  font-weight: 500;
+}
+
+.meeting-time.now {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.btn-join {
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.1s, opacity 0.1s;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.btn-join:hover { background: var(--accent-hover); }
+.btn-join:active { opacity: 0.7; }
+
+.meeting-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 2px 16px;
+}
+.meeting-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.badge-auto {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--accent);
+  background: rgba(0, 122, 255, 0.1);
+  border-radius: 4px;
+  padding: 1px 5px;
+  white-space: nowrap;
+  letter-spacing: 0.2px;
+}
+
+/* ---- Spinner ---- */
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.spinner {
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+/* ---- Footer ---- */
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 0.4; transform: scale(0.8); }
+  50%       { opacity: 1;   transform: scale(1);   }
+}
+
+.footer {
+  /* gradient rule — more atmospheric than flat border */
+  background:
+    linear-gradient(to bottom, transparent, transparent) padding-box,
+    linear-gradient(90deg,
+      transparent 0%,
+      var(--border) 15%,
+      var(--border) 85%,
+      transparent 100%
+    ) border-box;
+  border-top: 1px solid transparent;
+  border-image:
+    linear-gradient(90deg,
+      transparent 0%,
+      var(--border) 15%,
+      var(--border) 85%,
+      transparent 100%
+    ) 1;
+  padding: 0 16px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  gap: 8px;
+}
+
+.footer-version {
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+/* centre dot separator */
+.footer-sep {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--text-tertiary);
+  opacity: 0.35;
+  flex-shrink: 0;
+}
+
+.footer-refresh {
+  background: none;
+  border: none;
+  font-size: 10.5px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 3px 6px;
+  border-radius: 5px;
+  transition: background 0.12s, color 0.12s;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+  justify-content: flex-end;
+}
+
+.footer-refresh:hover {
+  background: var(--border);
+  color: var(--text-primary);
+}
+
+.footer-refresh:hover .footer-refresh-icon {
+  transform: rotate(30deg);
+}
+
+.footer-refresh-icon {
+  font-size: 11px;
+  line-height: 1;
+  display: inline-block;
+  transition: transform 0.25s ease;
+  color: var(--text-tertiary);
+}
+
+.footer-refresh-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Loading state: pulsing dot instead of refresh icon */
+.footer-refresh--loading {
+  cursor: default;
+  pointer-events: none;
+}
+
+.footer-refresh--loading::before {
+  content: '';
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
+  animation: pulse-dot 1.2s ease-in-out infinite;
+}
+
+.footer-refresh--loading .footer-refresh-label {
+  color: var(--text-tertiary);
+}
