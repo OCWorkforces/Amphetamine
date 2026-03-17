@@ -1,14 +1,8 @@
-import type { AppSettings, CalendarPermission, CalendarResult } from "../shared/types.js";
+import type { AppSettings } from "../shared/types.js";
 
 declare global {
   interface Window {
     api: {
-      calendar: {
-        getEvents(): Promise<CalendarResult>;
-        requestPermission(): Promise<CalendarPermission>;
-        getPermissionStatus(): Promise<CalendarPermission>;
-        onEventsUpdated(callback: () => void): () => void;
-      };
       window: {
         setHeight(height: number): void;
       };

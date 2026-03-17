@@ -3,8 +3,6 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync } from "fs";
 import { join } from "path";
 import {
   DEFAULT_SETTINGS,
-  OPEN_BEFORE_MINUTES_MIN,
-  OPEN_BEFORE_MINUTES_MAX,
 } from "../shared/types.js";
 import type { AppSettings } from "../shared/types.js";
 
@@ -22,13 +20,6 @@ function ensureUserDataDir(): void {
   }
 }
 
-function clampOpenBeforeMinutes(value: number): number {
-  return Math.max(
-    OPEN_BEFORE_MINUTES_MIN,
-    Math.min(OPEN_BEFORE_MINUTES_MAX, value),
-  );
-}
-
 export function loadSettings(): AppSettings {
   const settingsPath = getSettingsPath();
 
@@ -43,19 +34,14 @@ export function loadSettings(): AppSettings {
 
     // Validate and construct settings object
     settingsCache = {
-      openBeforeMinutes: clampOpenBeforeMinutes(
-        typeof parsed.openBeforeMinutes === "number"
-          ? parsed.openBeforeMinutes
-          : DEFAULT_SETTINGS.openBeforeMinutes,
-      ),
       launchAtLogin:
         typeof parsed.launchAtLogin === "boolean"
           ? parsed.launchAtLogin
           : DEFAULT_SETTINGS.launchAtLogin,
-      showTomorrowMeetings:
-        typeof parsed.showTomorrowMeetings === "boolean"
-          ? parsed.showTomorrowMeetings
-          : DEFAULT_SETTINGS.showTomorrowMeetings,
+      preventSleep:
+        typeof parsed.preventSleep === "boolean"
+          ? parsed.preventSleep
+          : DEFAULT_SETTINGS.preventSleep,
     };
     return settingsCache;
   } catch {
@@ -82,21 +68,13 @@ export function updateSettings(partial: Partial<AppSettings>): AppSettings {
     ...settingsCache,
   };
 
-  // Only apply known properties
-  if (typeof partial.openBeforeMinutes === "number") {
-    merged.openBeforeMinutes = clampOpenBeforeMinutes(
-      partial.openBeforeMinutes,
-    );
-  }
-
   if (typeof partial.launchAtLogin === "boolean") {
     merged.launchAtLogin = partial.launchAtLogin;
   }
 
-  if (typeof partial.showTomorrowMeetings === "boolean") {
-    merged.showTomorrowMeetings = partial.showTomorrowMeetings;
+  if (typeof partial.preventSleep === "boolean") {
+    merged.preventSleep = partial.preventSleep;
   }
-
   // Save and update cache
   saveSettings(merged);
   settingsCache = { ...merged };

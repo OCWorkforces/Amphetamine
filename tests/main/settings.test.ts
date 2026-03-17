@@ -19,11 +19,7 @@ const MOCK_USER_DATA_PATH = "/tmp/amphetamine-settings-test";
   getSettings,
   updateSettings,
 } from "../../src/main/settings.js";
-import {
-  DEFAULT_SETTINGS,
-  OPEN_BEFORE_MINUTES_MIN,
-  OPEN_BEFORE_MINUTES_MAX,
-} from "../../src/shared/types.js";
+import { DEFAULT_SETTINGS } from "../../src/shared/types.js";
 describe("settings", () => {
   const settingsPath = join(MOCK_USER_DATA_PATH, "settings.json");
 
@@ -62,9 +58,7 @@ describe("settings", () => {
 
     it("reads existing file correctly", () => {
       const expectedSettings = {
-        openBeforeMinutes: 3,
         launchAtLogin: true,
-        showTomorrowMeetings: false,
       };
 
       // Write settings file directly
@@ -74,9 +68,7 @@ describe("settings", () => {
 
       const settings = loadSettings();
 
-      expect(settings.openBeforeMinutes).toBe(3);
       expect(settings.launchAtLogin).toBe(true);
-      expect(settings.showTomorrowMeetings).toBe(false);
     });
 
     it("handles corrupted JSON (returns defaults)", () => {
@@ -94,9 +86,7 @@ describe("settings", () => {
   describe("saveSettings", () => {
     it("persists to disk", () => {
       const settingsToSave = {
-        openBeforeMinutes: 4,
         launchAtLogin: true,
-        showTomorrowMeetings: true,
       };
 
       saveSettings(settingsToSave);
@@ -107,9 +97,7 @@ describe("settings", () => {
       const raw = readFileSync(settingsPath, "utf-8");
       const saved = JSON.parse(raw);
 
-      expect(saved.openBeforeMinutes).toBe(4);
       expect(saved.launchAtLogin).toBe(true);
-      expect(saved.showTomorrowMeetings).toBe(true);
     });
   });
   describe("getSettings", () => {
@@ -126,55 +114,36 @@ describe("settings", () => {
   describe("updateSettings", () => {
     it("merges partial, saves, and returns full settings", () => {
       // First, save initial settings
-      saveSettings({ openBeforeMinutes: 2, launchAtLogin: false, showTomorrowMeetings: true });
+      saveSettings({ launchAtLogin: false });
 
       // Now update with partial
-      const result = updateSettings({ openBeforeMinutes: 4 });
+      const result = updateSettings({ launchAtLogin: true });
 
-      expect(result.openBeforeMinutes).toBe(4);
-      expect(result.launchAtLogin).toBe(false);
-      expect(result.showTomorrowMeetings).toBe(true);
+      expect(result.launchAtLogin).toBe(true);
 
       // Verify it was saved to disk
       const raw = readFileSync(settingsPath, "utf-8");
       const saved = JSON.parse(raw);
-      expect(saved.openBeforeMinutes).toBe(4);
-      expect(saved.launchAtLogin).toBe(false);
-      expect(saved.showTomorrowMeetings).toBe(true);
+      expect(saved.launchAtLogin).toBe(true);
 
       // Verify cache was updated
       const cached = getSettings();
-      expect(cached.openBeforeMinutes).toBe(4);
-    });
-
-    it("clamps openBeforeMinutes to 1-5 range (value below min -> 1)", () => {
-      const result = updateSettings({ openBeforeMinutes: 0 });
-
-      expect(result.openBeforeMinutes).toBe(OPEN_BEFORE_MINUTES_MIN);
-    });
-
-    it("clamps openBeforeMinutes to 1-5 range (value above max -> 5)", () => {
-      const result = updateSettings({ openBeforeMinutes: 10 });
-
-      expect(result.openBeforeMinutes).toBe(OPEN_BEFORE_MINUTES_MAX);
+      expect(cached.launchAtLogin).toBe(true);
     });
 
     it("ignores unknown properties in partial", () => {
       // TypeScript would catch this at compile time, but runtime test too
       const initial = getSettings();
 
-      const result = updateSettings({
-        openBeforeMinutes: 3,
-      });
+      const result = updateSettings({ launchAtLogin: true });
 
-      expect(result.openBeforeMinutes).toBe(3);
       // Verify unknown property wasn't added to result
-      expect(Object.keys(result).sort()).toEqual(["launchAtLogin", "openBeforeMinutes", "showTomorrowMeetings"].sort());
+      expect(Object.keys(result).sort()).toEqual(["launchAtLogin", "preventSleep"].sort());
     });
 
     it("updates launchAtLogin correctly", () => {
       // Start with default (false)
-      saveSettings({ openBeforeMinutes: 1, launchAtLogin: false, showTomorrowMeetings: true });
+      saveSettings({ launchAtLogin: false });
 
       // Enable launch at login
       const result = updateSettings({ launchAtLogin: true });
@@ -194,7 +163,7 @@ describe("settings", () => {
     it("defaults launchAtLogin to false when not in file", () => {
       // Write settings without launchAtLogin
       const fs = require("fs");
-      fs.writeFileSync(settingsPath, JSON.stringify({ openBeforeMinutes: 2 }));
+      fs.writeFileSync(settingsPath, JSON.stringify({}));
 
       const settings = loadSettings();
 

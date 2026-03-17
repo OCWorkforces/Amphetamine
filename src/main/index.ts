@@ -4,11 +4,10 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { setupTray } from "./tray.js";
 import { registerIpcHandlers } from "./ipc.js";
-import { startScheduler, stopScheduler, setSchedulerWindow } from "./scheduler.js";
 import { getPackageInfo } from "./utils/packageInfo.js";
 import { getSettings } from "./settings.js";
 import { syncAutoLaunch } from "./auto-launch.js";
-import { checkNotificationPermission } from "./notification.js";
+import { syncPreventSleep, stopPreventingSleep } from "./power-saver.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -101,15 +100,11 @@ app.whenReady().then(() => {
   mainWindow = createWindow();
   registerIpcHandlers(mainWindow);
   setupTray(mainWindow);
-  setSchedulerWindow(mainWindow);
-  startScheduler();
 
-  // Check notification permission on first run
-  void checkNotificationPermission();
-  
   // Sync auto-launch setting on startup
   const settings = getSettings();
   syncAutoLaunch(settings.launchAtLogin);
+  syncPreventSleep(settings.preventSleep);
 });
 
 app.on("window-all-closed", () => {
@@ -119,7 +114,7 @@ app.on("window-all-closed", () => {
 
 app.on("before-quit", () => {
   // Allow quit from tray menu
-  stopScheduler();
+  stopPreventingSleep();
   if (mainWindow) {
     mainWindow.destroy();
   }
