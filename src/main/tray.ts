@@ -11,6 +11,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { createSettingsWindow } from "./settings-window.js";
+import { getSettings, onSettingsChanged } from "./settings.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 let tray: Tray | null = null;
@@ -52,13 +53,14 @@ export function setupTray(mainWindow: BrowserWindow): void {
   // which silently prevents the tray from ever being created.
   const assetsDir = path.join(__dirname, "..", "..", "src", "assets");
 
-  function buildIcon(isDark: boolean): Electron.NativeImage {
+  function buildIcon(isDark: boolean, isActive: boolean): Electron.NativeImage {
     const suffix = isDark ? "dark" : "light";
+    const statePrefix = isActive ? "" : "inactive-";
     const icon1x = nativeImage.createFromPath(
-      path.join(assetsDir, `tray-icon-${suffix}.png`),
+      path.join(assetsDir, `tray-icon-${statePrefix}${suffix}.png`),
     );
     const icon2x = nativeImage.createFromPath(
-      path.join(assetsDir, `tray-icon-${suffix}@2x.png`),
+      path.join(assetsDir, `tray-icon-${statePrefix}${suffix}@2x.png`),
     );
     const icon = nativeImage.createEmpty();
     icon.addRepresentation({ scaleFactor: 1.0, buffer: icon1x.toPNG() });
@@ -66,14 +68,24 @@ export function setupTray(mainWindow: BrowserWindow): void {
     return icon;
   }
 
-  tray = new Tray(buildIcon(nativeTheme.shouldUseDarkColors));
+  function refreshTrayIcon(): void {
+    if (!tray) return;
+    tray.setImage(buildIcon(nativeTheme.shouldUseDarkColors, getSettings().preventSleep));
+  }
+
+  const initialSettings = getSettings();
+  tray = new Tray(buildIcon(nativeTheme.shouldUseDarkColors, initialSettings.preventSleep));
   tray.setToolTip("Amphetamine");
 
-  // Update icon whenever the system theme changes
+  // Update icon whenever the system theme changes or settings change
   const onThemeUpdated = (): void => {
-    tray?.setImage(buildIcon(nativeTheme.shouldUseDarkColors));
+    refreshTrayIcon();
   };
   nativeTheme.on("updated", onThemeUpdated);
+
+  onSettingsChanged(() => {
+    refreshTrayIcon();
+  });
 
   // Listener is cleaned up on process exit (app.before-quit destroys the tray).
 

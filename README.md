@@ -1,22 +1,19 @@
 # Amphetamine
 
-It's a macOS tray app for Google Meet calendar reminders. Fetches events from macOS Calendar via EventKit and auto-opens meetings in your browser 1 minute before they start.
+A macOS menu bar app that keeps your Mac awake. Runs in the system tray and prevents your Mac from going to sleep.
 
 ## Features
 
+- **Sleep Prevention** — Keep your Mac awake while Amphetamine is running
 - **Tray-native** — Lives in the menu bar, no Dock icon
-- **Calendar integration** — Reads Google Meet events from macOS Calendar via Swift EventKit
-- **Auto-launch** — Opens meeting URLs automatically (configurable 1-5 minutes before start)
 - **Launch at Login** — Optionally start Amphetamine automatically when you log in to macOS
-- **Settings UI** — Configure auto-open timing, login preferences, and display options via native macOS settings window
-- **Popover UI** — Click the tray icon to see upcoming meetings
-- **Tomorrow's Meetings** — Toggle to show or hide tomorrow's meetings in the popover
+- **Settings UI** — Configure sleep prevention and login preferences via a native macOS settings window
 
 ## Screenshots
 
 ![Settings](assets/setting-page.png)
 
-_Configure how many minutes before a meeting to auto-open the browser (1-5 minutes)_
+_Configure sleep prevention and login preferences_
 
 ## Requirements
 
@@ -28,9 +25,11 @@ _Configure how many minutes before a meeting to auto-open the browser (1-5 minut
 ```bash
 bun install
 bun run dev          # Start dev server + Electron
-bun run build        # Build all processes
+bun run build        # Build all processes (main + preload + renderer)
 bun run test         # Run test suite
+bun run test:watch   # Run tests in watch mode
 bun run typecheck    # TypeScript check
+bun run clean        # Remove lib/ and dist/
 ```
 
 ## Build & Installation
@@ -50,16 +49,17 @@ bun run typecheck    # TypeScript check
 
 The script will:
 
-1. Clean the `dist/` directory
-2. Build all TypeScript sources (main, preload, renderer)
-3. Package the app into a DMG for macOS arm64
-4. Sign the app (Developer ID if available, otherwise ad-hoc)
-5. Append environment suffix to filename (if `--environment` provided)
+1. Install dependencies
+2. Clean the `dist/` directory
+3. Build all TypeScript sources (main, preload, renderer)
+4. Package the app into a DMG for macOS arm64
+5. Sign the app (Developer ID if available, otherwise ad-hoc with re-signing)
+6. Append environment suffix to filename (if `--environment` provided)
 
 Output examples:
 
-- With `--environment stable`: `dist/Amphetamine-1.3.6-arm64-stable.dmg`
-- Without flag: `dist/Amphetamine-1.3.6-arm64.dmg`
+- With `--environment stable`: `dist/Amphetamine-1.0.1-arm64-stable.dmg`
+- Without flag: `dist/Amphetamine-1.0.1-arm64.dmg`
 
 ### Install to Applications
 
@@ -112,9 +112,8 @@ If the app crashes or won't start:
    codesign --force --deep --sign - "/Applications/Amphetamine.app"
    ```
 
-4. **Check Calendar permissions:** On first launch, macOS will prompt for Calendar access. Grant permission for the app to function.
+4. **Remove and reinstall:**
 
-5. **Remove and reinstall:**
    ```bash
    rm -rf "/Applications/Amphetamine.app"
    # Reinstall from DMG
@@ -127,14 +126,12 @@ If the app crashes or won't start:
 | Runtime  | Electron 41     |
 | Language | TypeScript 5.9  |
 | Build    | Rslib + Rsbuild |
-| Calendar | Swift EventKit  |
 | Test     | Vitest 4        |
 
 ## Contact
 
 If you have any questions or encounter issues, feel free to reach out to [kennydizi@ocworkforces.com](mailto:kennydizi@ocworkforces.com)
 
-
 ## License
 
-MIT
+Unlicense

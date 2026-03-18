@@ -7,94 +7,55 @@ Type definitions shared across main, preload, and renderer processes. Single sou
 | File                  | Role                                  |
 | --------------------- | ------------------------------------- |
 | `types.ts`            | IPC channels, interfaces, type unions |
-| `utils/escape-html.ts` | XSS protection utility |
+| `utils/escape-html.ts` | XSS protection utility                |
 
 ## IPC CHANNELS
 
 ```typescript
-// types.ts:2-10
+// types.ts:2-9
 export const IPC_CHANNELS = {
-  CALENDAR_GET_EVENTS: "calendar:get-events",
-  CALENDAR_REQUEST_PERMISSION: "calendar:request-permission",
-  CALENDAR_PERMISSION_STATUS: "calendar:permission-status",
   WINDOW_SET_HEIGHT: "window:set-height",
   APP_OPEN_EXTERNAL: "app:open-external",
   APP_GET_VERSION: "app:get-version",
   SETTINGS_GET: "settings:get",
   SETTINGS_SET: "settings:set",
+  SETTINGS_CHANGED: "settings:changed",   // push event (main → renderer)
 } as const;
 ```
 
 `IpcChannelMap` (types.ts:12) maps each channel to its `request` / `response` types.
+`SETTINGS_CHANGED` is NOT in `IpcChannelMap` — it's a push event only (no request/response).
 
 ## DATA MODELS
-
-### MeetingEvent
-
-```typescript
-// types.ts:45-54
-export interface MeetingEvent {
-  id: string;
-  title: string;
-  startDate: string; // ISO 8601
-  endDate: string; // ISO 8601
-  meetUrl?: string; // meet.google.com/xxx-xxxx-xxx (absent for non-Meet events)
-  calendarName: string;
-  isAllDay: boolean;
-  userEmail?: string; // Current user's Google email from EventKit attendee list
-}
-```
-
-### CalendarResult
-
-```typescript
-// types.ts:57
-export type CalendarResult = { events: MeetingEvent[] } | { error: string };
-```
-
-### CalendarPermission
-
-```typescript
-// types.ts:60
-export type CalendarPermission = "granted" | "denied" | "not-determined";
-```
 
 ### AppSettings
 
 ```typescript
-// types.ts:74-80
+// types.ts:41-46
 export interface AppSettings {
-  openBeforeMinutes: number;  // 1-5, default 1
-  launchAtLogin: boolean;     // macOS login item toggle
-  showTomorrowMeetings: boolean; // show tomorrow's meetings in tray menu
+  launchAtLogin: boolean;   // macOS login item toggle
+  preventSleep: boolean;    // powerSaveBlocker toggle
 }
-```
 
-### Constants
-
-```typescript
-// types.ts:84-92
-export const DEFAULT_SETTINGS: AppSettings = { 
-  openBeforeMinutes: 1, 
+// types.ts:49-52
+export const DEFAULT_SETTINGS: AppSettings = {
   launchAtLogin: false,
-  showTomorrowMeetings: true,
+  preventSleep: false,
 };
-export const OPEN_BEFORE_MINUTES_MIN = 1;
-export const OPEN_BEFORE_MINUTES_MAX = 5;
 ```
 
 ## TYPE UTILITIES
 
 ```typescript
-// types.ts:40-42
-export type IpcChannel = (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS];
-export type IpcRequest<K extends IpcChannel> = IpcChannelMap[K]['request'];
-export type IpcResponse<K extends IpcChannel> = IpcChannelMap[K]['response'];
+// types.ts:36-38
+export type IpcChannel = keyof IpcChannelMap;
+export type IpcRequest<K extends IpcChannel> = IpcChannelMap[K]["request"];
+export type IpcResponse<K extends IpcChannel> = IpcChannelMap[K]["response"];
 ```
 
 ## USAGE PATTERN
 
-1. **Add new channel**: Add to `IPC_CHANNELS` object
+1. **Add new channel**: Add to `IPC_CHANNELS` object + `IpcChannelMap`
 2. **Add new data type**: Define interface/type export
 3. **Use in processes**: `import { ... } from '../shared/types.js'`
 
@@ -104,6 +65,6 @@ export type IpcResponse<K extends IpcChannel> = IpcChannelMap[K]['response'];
 | -------- | -------------------- |
 | main     | `../shared/types.js` |
 | preload  | `../shared/types.js` |
-| renderer | `../shared/types.js` |
+| renderer | `../../shared/types.js` |
 
 Note: `.js` extension required for ESM resolution even though source is `.ts`.

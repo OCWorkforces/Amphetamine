@@ -1,10 +1,19 @@
-import { app, BrowserWindow } from "electron";
+import { app, BrowserWindow, nativeImage } from "electron";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const isDev = !app.isPackaged;
 
+// Resolve icon.icns path:
+//   Dev:      lib/main/ → ../../build/icon.icns
+//   Packaged: app.asar/lib/main/ → build resources at process.resourcesPath
+function getAppIconPath(): string {
+  if (isDev) {
+    return path.join(__dirname, "..", "..", "build", "icon.icns");
+  }
+  return path.join(process.resourcesPath, "icon.icns");
+}
 let settingsWindow: BrowserWindow | null = null;
 
 /**
@@ -52,7 +61,9 @@ export function createSettingsWindow(): BrowserWindow {
   // Show window when ready
   win.once("ready-to-show", () => {
     win.show();
-    // Show in Dock when settings window is open
+    // Show in Dock with app icon when settings window is open
+    const icon = nativeImage.createFromPath(getAppIconPath());
+    app.dock?.setIcon(icon);
     app.dock?.show();
   });
 
