@@ -27,7 +27,21 @@ projects: [
 ];
 ```
 
-## MAIN PROCESS TESTS (48 tests total)
+## MAIN PROCESS TESTS (32 tests)
+
+**Mock Pattern**:
+
+```typescript
+vi.mock("electron", () => ({ shell, Notification, powerSaveBlocker, ... }));
+vi.resetModules() + dynamic import for fresh module state
+```
+
+| File                | Tests | Focus                                          |
+| ------------------- | ----- | ---------------------------------------------- |
+| power-saver.test.ts | 12    | powerSaveBlocker: start/stop/isPreventingSleep   |
+| settings.test.ts   | 9     | File I/O, validation, defaults, cache behavior   |
+| tray.test.ts       | 3     | Tray icon, context menu, about window            |
+| ipc.test.ts        | 8     | validateSender, ALLOWED_ORIGINS                  |
 
 **Mock Pattern**:
 
@@ -52,10 +66,10 @@ vi.resetModules() + dynamic import for fresh module state
 
 ## RENDERER TESTS (15 tests)
 
-| File                | Focus                    |
-| ------------------- | ------------------------ |
-| delegation.test.ts  | Event delegation on #app  |
-| escape-html.test.ts | XSS protection           |
+| File                | Tests | Focus                    |
+| ------------------- | ----- | ------------------------ |
+| delegation.test.ts  | 4     | Event delegation on #app  |
+| escape-html.test.ts | 11    | XSS protection           |
 
 ## COMMANDS
 

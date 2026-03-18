@@ -1,7 +1,7 @@
 # Amphetamine — Project Knowledge Base
 
 **Generated:** 2026-03-18
-**Commit:** 0a87277
+**Commit:** c70048c2
 **Branch:** develop
 
 ## OVERVIEW
@@ -14,12 +14,11 @@ macOS tray-only Electron app that prevents the system from sleeping. Settings wi
 | Framework | Electron 41                               |
 | Build     | Rslib (main/preload) + Rsbuild (renderer) |
 | Package   | Bun                                       |
-| Test      | Vitest 4 (workspace, 48 tests)            |
+| Test      | Vitest 4 (workspace, 47 tests)            |
 
 ## STRUCTURE
 
 ```
-src/
 src/
 ├── main/             # Electron main process (Node.js)
 │   ├── index.ts      # App bootstrap, window, lifecycle
@@ -144,15 +143,16 @@ All builds use SWC minification with `drop_console: true`. Console logs stripped
 - Entitlements in `build/entitlements.mac*.plist`
 - `LSUIElement: true` — app runs as agent (no Dock icon by default)
 - `asarUnpack` references `googlemeet-events.swift` in electron-builder.yml (stale — Swift file removed in v1.0 refactor)
+- `NSCalendarsFullAccessUsageDescription` and `NSAppleEventsUsageDescription` in electron-builder.yml extendInfo (stale — calendar features removed in v1.0)
 
 ## NOTES
 
 - **No calendar/meeting features**: Removed in v1.0 refactor. App is now a sleep-prevention tray utility
-- **Power-saver**: Uses `electron.powerSaveBlocker.start('prevent-app-suspension')`, synced with settings
+- **Power-saver**: Uses `electron.powerSaveBlocker.start('prevent-app-suspension')`, synced with settings. No macOS permission required — IOKit assertion API needs no user consent
 - **Launch at login**: Uses `app.setLoginItemSettings()` to enable/disable auto-start on macOS login
 - **Window hide on blur**: Popover behavior — hides when focus lost (dev mode exempt)
 - **Window hide on minimize**: Also hides (not minimize to Dock)
-- **Tests exist**: 48 tests covering power-saver, settings, IPC, auto-launch, tray, event delegation, and XSS
+- **Tests exist**: 47 tests covering power-saver, settings, IPC, auto-launch, tray, event delegation, and XSS
 - **No CI**: No GitHub workflows configured
 - **Dependencies**: Only runtime dep is `electron-log`
 

@@ -95,7 +95,7 @@ All handlers validate sender via `validateSender()` / `validateOnSender()` again
 | Symbol                  | Location               | Role                                |
 | ----------------------- | ---------------------- | ----------------------------------- |
 | `createWindow`          | `index.ts:42`          | BrowserWindow factory (tray popover)|
-| `setupTray`             | `tray.ts:46`           | System tray init                    |
+`setupTray`             | `tray.ts:47`           | System tray init + about window
 | `registerIpcHandlers`   | `ipc.ts:64`            | IPC registration                    |
 | `typedHandle`           | `ipc.ts:54`            | Type-safe IPC wrapper               |
 | `validateSender`        | `ipc.ts:28`            | Origin validation                  |
@@ -109,5 +109,13 @@ All handlers validate sender via `validateSender()` / `validateOnSender()` again
 | `getSettings`           | `settings.ts:61`       | Get cached settings copy            |
 | `getAutoLaunchStatus`   | `auto-launch.ts:7`     | Read macOS login item status        |
 | `setAutoLaunch`         | `auto-launch.ts:21`    | Set macOS login item                |
-| `syncAutoLaunch`        | `auto-launch.ts:40`    | Sync if state differs               |
-| `getPackageInfo`        | `utils/packageInfo.ts:38`| Cached package.json reader       |
+`syncAutoLaunch`        | `auto-launch.ts:40`    | Sync if state differs               
+| `showAbout`            | `tray.ts:21`           | Native About panel (singleton)     
+| `closeSettingsWindow` | `settings-window.ts:85`| Close settings if open             
+| `getPackageInfo`       | `utils/packageInfo.ts:38`| Cached package.json reader       
+| `createLogger`         | `logger.ts:8`          | Structured logger factory          |
+
+## STALE / CLEANUP
+
+- `logger.ts`: `PREFIX_MAP` still contains `scheduler` and `calendar` scopes from pre-v1.0 refactor (only `main` and `ipc` are used)
+- `utils/packageInfo.ts`: Fallback description mentions "Google Meet meetings" — stale from pre-v1.0 refactor

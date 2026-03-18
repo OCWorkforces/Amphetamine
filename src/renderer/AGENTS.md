@@ -16,7 +16,7 @@ Electron renderer (web context). Vanilla TypeScript UI with native macOS popover
 
 ## MAIN POPOVER UI
 
-Static status display — "Amphetamine is running" with version number. No state machine, no refresh loop.
+Static status display — "Amphetamine is running" with version number and description. No state machine, no refresh loop.
 - Renders on `DOMContentLoaded`, measures content height, resizes window via `window.api.window.setHeight()`
 - Silent fail on error — shell still renders
 
@@ -60,6 +60,7 @@ window.api.settings.onChanged(callback);  // → () => void (unsubscribe)
 | `.state-screen`        | Status display in popover           |
 | `.state-icon`          | ⚡ icon                             |
 | `.state-title`         | "Amphetamine is running"           |
+| `.state-desc`          | Description text below title       |
 | `.settings-titlebar`   | Settings window title bar           |
 | `.settings-hero`       | App icon + name + description       |
 | `.setting-row`         | Toggle row container                |
