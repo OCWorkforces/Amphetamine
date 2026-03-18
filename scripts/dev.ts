@@ -107,7 +107,9 @@ async function waitForBuildOutputs(maxWaitMs: number): Promise<boolean> {
 
 async function main() {
   console.log("[dev] Starting rslib watch for main process...");
-  run("bun", ["x", "rslib", "build", "--watch", "-c", "rslib.config.ts"]);
+  run("bun", ["x", "rslib", "build", "--watch", "-c", "rslib.config.ts"], {
+    NODE_ENV: "development",
+  });
 
   console.log("[dev] Starting rslib watch for preload...");
   run("bun", [
@@ -117,8 +119,9 @@ async function main() {
     "--watch",
     "-c",
     "rslib.config.preload.ts",
-  ]);
-
+  ], {
+    NODE_ENV: "development",
+  });
   console.log("[dev] Starting rsbuild dev server for renderer...");
   run("bun", ["x", "rsbuild", "dev", "--port", String(DEV_SERVER_PORT)]);
 
