@@ -111,7 +111,7 @@ export function setupTray(mainWindow: BrowserWindow): void {
     const template: MenuItemConstructorOptions[] = [
       { type: "separator" },
       { label: "Settings...", click: () => createSettingsWindow() },
-      { label: "About", click: () => showAbout(mainWindow) },
+      { label: "About Amphetamine", click: () => showAbout(mainWindow) },
       { label: "Quit", accelerator: "Cmd+Q", click: () => app.quit() },
     ];
     tray!.popUpContextMenu(Menu.buildFromTemplate(template));
