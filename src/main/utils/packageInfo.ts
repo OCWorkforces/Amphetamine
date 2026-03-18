@@ -61,18 +61,3 @@ export function getPackageInfo(): Readonly<PackageInfo> {
   return Object.freeze(packageInfo);
 }
 
-/**
- * Clear cached package info (useful for testing)
- */
-export function clearPackageInfoCache(): void {
-  packageInfo = null;
-  log.debug('[PackageInfo] Cleared package info cache');
-}
-
-/**
- * Check if package info is loaded
- * @returns true if package.json has been loaded
- */
-export function isPackageInfoLoaded(): boolean {
-  return packageInfo !== null;
-}
