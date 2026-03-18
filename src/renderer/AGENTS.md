@@ -8,21 +8,23 @@ Electron renderer (web context). Vanilla TypeScript UI with native macOS popover
 | --------------------- | -------------------------------------------- |
 | `index.ts`            | Main popover UI (static status display)      |
 | `index.html`          | CSP-protected HTML template                  |
-| `env.d.ts`            | TypeScript declarations                      |
+| `env.d.ts`            | TypeScript declarations for `window.api`     |
 | `styles/main.css`     | Native macOS styling, dark mode support      |
 | `settings/index.ts`   | Settings form logic, toggle handlers         |
-| `settings/index.html` | Settings HTML template                      |
+| `settings/index.html` | Settings HTML template                       |
 | `settings/styles.css` | Settings-specific styles (iOS-style toggles) |
 
 ## MAIN POPOVER UI
 
 Static status display — "Amphetamine is running" with version number and description. No state machine, no refresh loop.
+
 - Renders on `DOMContentLoaded`, measures content height, resizes window via `window.api.window.setHeight()`
 - Silent fail on error — shell still renders
 
 ## SETTINGS WINDOW
 
 Separate renderer entry at `settings/`. Two toggles: Launch at Login, Prevent Sleep.
+
 - Uses native window chrome (`titleBarStyle: "hiddenInset"`)
 - Shows in Dock when open (tray-only app otherwise)
 - Singleton BrowserWindow (focus if already open)
@@ -38,12 +40,10 @@ Separate renderer entry at `settings/`. Two toggles: Launch at Login, Prevent Sl
 ## API ACCESS
 
 ```typescript
-window.api.window.setHeight(height);        // → void (ipcMain.on, fire-and-forget)
-window.api.app.openExternal(url);          // → Promise<void>
-window.api.app.getVersion();               // → Promise<string>
-window.api.settings.get();                 // → Promise<AppSettings>
-window.api.settings.set(partial);         // → Promise<AppSettings>
-window.api.settings.onChanged(callback);  // → () => void (unsubscribe)
+window.api.window.setHeight(height); // → void (ipcMain.on, fire-and-forget)
+window.api.app.getVersion(); // → Promise<string>
+window.api.settings.get(); // → Promise<AppSettings>
+window.api.settings.set(partial); // → Promise<AppSettings>
 ```
 
 ## CSS CONVENTIONS
@@ -55,31 +55,29 @@ window.api.settings.onChanged(callback);  // → () => void (unsubscribe)
 
 ## KEY CLASSES
 
-| Class                  | Use                                |
-| ---------------------- | ---------------------------------- |
-| `.state-screen`        | Status display in popover           |
-| `.state-icon`          | ⚡ icon                             |
-| `.state-title`         | "Amphetamine is running"           |
-| `.state-desc`          | Description text below title       |
-| `.settings-titlebar`   | Settings window title bar           |
-| `.settings-hero`       | App icon + name + description       |
-| `.setting-row`         | Toggle row container                |
-| `.toggle-switch`       | iOS-style toggle switch wrapper     |
-| `.toggle-track`        | Toggle track element                |
-| `.toggle-thumb`        | Toggle thumb (sliding circle)       |
-| `.save-indicator`      | "✓ Saved" text (fades after 1.5s)  |
-| `.settings-footer`     | Copyright footer                    |
+| Class                | Use                               |
+| -------------------- | --------------------------------- |
+| `.state-screen`      | Status display in popover         |
+| `.state-title`       | "Amphetamine is running"          |
+| `.state-desc`        | Description text below title      |
+| `.settings-titlebar` | Settings window title bar         |
+| `.settings-hero`     | App icon + name + description     |
+| `.setting-row`       | Toggle row container              |
+| `.toggle-switch`     | iOS-style toggle switch wrapper   |
+| `.toggle-track`      | Toggle track element              |
+| `.toggle-thumb`      | Toggle thumb (sliding circle)     |
+| `.save-indicator`    | "✓ Saved" text (fades after 1.5s) |
+| `.settings-footer`   | Copyright footer                  |
 
 ## SECURITY
 
 - CSP in `index.html`: `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:`
-- `escapeHtml()` available in `src/shared/utils/escape-html.ts` (not used in current UI since no user content rendered)
+- Identical CSP in `settings/index.html`
 
 ## TESTS
 
 **Location**: `tests/renderer/*.test.ts`
 
-| File                | Focus                                          |
-| ------------------- | ---------------------------------------------- |
-| `delegation.test.ts` | Event delegation on `#app` (4 tests)            |
-| `escape-html.test.ts`| XSS protection (11 tests)                      |
+| File                 | Focus                                |
+| -------------------- | ------------------------------------ |
+| `delegation.test.ts` | Event delegation on `#app` (3 tests) |
