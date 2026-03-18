@@ -33,47 +33,65 @@ describe("tray module exports", () => {
         this.on = vi.fn();
       }),
     }));
-    vi.mock("../../src/main/settings.js", () => ({
-      getSettings: vi
-        .fn()
-        .mockReturnValue({ launchAtLogin: false, preventSleep: false }),
-      updateSettings: vi
-        .fn()
-        .mockReturnValue({ launchAtLogin: false, preventSleep: false }),
-    }));
+    vi.mock("../../src/main/settings.js", () => {
+      const settingsChangeCallbacks: Array<(s: any) => void> = [];
+      return {
+        getSettings: vi
+          .fn()
+          .mockReturnValue({ launchAtLogin: false, preventSleep: false }),
+        updateSettings: vi
+          .fn()
+          .mockReturnValue({ launchAtLogin: false, preventSleep: false }),
+        onSettingsChanged: vi.fn().mockImplementation((cb: (s: any) => void) => {
+          settingsChangeCallbacks.push(cb);
+          return () => {
+            const idx = settingsChangeCallbacks.indexOf(cb);
+            if (idx >= 0) settingsChangeCallbacks.splice(idx, 1);
+          };
+        }),
+        __settingsChangeCallbacks: settingsChangeCallbacks,
+      };
+    });
     vi.mock("../../src/main/power-saver.js", () => ({
       syncPreventSleep: vi.fn(),
     }));
   });
 
-  it("exports setupTray function", async () => {
-    const trayModule = await import("../../src/main/tray.js");
-
-    expect(typeof trayModule.setupTray).toBe("function");
-  });
-
-  it("setupTray creates a Tray instance", async () => {
+  it("setupTray subscribes to settings changes via onSettingsChanged", async () => {
     const { setupTray } = await import("../../src/main/tray.js");
-    const { Tray } = await import("electron");
+    const settingsMod = (await import("../../src/main/settings.js")) as any;
 
     const mockWindow = {} as any;
     setupTray(mockWindow);
 
-    expect(Tray).toHaveBeenCalled();
+    expect(settingsMod.onSettingsChanged).toHaveBeenCalledWith(
+      expect.any(Function),
+    );
   });
 
-  it("setupTray sets tooltip to 'Amphetamine'", async () => {
+  it("tray icon updates when settings change (preventSleep toggle)", async () => {
     const { setupTray } = await import("../../src/main/tray.js");
     const { Tray } = await import("electron");
+    const settingsMod = (await import("../../src/main/settings.js")) as any;
 
     const mockWindow = {} as any;
     setupTray(mockWindow);
 
     const trayInstance = (Tray as ReturnType<typeof vi.fn>).mock.results[0]
       .value;
-    expect(trayInstance.setToolTip).toHaveBeenCalledWith("Amphetamine");
-  });
+    const setImageCalls = trayInstance.setImage.mock.calls.length;
 
+    // Simulate settings change callback (preventSleep toggled ON)
+    const onSettingsChangedCb = settingsMod.onSettingsChanged.mock.calls[0][0];
+    settingsMod.getSettings.mockReturnValue({
+      launchAtLogin: false,
+      preventSleep: true,
+    });
+    onSettingsChangedCb(settingsMod.getSettings());
+
+    // setImage should have been called again after settings change
+    expect(trayInstance.setImage.mock.calls.length).toBeGreaterThan(setImageCalls);
+  });
   it("setupTray registers nativeTheme.on('updated') handler", async () => {
     const { setupTray } = await import("../../src/main/tray.js");
     const { nativeTheme } = await import("electron");

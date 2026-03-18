@@ -6,6 +6,18 @@ import {
 } from "../shared/types.js";
 import type { AppSettings } from "../shared/types.js";
 
+/** Callback invoked when settings change (partial or full update) */
+type SettingsChangeCallback = (settings: AppSettings) => void;
+
+const settingsListeners = new Set<SettingsChangeCallback>();
+
+/** Subscribe to settings changes. Returns an unsubscribe function. */
+export function onSettingsChanged(callback: SettingsChangeCallback): () => void {
+  settingsListeners.add(callback);
+  return () => {
+    settingsListeners.delete(callback);
+  };
+}
 let settingsCache: AppSettings = { ...DEFAULT_SETTINGS };
 
 function getSettingsPath(): string {
@@ -78,6 +90,13 @@ export function updateSettings(partial: Partial<AppSettings>): AppSettings {
   // Save and update cache
   saveSettings(merged);
   settingsCache = { ...merged };
+
+  // Notify settings change listeners
+  const snapshot = getSettings();
+  for (const listener of settingsListeners) {
+    listener(snapshot);
+  }
+
 
   return getSettings();
 }
