@@ -14,6 +14,8 @@ import {
 } from "../shared/types.js";
 
 import { getSettings, updateSettings } from "./settings.js";
+import { syncPreventSleep } from "./power-saver.js";
+import { syncAutoLaunch } from "./auto-launch.js";
 
 /** Accepted URL origins for IPC senders (renderer served from file:// or localhost in dev) */
 const ALLOWED_ORIGINS = new Set([
@@ -131,6 +133,15 @@ export function registerIpcHandlers(win: BrowserWindow): void {
     ): IpcResponse<typeof IPC_CHANNELS.SETTINGS_SET> => {
       if (!validateSender(event)) return getSettings();
       const updated = updateSettings(partial);
+
+      // Sync system behaviors to match the new settings
+      if (typeof partial.preventSleep === "boolean") {
+        syncPreventSleep(updated.preventSleep);
+      }
+      if (typeof partial.launchAtLogin === "boolean") {
+        syncAutoLaunch(updated.launchAtLogin);
+      }
+
       win.webContents.send(IPC_CHANNELS.SETTINGS_CHANGED, updated);
       return updated;
     },

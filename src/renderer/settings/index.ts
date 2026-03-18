@@ -1,5 +1,6 @@
 import "./styles.css";
 import type { AppSettings } from "../../shared/types.js";
+import heroIcon from "../../assets/settings-hero-icon.png";
 
 let settings: AppSettings = {
   launchAtLogin: false,
@@ -17,7 +18,7 @@ function render(errorMessage?: string): void {
       <span class="settings-title">Settings</span>
     </div>
     <div class="settings-hero">
-      <div class="settings-hero-icon">⚡</div>
+      <img class="settings-hero-icon" src="${heroIcon}" alt="Amphetamine" />
       <div class="settings-hero-text">
         <div class="settings-hero-name">Amphetamine</div>
         <div class="settings-hero-desc">Keep your Mac awake</div>
