@@ -1,6 +1,8 @@
 import * as rspack from '@rspack/core';
 import { defineConfig } from '@rslib/core';
 
+const isDev = process.env.NODE_ENV !== 'production';
+
 export default defineConfig({
   lib: [
     {
@@ -17,7 +19,7 @@ export default defineConfig({
           js: '[name].cjs',
         },
         // === PRODUCTION OPTIMIZATIONS ===
-        minify: true,
+        minify: !isDev,
         sourceMap: false,
       },
       tools: {
@@ -27,20 +29,22 @@ export default defineConfig({
         rspack(config) {
           // === OPTIMIZATION FLAGS ===
           config.optimization = {
-            minimize: true,
-            usedExports: true,
-            sideEffects: true,
-            concatenateModules: true,
-            innerGraph: true,
-            minimizer: [
-              new rspack.SwcJsMinimizerRspackPlugin({
-                minimizerOptions: {
-                  compress: {
-                    drop_console: true,
-                  },
-                },
-              }),
-            ],
+            minimize: !isDev,
+            usedExports: !isDev,
+            sideEffects: !isDev,
+            concatenateModules: !isDev,
+            innerGraph: !isDev,
+            minimizer: isDev
+              ? []
+              : [
+                  new rspack.SwcJsMinimizerRspackPlugin({
+                    minimizerOptions: {
+                      compress: {
+                        drop_console: true,
+                      },
+                    },
+                  }),
+                ],
           };
 
           // Append electron external AFTER ElectronTargetPlugin has set its externals

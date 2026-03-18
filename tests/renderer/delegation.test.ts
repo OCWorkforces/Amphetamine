@@ -18,24 +18,6 @@ describe("event delegation", () => {
     expect(handler).toHaveBeenCalledOnce();
   });
 
-  it('clicking [data-action="join-meeting"] provides data-url to handler', () => {
-    document.body.innerHTML =
-      '<div id="app"><button data-action="join-meeting" data-url="https://meet.google.com/abc">Join</button></div>';
-    const app = document.getElementById("app")!;
-    let capturedUrl = "";
-    app.addEventListener("click", (e) => {
-      const target = (e.target as HTMLElement).closest<HTMLElement>(
-        "[data-action]",
-      );
-      if (target?.dataset["action"] === "join-meeting") {
-        capturedUrl = target.dataset["url"] ?? "";
-      }
-    });
-    document
-      .querySelector<HTMLButtonElement>('[data-action="join-meeting"]')!
-      .click();
-    expect(capturedUrl).toBe("https://meet.google.com/abc");
-  });
 
   it("clicking outside [data-action] elements does not trigger handlers", () => {
     document.body.innerHTML =

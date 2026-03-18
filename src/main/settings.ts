@@ -27,9 +27,7 @@ function getSettingsPath(): string {
 
 function ensureUserDataDir(): void {
   const userDataPath = app.getPath("userData");
-  if (!existsSync(userDataPath)) {
-    mkdirSync(userDataPath, { recursive: true });
-  }
+  mkdirSync(userDataPath, { recursive: true });
 }
 
 export function loadSettings(): AppSettings {
@@ -98,8 +96,9 @@ export function updateSettings(partial: Partial<AppSettings>): AppSettings {
   }
 
 
-  return getSettings();
+  return snapshot;
 }
+
 
 // Initialize on module load
 loadSettings();

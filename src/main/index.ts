@@ -17,21 +17,27 @@ const isDev = !app.isPackaged;
 process.on("uncaughtException", (error: Error) => {
   console.error("[main] Uncaught exception:", error);
   if (!isDev) {
-    dialog.showErrorBox("Unexpected Error", error.message || "An unexpected error occurred.");
+    dialog.showErrorBox(
+      "Unexpected Error",
+      error.message || "An unexpected error occurred.",
+    );
     app.exit(1);
   }
 });
 
-process.on("unhandledRejection", (reason: unknown, promise: Promise<unknown>) => {
-  console.error("[main] Unhandled rejection at:", promise, "reason:", reason);
-  // Do not exit on unhandled rejection - these are often recoverable
-});
+process.on(
+  "unhandledRejection",
+  (reason: unknown, promise: Promise<unknown>) => {
+    console.error("[main] Unhandled rejection at:", promise, "reason:", reason);
+    // Do not exit on unhandled rejection - these are often recoverable
+  },
+);
 
 const packageJson = getPackageInfo();
-const platform = [os.type(), os.release(), os.arch()].join(', ');
+const platform = [os.type(), os.release(), os.arch()].join(", ");
 
 app.setAboutPanelOptions({
-  applicationName: 'Amphetamine',
+  applicationName: "Amphetamine",
   applicationVersion: app.getVersion(),
   copyright: `Developed by ${packageJson.author}`,
   version: platform,
@@ -54,6 +60,7 @@ function createWindow(): BrowserWindow {
     titleBarStyle: "hidden",
     transparent: true,
     hasShadow: true,
+    paintWhenInitiallyHidden: false,
     webPreferences: {
       preload: path.join(__dirname, "..", "preload", "index.cjs"),
       sandbox: true,
@@ -74,19 +81,16 @@ function createWindow(): BrowserWindow {
   win.on("close", (event) => {
     event.preventDefault();
     win.hide();
-    app.dock?.hide();
   });
 
   win.on("minimize", () => {
     win.hide();
-    app.dock?.hide();
   });
 
   // Hide when focus lost (popover behavior)
   win.on("blur", () => {
     if (!isDev) {
       win.hide();
-      app.dock?.hide();
     }
   });
 
@@ -94,8 +98,8 @@ function createWindow(): BrowserWindow {
 }
 
 app.whenReady().then(() => {
-  // Hide from Dock immediately
-  app.dock?.hide();
+  // Register as accessory app — no Dock icon, no menu bar
+  app.setActivationPolicy("accessory");
 
   mainWindow = createWindow();
   registerIpcHandlers(mainWindow);

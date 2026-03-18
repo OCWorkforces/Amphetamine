@@ -7,7 +7,7 @@ let settings: AppSettings = {
   preventSleep: false,
 };
 let isSaving = false;
-let saveIndicatorTimer: ReturnType<typeof setTimeout> | null = null;
+const saveIndicatorTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 function render(errorMessage?: string): void {
   const app = document.getElementById("app");
@@ -73,18 +73,21 @@ function showSaveIndicator(id: string, text: string): void {
   const indicator = document.getElementById(id);
   if (!indicator) return;
 
-  if (saveIndicatorTimer !== null) {
-    clearTimeout(saveIndicatorTimer);
-    saveIndicatorTimer = null;
+  // Clear previous timer for this specific indicator (not shared)
+  const prevTimer = saveIndicatorTimers.get(id);
+  if (prevTimer !== undefined) {
+    clearTimeout(prevTimer);
+    saveIndicatorTimers.delete(id);
   }
 
   indicator.textContent = text;
   indicator.classList.add("visible");
 
-  saveIndicatorTimer = setTimeout(() => {
+  const timer = setTimeout(() => {
     indicator.classList.remove("visible");
-    saveIndicatorTimer = null;
+    saveIndicatorTimers.delete(id);
   }, 1500);
+  saveIndicatorTimers.set(id, timer);
 }
 
 function setupToggleListener(): void {
@@ -124,8 +127,6 @@ async function saveSettings(
     const updated = await window.api.settings.set(partial);
     settings = updated;
     showSaveIndicator(indicatorId, "✓ Saved");
-    // Re-render to sync state without losing focus feel
-    render();
   } catch (err) {
     const message =
       err instanceof Error ? err.message : "Failed to save settings";

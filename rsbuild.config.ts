@@ -43,6 +43,6 @@ export default defineConfig({
   },
   performance: {
     chunkSplit: { strategy: 'all-in-one' },
-    removeConsole: ['log', 'info', 'warn', 'error'],
+    removeConsole: process.env.NODE_ENV === 'production' ? ['log', 'info', 'warn'] : [],
   },
 });

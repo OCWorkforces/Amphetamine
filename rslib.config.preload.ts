@@ -1,53 +1,56 @@
-import * as rspack from '@rspack/core';
+import * as rspack from "@rspack/core";
+import { defineConfig } from "@rslib/core";
 
-import { defineConfig } from '@rslib/core';
+const isDev = process.env.NODE_ENV !== "production";
 
 export default defineConfig({
   lib: [
     {
-      format: 'cjs',
+      format: "cjs",
       bundle: true,
       dts: false,
       source: {
-        entry: { index: './src/preload/index.ts' },
+        entry: { index: "./src/preload/index.ts" },
       },
       output: {
-        distPath: { root: './lib/preload' },
-        filename: { js: 'index.cjs' },
-        target: 'node',
+        distPath: { root: "./lib/preload" },
+        filename: { js: "index.cjs" },
+        target: "node",
         // === PRODUCTION OPTIMIZATIONS ===
-        minify: true,
+        minify: !isDev,
         sourceMap: false,
       },
       tools: {
         bundlerChain(chain) {
-          chain.target('electron-preload');
+          chain.target("electron-preload");
         },
         rspack(config) {
           // === OPTIMIZATION FLAGS ===
           config.optimization = {
-            minimize: true,
-            usedExports: true,
-            sideEffects: true,
-            concatenateModules: true,
-            innerGraph: true,
-            minimizer: [
-              new rspack.SwcJsMinimizerRspackPlugin({
-                minimizerOptions: {
-                  compress: {
-                    drop_console: true,
-                  },
-                },
-              }),
-            ],
+            minimize: !isDev,
+            usedExports: !isDev,
+            sideEffects: !isDev,
+            concatenateModules: !isDev,
+            innerGraph: !isDev,
+            minimizer: isDev
+              ? []
+              : [
+                  new rspack.SwcJsMinimizerRspackPlugin({
+                    minimizerOptions: {
+                      compress: {
+                        drop_console: true,
+                      },
+                    },
+                  }),
+                ],
           };
 
           // CRITICAL: electron must never be bundled in preload
           const existing = config.externals ?? [];
           const arr = Array.isArray(existing) ? existing : [existing];
-          arr.push(function(ctx, callback) {
-            const req = ctx.request ?? '';
-            if (req === 'electron' || req.startsWith('electron/')) {
+          arr.push(function (ctx, callback) {
+            const req = ctx.request ?? "";
+            if (req === "electron" || req.startsWith("electron/")) {
               return callback(undefined, `commonjs ${req}`);
             }
             callback();
@@ -55,13 +58,13 @@ export default defineConfig({
           config.externals = arr;
           // Configure extension alias for TypeScript imports
           config.resolve = config.resolve ?? {};
-          config.resolve.extensionAlias = { '.js': ['.ts', '.js'] };
+          config.resolve.extensionAlias = { ".js": [".ts", ".js"] };
           return config;
+        },
       },
     },
-  },
-],
+  ],
   source: {
-    tsconfigPath: './src/preload/tsconfig.json',
+    tsconfigPath: "./src/preload/tsconfig.json",
   },
 });

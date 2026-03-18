@@ -13,8 +13,7 @@ tests/
 │   ├── tray.test.ts         # tray module, about window
 │   └── ipc.test.ts          # validateSender, origin check
 └── renderer/
-    ├── delegation.test.ts  # event delegation on #app
-    └── escape-html.test.ts  # XSS protection
+    └── delegation.test.ts   # event delegation on #app
 ```
 
 ## CONFIGURATION
@@ -22,8 +21,17 @@ tests/
 ```typescript
 // vitest.workspace.ts
 projects: [
-  { name: "main", environment: "node", include: ["tests/main/**/*.test.ts"], setupFiles: ["./tests/setup.main.ts"] },
-  { name: "renderer", environment: "jsdom", include: ["tests/renderer/**/*.test.ts"] },
+  {
+    name: "main",
+    environment: "node",
+    include: ["tests/main/**/*.test.ts"],
+    setupFiles: ["./tests/setup.main.ts"],
+  },
+  {
+    name: "renderer",
+    environment: "jsdom",
+    include: ["tests/renderer/**/*.test.ts"],
+  },
 ];
 ```
 
@@ -32,44 +40,31 @@ projects: [
 **Mock Pattern**:
 
 ```typescript
+vi.hoisted(() => { const mockX = vi.fn(); return { mockX }; });
 vi.mock("electron", () => ({ shell, Notification, powerSaveBlocker, ... }));
-vi.resetModules() + dynamic import for fresh module state
+// beforeEach: vi.resetModules() + vi.clearAllMocks() + re-apply mock defaults
+// dynamic import: const mod = await import("../../src/main/foo.js");
 ```
 
 | File                | Tests | Focus                                          |
 | ------------------- | ----- | ---------------------------------------------- |
-| power-saver.test.ts | 12    | powerSaveBlocker: start/stop/isPreventingSleep   |
-| settings.test.ts   | 9     | File I/O, validation, defaults, cache behavior   |
-| tray.test.ts       | 3     | Tray icon, context menu, about window            |
-| ipc.test.ts        | 8     | validateSender, ALLOWED_ORIGINS                  |
-
-**Mock Pattern**:
-
-```typescript
-vi.mock("electron", () => ({ shell, Notification, powerSaveBlocker, ... }));
-vi.resetModules() + dynamic import for fresh module state
-```
-
-| File              | Focus                                          |
-| ----------------- | ---------------------------------------------- |
-| power-saver.test.ts| powerSaveBlocker: start/stop/isPreventingSleep   |
-| settings.test.ts  | File I/O, validation, defaults, cache behavior   |
-| tray.test.ts      | Tray icon, context menu, about window            |
-| ipc.test.ts       | validateSender, ALLOWED_ORIGINS                  |
+| power-saver.test.ts | 12    | powerSaveBlocker: start/stop/isPreventingSleep |
+| settings.test.ts    | 9     | File I/O, validation, defaults, cache behavior |
+| tray.test.ts        | 3     | Tray icon, context menu, about window          |
+| ipc.test.ts         | 8     | validateSender, ALLOWED_ORIGINS                |
 
 **Key Test Patterns**:
 
 - `vi.hoisted()` + `vi.mock()` for Electron API mocking
 - `vi.resetModules()` + `await import(...)` for fresh module state per test
 - `vi.clearAllMocks()` in `beforeEach` with mock behavior re-applied after clear
-- `as any` type assertion allowed in test mocks only (3 instances in tray.test.ts)
+- `as any` type assertion allowed in test mocks only
 
-## RENDERER TESTS (15 tests)
+## RENDERER TESTS (3 tests)
 
-| File                | Tests | Focus                    |
-| ------------------- | ----- | ------------------------ |
-| delegation.test.ts  | 4     | Event delegation on #app  |
-| escape-html.test.ts | 11    | XSS protection           |
+| File               | Tests | Focus                    |
+| ------------------ | ----- | ------------------------ |
+| delegation.test.ts | 3     | Event delegation on #app |
 
 ## COMMANDS
 
@@ -82,8 +77,9 @@ bun run test:coverage # With v8 coverage
 ## SETUP FILE
 
 Mocked Electron APIs in `tests/setup.main.ts`:
+
 - `app`: getVersion, quit, dock, isPackaged, whenReady, on, getPath
 - `BrowserWindow`: loadURL, show, hide, destroy, getBounds, setPosition, webContents, getAllWindows
 - `ipcMain`: handle, on, off
 - `Tray`: setToolTip, setTitle, on, getBounds, popUpContextMenu
-- `Menu`, `screen`, `nativeImage`
+- `Menu`, `screen`, `nativeImage`, `shell`, `dialog`, `nativeTheme`, `Notification`, `powerSaveBlocker`

@@ -12,14 +12,10 @@ directories:
 files:
   - lib/**/*
   - src/assets/**/*
-  - src/main/googlemeet-events.swift
   - package.json
   - assets/**/*
-  - '!**/*.map'
-  - '!**/node_modules'
-# Unpack Swift file from asar so swiftc can read it (external tools cannot read asar archives)
-asarUnpack:
-  - "src/main/googlemeet-events.swift"
+  - "!**/*.map"
+  - "!**/node_modules"
 
 # === ELECTRON LOCALES ===
 # Only keep English (saves ~5-10MB)
@@ -42,8 +38,6 @@ mac:
   entitlementsInherit: build/entitlements.mac.inherit.plist
   extendInfo:
     LSUIElement: true
-    NSCalendarsFullAccessUsageDescription: Amphetamine needs calendar access to find your Google Meet events.
-    NSAppleEventsUsageDescription: Amphetamine uses AppleScript to read your calendar events.
   notarize: false
 
 # === DMG-SPECIFIC ===
@@ -56,8 +50,3 @@ dmg:
   sign: false
 
 afterPack: build/after-pack.cjs
-afterSign: build/notarize.cjs
-
-nsis:
-  oneClick: false
-  perMachine: true

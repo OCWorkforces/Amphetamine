@@ -4,40 +4,36 @@ Type definitions shared across main, preload, and renderer processes. Single sou
 
 ## FILES
 
-| File                  | Role                                  |
-| --------------------- | ------------------------------------- |
-| `types.ts`            | IPC channels, interfaces, type unions |
-| `utils/escape-html.ts` | XSS protection utility                |
+| File       | Role                                  |
+| ---------- | ------------------------------------- |
+| `types.ts` | IPC channels, interfaces, type unions |
 
 ## IPC CHANNELS
 
 ```typescript
-// types.ts:2-9
+// types.ts:2-7
 export const IPC_CHANNELS = {
   WINDOW_SET_HEIGHT: "window:set-height",
-  APP_OPEN_EXTERNAL: "app:open-external",
   APP_GET_VERSION: "app:get-version",
   SETTINGS_GET: "settings:get",
   SETTINGS_SET: "settings:set",
-  SETTINGS_CHANGED: "settings:changed",   // push event (main → renderer)
 } as const;
 ```
 
-`IpcChannelMap` (types.ts:12) maps each channel to its `request` / `response` types.
-`SETTINGS_CHANGED` is NOT in `IpcChannelMap` — it's a push event only (no request/response).
+`IpcChannelMap` (types.ts:10) maps each channel to its `request` / `response` types.
 
 ## DATA MODELS
 
 ### AppSettings
 
 ```typescript
-// types.ts:41-46
+// types.ts:35-40
 export interface AppSettings {
-  launchAtLogin: boolean;   // macOS login item toggle
-  preventSleep: boolean;    // powerSaveBlocker toggle
+  launchAtLogin: boolean; // macOS login item toggle
+  preventSleep: boolean; // powerSaveBlocker toggle
 }
 
-// types.ts:49-52
+// types.ts:43-46
 export const DEFAULT_SETTINGS: AppSettings = {
   launchAtLogin: false,
   preventSleep: false,
@@ -47,7 +43,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
 ## TYPE UTILITIES
 
 ```typescript
-// types.ts:36-38
+// types.ts:30-32
 export type IpcChannel = keyof IpcChannelMap;
 export type IpcRequest<K extends IpcChannel> = IpcChannelMap[K]["request"];
 export type IpcResponse<K extends IpcChannel> = IpcChannelMap[K]["response"];
@@ -61,10 +57,10 @@ export type IpcResponse<K extends IpcChannel> = IpcChannelMap[K]["response"];
 
 ## IMPORT PATHS
 
-| Process  | Import Path          |
-| -------- | -------------------- |
-| main     | `../shared/types.js` |
-| preload  | `../shared/types.js` |
+| Process  | Import Path             |
+| -------- | ----------------------- |
+| main     | `../shared/types.js`    |
+| preload  | `../shared/types.js`    |
 | renderer | `../../shared/types.js` |
 
 Note: `.js` extension required for ESM resolution even though source is `.ts`.
