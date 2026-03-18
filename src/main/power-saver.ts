@@ -10,7 +10,7 @@ export function startPreventingSleep(): void {
   if (blockerId !== null && powerSaveBlocker.isStarted(blockerId)) {
     return;
   }
-  blockerId = powerSaveBlocker.start("prevent-app-suspension");
+  blockerId = powerSaveBlocker.start("prevent-display-sleep");
   console.log("[power-saver] Started preventing sleep (id:", blockerId, ")");
 }
 

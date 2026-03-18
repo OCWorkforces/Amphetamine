@@ -36,9 +36,9 @@ describe("power-saver", () => {
   });
 
   describe("startPreventingSleep", () => {
-    it("calls powerSaveBlocker.start with prevent-app-suspension", () => {
+    it("calls powerSaveBlocker.start with prevent-display-sleep", () => {
       startPreventingSleep();
-      expect(mockStart).toHaveBeenCalledWith("prevent-app-suspension");
+      expect(mockStart).toHaveBeenCalledWith("prevent-display-sleep");
     });
 
     it("is idempotent — does not start a new blocker if already active", () => {
@@ -94,7 +94,7 @@ describe("power-saver", () => {
   describe("syncPreventSleep", () => {
     it("calls startPreventingSleep when enabled=true", () => {
       syncPreventSleep(true);
-      expect(mockStart).toHaveBeenCalledWith("prevent-app-suspension");
+      expect(mockStart).toHaveBeenCalledWith("prevent-display-sleep");
       expect(mockStop).not.toHaveBeenCalled();
     });
 
