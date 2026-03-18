@@ -1,6 +1,5 @@
 import {
   ipcMain,
-  shell,
   app,
   BrowserWindow,
   type IpcMainEvent,
@@ -8,6 +7,7 @@ import {
 } from "electron";
 import {
   IPC_CHANNELS,
+  DEFAULT_SETTINGS,
   type IpcChannelMap,
   type IpcRequest,
   type IpcResponse,
@@ -22,6 +22,9 @@ const ALLOWED_ORIGINS = new Set([
   "http://localhost:5173",
   "http://127.0.0.1:5173",
 ]);
+
+/** Window dimensions for the popover */
+const WINDOW_WIDTH = 360;
 
 /** Acceptable height bounds for the popover window */
 const MIN_WINDOW_HEIGHT = 220;
@@ -77,7 +80,7 @@ export function registerIpcHandlers(win: BrowserWindow): void {
             MIN_WINDOW_HEIGHT,
             Math.min(MAX_WINDOW_HEIGHT, Math.round(height)),
           );
-          win.setSize(360, clampedHeight, true);
+          win.setSize(WINDOW_WIDTH, clampedHeight, true);
         }
       } catch (err) {
         console.error("[ipc] WINDOW_SET_HEIGHT error:", err);
@@ -87,32 +90,10 @@ export function registerIpcHandlers(win: BrowserWindow): void {
 
   // App utilities
   typedHandle(
-    IPC_CHANNELS.APP_OPEN_EXTERNAL,
-    async (
-      event,
-      url: IpcRequest<typeof IPC_CHANNELS.APP_OPEN_EXTERNAL>,
-    ): Promise<IpcResponse<typeof IPC_CHANNELS.APP_OPEN_EXTERNAL>> => {
-      if (!validateSender(event)) return;
-      try {
-        if (typeof url === "string") {
-          await shell.openExternal(url);
-        }
-      } catch (err) {
-        console.error("[ipc] APP_OPEN_EXTERNAL error:", err);
-      }
-    },
-  );
-
-  typedHandle(
     IPC_CHANNELS.APP_GET_VERSION,
     (event): IpcResponse<typeof IPC_CHANNELS.APP_GET_VERSION> => {
       if (!validateSender(event)) return "";
-      try {
-        return app.getVersion();
-      } catch (err) {
-        console.error("[ipc] APP_GET_VERSION error:", err);
-        return "";
-      }
+      return app.getVersion();
     },
   );
 
@@ -120,7 +101,7 @@ export function registerIpcHandlers(win: BrowserWindow): void {
   typedHandle(
     IPC_CHANNELS.SETTINGS_GET,
     (event): IpcResponse<typeof IPC_CHANNELS.SETTINGS_GET> => {
-      if (!validateSender(event)) return getSettings();
+      if (!validateSender(event)) return { ...DEFAULT_SETTINGS };
       return getSettings();
     },
   );
@@ -142,9 +123,7 @@ export function registerIpcHandlers(win: BrowserWindow): void {
         syncAutoLaunch(updated.launchAtLogin);
       }
 
-      win.webContents.send(IPC_CHANNELS.SETTINGS_CHANGED, updated);
       return updated;
     },
   );
-
 }
