@@ -44,6 +44,12 @@ function showAbout(mainWindow: BrowserWindow): void {
   });
 }
 
+/**
+ * Cached tray icons — only 4 variants (dark/light × active/inactive).
+ * Avoids rebuilding from disk on every theme/settings change.
+ */
+const iconCache = new Map<string, Electron.NativeImage>();
+
 export function setupTray(mainWindow: BrowserWindow): void {
   // In dev:      __dirname = lib/main/   → ../../src/assets
   // In packaged: __dirname = app.asar/lib/main/ → ../../src/assets (inside asar)
@@ -54,6 +60,10 @@ export function setupTray(mainWindow: BrowserWindow): void {
   const assetsDir = path.join(__dirname, "..", "..", "src", "assets");
 
   function buildIcon(isDark: boolean, isActive: boolean): Electron.NativeImage {
+    const key = `${isDark}-${isActive}`;
+    const cached = iconCache.get(key);
+    if (cached) return cached;
+
     const suffix = isDark ? "dark" : "light";
     const statePrefix = isActive ? "" : "inactive-";
     const icon1x = nativeImage.createFromPath(
@@ -65,16 +75,22 @@ export function setupTray(mainWindow: BrowserWindow): void {
     const icon = nativeImage.createEmpty();
     icon.addRepresentation({ scaleFactor: 1.0, buffer: icon1x.toPNG() });
     icon.addRepresentation({ scaleFactor: 2.0, buffer: icon2x.toPNG() });
+
+    iconCache.set(key, icon);
     return icon;
   }
 
   function refreshTrayIcon(): void {
     if (!tray) return;
-    tray.setImage(buildIcon(nativeTheme.shouldUseDarkColors, getSettings().preventSleep));
+    tray.setImage(
+      buildIcon(nativeTheme.shouldUseDarkColors, getSettings().preventSleep),
+    );
   }
 
   const initialSettings = getSettings();
-  tray = new Tray(buildIcon(nativeTheme.shouldUseDarkColors, initialSettings.preventSleep));
+  tray = new Tray(
+    buildIcon(nativeTheme.shouldUseDarkColors, initialSettings.preventSleep),
+  );
   tray.setToolTip("Amphetamine");
 
   // Update icon whenever the system theme changes or settings change
@@ -83,6 +99,7 @@ export function setupTray(mainWindow: BrowserWindow): void {
   };
   nativeTheme.on("updated", onThemeUpdated);
 
+  // Store unsubscribe for cleanup robustness
   onSettingsChanged(() => {
     refreshTrayIcon();
   });

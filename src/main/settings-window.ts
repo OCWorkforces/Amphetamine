@@ -14,6 +14,17 @@ function getAppIconPath(): string {
   }
   return path.join(process.resourcesPath, "icon.icns");
 }
+
+/** Cached dock icon to avoid re-reading from disk on every settings open */
+let cachedDockIcon: Electron.NativeImage | null = null;
+
+function getDockIcon(): Electron.NativeImage {
+  if (!cachedDockIcon) {
+    cachedDockIcon = nativeImage.createFromPath(getAppIconPath());
+  }
+  return cachedDockIcon;
+}
+
 let settingsWindow: BrowserWindow | null = null;
 
 /**
@@ -61,17 +72,16 @@ export function createSettingsWindow(): BrowserWindow {
   // Show window when ready
   win.once("ready-to-show", () => {
     win.show();
-    // Show in Dock with app icon when settings window is open
-    const icon = nativeImage.createFromPath(getAppIconPath());
-    app.dock?.setIcon(icon);
-    app.dock?.show();
+    // Switch to regular app so Dock icon appears with settings window
+    app.setActivationPolicy("regular");
+    app.dock?.setIcon(getDockIcon());
   });
 
   // Clean up reference on close
   win.on("closed", () => {
     settingsWindow = null;
-    // Hide from Dock when settings window closes (tray-only app)
-    app.dock?.hide();
+    // Return to accessory mode when settings window closes (tray-only app)
+    app.setActivationPolicy("accessory");
   });
 
   settingsWindow = win;
