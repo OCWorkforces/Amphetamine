@@ -7,6 +7,7 @@ let settings: AppSettings = {
   preventSleep: false,
 };
 let isSaving = false;
+let pendingSave: Partial<AppSettings> | null = null;
 const saveIndicatorTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 function render(errorMessage?: string): void {
@@ -25,7 +26,7 @@ function render(errorMessage?: string): void {
       </div>
     </div>
     <div class="settings-content">
-      ${errorMessage ? `<p class="settings-error">${errorMessage}</p>` : ""}
+      <p id="settings-error-text" class="settings-error"></p>
       <div class="setting-row setting-row--toggle">
         <div class="setting-row-inner">
           <label class="setting-label" for="launch-at-login-toggle">
@@ -65,6 +66,12 @@ function render(errorMessage?: string): void {
       <span class="settings-footer-text">Amphetamine &middot; &copy; ${new Date().getFullYear()}</span>
     </div>
   `;
+
+  // Set error message safely via textContent (prevents XSS)
+  const errorEl = document.getElementById("settings-error-text");
+  if (errorEl) {
+    errorEl.textContent = errorMessage ?? "";
+  }
 
   setupToggleListener();
 }
@@ -120,7 +127,13 @@ async function saveSettings(
   partial: Partial<AppSettings>,
   indicatorId: string = "launch-save-indicator",
 ): Promise<void> {
-  if (isSaving) return;
+  // If a save is already in progress, store the latest partial and return.
+  // When the current save completes, it will process the pending one.
+  // Rapid toggles → last toggle's value wins (latest-wins queue).
+  if (isSaving) {
+    pendingSave = partial;
+    return;
+  }
   isSaving = true;
 
   try {
@@ -133,6 +146,12 @@ async function saveSettings(
     render(message);
   } finally {
     isSaving = false;
+    // Process any pending save that arrived while we were working
+    if (pendingSave) {
+      const savedPartial = pendingSave;
+      pendingSave = null;
+      await saveSettings(savedPartial, indicatorId);
+    }
   }
 }
 

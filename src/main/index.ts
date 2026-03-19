@@ -8,6 +8,7 @@ import { getPackageInfo } from "./utils/packageInfo.js";
 import { getSettings } from "./settings.js";
 import { syncAutoLaunch } from "./auto-launch.js";
 import { syncPreventSleep, stopPreventingSleep } from "./power-saver.js";
+import { closeSettingsWindow } from "./settings-window.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -44,6 +45,7 @@ app.setAboutPanelOptions({
 });
 
 let mainWindow: BrowserWindow | null = null;
+let isQuitting = false;
 
 function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
@@ -71,14 +73,15 @@ function createWindow(): BrowserWindow {
 
   if (isDev) {
     const devUrl =
-      process.env["VITE_DEV_SERVER_URL"] ?? "http://localhost:5173";
+      process.env["DEV_SERVER_URL"] ?? "http://localhost:5173";
     win.loadURL(devUrl);
   } else {
     win.loadFile(path.join(__dirname, "..", "renderer", "index.html"));
   }
 
-  // Intercept close/minimize → hide to tray
+  // Intercept close/minimize → hide to tray (unless quitting)
   win.on("close", (event) => {
+    if (isQuitting) return;
     event.preventDefault();
     win.hide();
   });
@@ -103,7 +106,7 @@ app.whenReady().then(() => {
 
   mainWindow = createWindow();
   registerIpcHandlers(mainWindow);
-  setupTray(mainWindow);
+  setupTray();
 
   // Sync auto-launch setting on startup
   const settings = getSettings();
@@ -117,7 +120,8 @@ app.on("window-all-closed", () => {
 });
 
 app.on("before-quit", () => {
-  // Allow quit from tray menu
+  isQuitting = true;
+  closeSettingsWindow();
   stopPreventingSleep();
   if (mainWindow) {
     mainWindow.destroy();

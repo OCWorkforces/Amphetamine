@@ -1,6 +1,5 @@
 import {
   Tray,
-  BrowserWindow,
   nativeImage,
   nativeTheme,
   Menu,
@@ -12,36 +11,15 @@ import { fileURLToPath } from "node:url";
 
 import { createSettingsWindow } from "./settings-window.js";
 import { getSettings, onSettingsChanged } from "./settings.js";
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 let tray: Tray | null = null;
 
-let aboutOpen = false;
-
-function showAbout(mainWindow: BrowserWindow): void {
-  if (aboutOpen) {
-    // Focus the existing about window
-    const existing = BrowserWindow.getAllWindows().find(
-      (w) => w !== mainWindow,
-    );
-    existing?.focus();
-    return;
-  }
-  aboutOpen = true;
+function showAbout(): void {
+  // app.showAboutPanel() is a native macOS dialog, managed by the OS as a singleton.
+  // No need for manual window tracking.
   app.showAboutPanel();
-  setImmediate(() => {
-    const aboutWindow = BrowserWindow.getAllWindows().find(
-      (w) => w !== mainWindow,
-    );
-    if (aboutWindow) {
-      aboutWindow.setAlwaysOnTop(true, "floating");
-      aboutWindow.once("closed", () => {
-        aboutOpen = false;
-      });
-    } else {
-      aboutOpen = false;
-    }
-  });
 }
 
 /**
@@ -50,7 +28,7 @@ function showAbout(mainWindow: BrowserWindow): void {
  */
 const iconCache = new Map<string, Electron.NativeImage>();
 
-export function setupTray(mainWindow: BrowserWindow): void {
+export function setupTray(): void {
   // In dev:      __dirname = lib/main/   → ../../src/assets
   // In packaged: __dirname = app.asar/lib/main/ → ../../src/assets (inside asar)
   //
@@ -111,7 +89,7 @@ export function setupTray(mainWindow: BrowserWindow): void {
     const template: MenuItemConstructorOptions[] = [
       { type: "separator" },
       { label: "Settings...", click: () => createSettingsWindow() },
-      { label: "About Amphetamine", click: () => showAbout(mainWindow) },
+      { label: "About Amphetamine", click: () => showAbout() },
       { label: "Quit", accelerator: "Cmd+Q", click: () => app.quit() },
     ];
     tray!.popUpContextMenu(Menu.buildFromTemplate(template));

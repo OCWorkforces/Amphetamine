@@ -4,10 +4,10 @@
  * Eliminates duplicate file reads and provides type safety
  */
 
-import { app } from 'electron';
-import path from 'path';
-import { readFileSync } from 'fs';
-import log from 'electron-log';
+import { app } from "electron";
+import path from "node:path";
+import { readFileSync } from "fs";
+import log from "electron-log";
 
 /**
  * Package.json structure with commonly used fields
@@ -38,21 +38,22 @@ let packageInfo: PackageInfo | null = null;
 export function getPackageInfo(): Readonly<PackageInfo> {
   if (!packageInfo) {
     try {
-      const pkgPath = path.join(app.getAppPath(), 'package.json');
-      const pkgContent = readFileSync(pkgPath, 'utf-8');
+      const pkgPath = path.join(app.getAppPath(), "package.json");
+      const pkgContent = readFileSync(pkgPath, "utf-8");
       packageInfo = JSON.parse(pkgContent) as PackageInfo;
-      log.debug('[PackageInfo] Loaded package.json');
+      log.debug("[PackageInfo] Loaded package.json");
     } catch (error) {
-      log.error('[PackageInfo] Failed to load package.json:', error);
+      log.error("[PackageInfo] Failed to load package.json:", error);
       // Return minimal fallback to prevent crashes
       packageInfo = {
-        name: 'amphetamine',
-        productName: 'Amphetamine',
-        version: '1.0.0',
-        description: 'Amphetamine is a desktop application that helps you keep track of your Google Meet meetings and reminds you before they start.',
-        repository: 'https://github.com/OCWorkforces/Amphetamine',
-        homepage: 'https://github.com/OCWorkforces/Amphetamine',
-        author: 'OCWorkforces Engineers',
+        name: "amphetamine",
+        productName: "Amphetamine",
+        version: "1.0.0",
+        description:
+          "Amphetamine is a macOS menu bar app that keeps your Mac awake.",
+        repository: "https://github.com/OCWorkforces/Amphetamine",
+        homepage: "https://github.com/OCWorkforces/Amphetamine",
+        author: "OCWorkforces Engineers",
       };
     }
   }
@@ -60,4 +61,3 @@ export function getPackageInfo(): Readonly<PackageInfo> {
   // Return frozen object to prevent mutations
   return Object.freeze(packageInfo);
 }
-

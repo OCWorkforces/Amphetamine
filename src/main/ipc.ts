@@ -5,6 +5,7 @@ import {
   type IpcMainEvent,
   type IpcMainInvokeEvent,
 } from "electron";
+import log from "electron-log";
 import {
   IPC_CHANNELS,
   DEFAULT_SETTINGS,
@@ -29,6 +30,7 @@ const WINDOW_WIDTH = 360;
 /** Acceptable height bounds for the popover window */
 const MIN_WINDOW_HEIGHT = 220;
 const MAX_WINDOW_HEIGHT = 480;
+
 /** Returns true if the sender's origin is the app's own renderer */
 export function validateSender(event: IpcMainInvokeEvent): boolean {
   const senderUrl = event.senderFrame?.url ?? "";
@@ -36,15 +38,29 @@ export function validateSender(event: IpcMainInvokeEvent): boolean {
 }
 
 function validateSenderUrl(senderUrl: string): boolean {
-  // file:// origin check (packaged app)
-  if (senderUrl.startsWith("file://")) return true;
-  // Dev server origins
-  for (const origin of ALLOWED_ORIGINS) {
-    if (senderUrl.startsWith(origin)) return true;
+  try {
+    const url = new URL(senderUrl);
+
+    // Dev server origins - use URL origin for proper comparison
+    if (url.protocol === "http:") {
+      return (
+        ALLOWED_ORIGINS.has(url.origin) ||
+        ALLOWED_ORIGINS.has(`${url.protocol}//${url.host}`)
+      );
+    }
+
+    // file:// origin check (packaged app) - validate path is within app bundle
+    if (url.protocol === "file:") {
+      const filePath = url.pathname;
+      // Accept if path contains .asar (app bundle) or is empty (main window)
+      return filePath.includes(".asar") || filePath.length === 0;
+    }
+
+    return false;
+  } catch {
+    log.warn("[ipc] Invalid sender URL:", senderUrl);
+    return false;
   }
-  // Log unauthorized attempt for security auditing
-  console.warn("[ipc] Rejected IPC from unauthorized sender:", senderUrl);
-  return false;
 }
 
 function validateOnSender(event: IpcMainEvent): boolean {
