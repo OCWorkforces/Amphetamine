@@ -1,9 +1,14 @@
 import { app } from "electron";
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from "fs";
-import { join } from "path";
+import log from "electron-log";
 import {
-  DEFAULT_SETTINGS,
-} from "../shared/types.js";
+  existsSync,
+  readFileSync,
+  writeFileSync,
+  renameSync,
+  mkdirSync,
+} from "fs";
+import { join } from "path";
+import { DEFAULT_SETTINGS } from "../shared/types.js";
 import type { AppSettings } from "../shared/types.js";
 
 /** Callback invoked when settings change (partial or full update) */
@@ -12,7 +17,9 @@ type SettingsChangeCallback = (settings: AppSettings) => void;
 const settingsListeners = new Set<SettingsChangeCallback>();
 
 /** Subscribe to settings changes. Returns an unsubscribe function. */
-export function onSettingsChanged(callback: SettingsChangeCallback): () => void {
+export function onSettingsChanged(
+  callback: SettingsChangeCallback,
+): () => void {
   settingsListeners.add(callback);
   return () => {
     settingsListeners.delete(callback);
@@ -55,7 +62,7 @@ export function loadSettings(): AppSettings {
     };
     return settingsCache;
   } catch {
-    // Corrupted JSON or other error - return defaults
+    log.warn("[settings] Corrupted settings file, using defaults");
     settingsCache = { ...DEFAULT_SETTINGS };
     return settingsCache;
   }
@@ -64,8 +71,11 @@ export function loadSettings(): AppSettings {
 export function saveSettings(settings: AppSettings): void {
   ensureUserDataDir();
   const settingsPath = getSettingsPath();
+  const tmpPath = settingsPath + ".tmp";
   const raw = JSON.stringify(settings, null, 2);
-  writeFileSync(settingsPath, raw, "utf-8");
+  // Write to temp file first, then atomically rename
+  writeFileSync(tmpPath, raw, "utf-8");
+  renameSync(tmpPath, settingsPath);
 }
 
 export function getSettings(): AppSettings {
@@ -95,10 +105,8 @@ export function updateSettings(partial: Partial<AppSettings>): AppSettings {
     listener(snapshot);
   }
 
-
   return snapshot;
 }
-
 
 // Initialize on module load
 loadSettings();

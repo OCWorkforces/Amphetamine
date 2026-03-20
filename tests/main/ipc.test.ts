@@ -3,9 +3,9 @@ import { validateSender } from "../../src/main/ipc.js";
 import type { IpcMainInvokeEvent } from "electron";
 
 describe("validateSender", () => {
-  it("accepts file:// origin (packaged app)", () => {
+  it("accepts file:// origin within app bundle (.asar)", () => {
     const event = {
-      senderFrame: { url: "file:///path/to/app/index.html" },
+      senderFrame: { url: "file:///path/to/app.asar/src/renderer/index.html" },
     } as IpcMainInvokeEvent;
     expect(validateSender(event)).toBe(true);
   });
@@ -22,6 +22,13 @@ describe("validateSender", () => {
       senderFrame: { url: "http://127.0.0.1:5173/index.html" },
     } as IpcMainInvokeEvent;
     expect(validateSender(event)).toBe(true);
+  });
+
+  it("rejects file:// origin outside app bundle", () => {
+    const event = {
+      senderFrame: { url: "file:///tmp/malicious.html" },
+    } as IpcMainInvokeEvent;
+    expect(validateSender(event)).toBe(false);
   });
 
   it("rejects malicious origin", () => {

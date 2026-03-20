@@ -133,9 +133,9 @@ body {
   padding: 0 0 10px;
   display: flex;
   flex-direction: column;
+  justify-content: center;
   overflow: hidden;
 }
-
 
 /* ---- Setting row ---- */
 .setting-row {
@@ -179,7 +179,6 @@ body {
   flex-shrink: 0;
 }
 
-
 /* ---- Save indicator ---- */
 .save-indicator {
   font-size: 11.5px;
@@ -213,6 +212,10 @@ body {
   margin: 0 12px 8px;
   border-radius: var(--radius-sm);
   border: 1px solid rgba(255, 59, 48, 0.12);
+}
+
+.settings-error:empty {
+  display: none;
 }
 
 @media (prefers-color-scheme: dark) {

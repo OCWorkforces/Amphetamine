@@ -63,7 +63,7 @@ export function createSettingsWindow(): BrowserWindow {
   // Load settings page
   if (isDev) {
     const devUrl =
-      process.env["VITE_DEV_SERVER_URL"] ?? "http://localhost:5173";
+      process.env["DEV_SERVER_URL"] ?? "http://localhost:5173";
     win.loadURL(`${devUrl}/settings.html`);
   } else {
     win.loadFile(path.join(__dirname, "..", "renderer", "settings.html"));
@@ -71,6 +71,7 @@ export function createSettingsWindow(): BrowserWindow {
 
   // Show window when ready
   win.once("ready-to-show", () => {
+    if (win.isDestroyed()) return;
     win.show();
     // Switch to regular app so Dock icon appears with settings window
     app.setActivationPolicy("regular");

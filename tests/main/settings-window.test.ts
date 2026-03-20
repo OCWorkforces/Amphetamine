@@ -1,0 +1,105 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+
+const {
+  mockFocus,
+  mockClose,
+  mockShow,
+  mockSetActivationPolicy,
+  mockSetDockIcon,
+} = vi.hoisted(() => ({
+  mockFocus: vi.fn(),
+  mockClose: vi.fn(),
+  mockShow: vi.fn(),
+  mockSetActivationPolicy: vi.fn(),
+  mockSetDockIcon: vi.fn(),
+}));
+
+const mockIsDestroyed = vi.hoisted(() => vi.fn().mockReturnValue(false));
+
+vi.mock("electron", () => ({
+  app: {
+    isPackaged: false,
+    setActivationPolicy: mockSetActivationPolicy,
+    dock: {
+      setIcon: mockSetDockIcon,
+    },
+  },
+  BrowserWindow: vi.fn().mockImplementation(function (this: any) {
+    this.focus = mockFocus;
+    this.close = mockClose;
+    this.show = mockShow;
+    this.isDestroyed = mockIsDestroyed;
+    this.once = vi.fn().mockImplementation((event: string, cb: () => void) => {
+      if (event === "ready-to-show") {
+        // Simulate async ready-to-show
+        setTimeout(cb, 0);
+      }
+    });
+    this.on = vi.fn();
+    this.loadURL = vi.fn();
+    this.loadFile = vi.fn();
+  }),
+  nativeImage: {
+    createFromPath: vi.fn().mockReturnValue({
+      toPNG: vi.fn().mockReturnValue(Buffer.alloc(0)),
+    }),
+  },
+}));
+
+describe("settings-window", () => {
+  let createSettingsWindow: () => import("../../src/main/settings-window.js").BrowserWindow;
+  let closeSettingsWindow: () => void;
+
+  beforeEach(async () => {
+    vi.resetModules();
+    vi.clearAllMocks();
+    mockIsDestroyed.mockReturnValue(false);
+
+    const mod = await import("../../src/main/settings-window.js");
+    createSettingsWindow = mod.createSettingsWindow;
+    closeSettingsWindow = mod.closeSettingsWindow;
+  });
+
+  describe("createSettingsWindow", () => {
+    it("returns a BrowserWindow instance", () => {
+      const win = createSettingsWindow();
+      expect(win).toBeDefined();
+    });
+
+    it("focuses existing window if already open (singleton)", async () => {
+      const win1 = createSettingsWindow();
+      const win2 = createSettingsWindow();
+      expect(mockFocus).toHaveBeenCalled();
+      // Same instance returned
+      expect(win1).toBe(win2);
+    });
+
+    it("sets activation policy to regular when shown", async () => {
+      createSettingsWindow();
+      // Wait for ready-to-show handler
+      await new Promise((r) => setTimeout(r, 10));
+      expect(mockSetActivationPolicy).toHaveBeenCalledWith("regular");
+    });
+  });
+
+  describe("closeSettingsWindow", () => {
+    it("closes the settings window if open", async () => {
+      createSettingsWindow();
+      await new Promise((r) => setTimeout(r, 10));
+      closeSettingsWindow();
+      expect(mockClose).toHaveBeenCalled();
+    });
+
+    it("is safe to call when no window exists", () => {
+      expect(() => closeSettingsWindow()).not.toThrow();
+    });
+
+    it("is safe to call when window is destroyed", async () => {
+      const win = createSettingsWindow();
+      await new Promise((r) => setTimeout(r, 10));
+      mockIsDestroyed.mockReturnValue(true);
+      win.isDestroyed = mockIsDestroyed;
+      expect(() => closeSettingsWindow()).not.toThrow();
+    });
+  });
+});

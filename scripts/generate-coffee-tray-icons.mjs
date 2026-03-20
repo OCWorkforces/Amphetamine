@@ -31,7 +31,7 @@ if (!existsSync(ASSETS_DIR)) {
 function coffeeCupSvg(opts) {
   const { fill, steamColor, size } = opts;
   const s = size;
-  const pad = s * 0.05;
+  const pad = s * 0.01;
   const iw = s - pad * 2; // inner width
   const ih = s - pad * 2;
 
