@@ -133,6 +133,7 @@ body {
   padding: 0 0 10px;
   display: flex;
   flex-direction: column;
+  justify-content: center;
   overflow: hidden;
 }
 
