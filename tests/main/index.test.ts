@@ -39,7 +39,7 @@ vi.mock("electron", async (importOriginal) => {
       setActivationPolicy: mockSetActivationPolicy,
       exit: mockExit,
     },
-    BrowserWindow: vi.fn().mockImplementation(function (this: any) {
+    BrowserWindow: vi.fn().mockImplementation(function (this: Record<string, ReturnType<typeof vi.fn>>) {
       this.loadURL = vi.fn();
       this.loadFile = vi.fn();
       this.show = vi.fn();

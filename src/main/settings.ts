@@ -6,7 +6,7 @@ import { DEFAULT_SETTINGS } from "../shared/types.js";
 import type { AppSettings } from "../shared/types.js";
 
 /** Callback invoked when settings change (partial or full update) */
-type SettingsChangeCallback = (settings: AppSettings) => void;
+type SettingsChangeCallback = (_settings: AppSettings) => void;
 
 const settingsListeners = new Set<SettingsChangeCallback>();
 

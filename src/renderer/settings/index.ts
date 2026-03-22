@@ -1,4 +1,5 @@
 import "./styles.css";
+import log from "electron-log";
 import type { AppSettings } from "../../shared/types.js";
 
 const heroIcon = new URL("../../assets/settings-hero-icon.png", import.meta.url).toString();
@@ -175,8 +176,8 @@ async function saveSettings(
 async function init(): Promise<void> {
   try {
     settings = await window.api.settings.get();
-  } catch {
-    // Use default if load fails; render will show no error
+  } catch (e1) {
+    log.info("[settings] Failed to load settings, using defaults", e1);
   }
 
   try {
@@ -184,7 +185,9 @@ async function init(): Promise<void> {
     if (status?.isRunning) {
       settings.sessionDuration = status.durationMinutes;
     }
-  } catch {}
+  } catch (e2) {
+    log.info("[settings] Failed to get session status", e2);
+  }
 
   render();
 }

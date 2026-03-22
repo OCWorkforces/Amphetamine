@@ -48,7 +48,7 @@ const api = {
       ),
   },
 
-  onSettingsChanged: (callback: (settings: AppSettings) => void) => {
+  onSettingsChanged: (callback: (_settings: AppSettings) => void) => {
     const listener = (_event: unknown, settings: AppSettings) => {
       callback(settings);
     };
@@ -64,7 +64,7 @@ const api = {
         IPC_CHANNELS.AUTO_UPDATER_CHECK,
         undefined as IpcRequest<typeof IPC_CHANNELS.AUTO_UPDATER_CHECK>,
       ),
-    onStatus: (callback: (data: IpcResponse<typeof IPC_CHANNELS.AUTO_UPDATER_STATUS>) => void) => {
+    onStatus: (callback: (_data: IpcResponse<typeof IPC_CHANNELS.AUTO_UPDATER_STATUS>) => void) => {
       const listener = (_event: unknown, data: IpcResponse<typeof IPC_CHANNELS.AUTO_UPDATER_STATUS>) => {
         callback(data);
       };

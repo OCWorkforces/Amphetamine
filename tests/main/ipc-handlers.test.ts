@@ -28,7 +28,7 @@ vi.mock("electron", async (importOriginal) => {
 
 // Mock dependencies
 const mockGetSettings = vi.fn().mockReturnValue({ ...DEFAULT_SETTINGS });
-const mockUpdateSettings = vi.fn().mockImplementation((partial: any) => ({
+const mockUpdateSettings = vi.fn().mockImplementation((partial: Partial<typeof DEFAULT_SETTINGS>) => ({
   ...DEFAULT_SETTINGS,
   ...partial,
 }));
@@ -80,8 +80,8 @@ vi.mock("../../src/main/session-timer.js", () => ({
 }));
 
 describe("ipc-handlers", () => {
-  let registerIpcHandlers: (win: any) => void;
-  let registeredHandlers: Map<string, any>;
+  let registerIpcHandlers: (_win: { setSize?: (_w: number, _h: number, _animate?: boolean) => void }) => void;
+  let registeredHandlers: Map<string, (..._args: unknown[]) => unknown>;
 
   beforeEach(async () => {
     vi.clearAllMocks();
@@ -89,7 +89,7 @@ describe("ipc-handlers", () => {
 
     // Reset mock return values
     mockGetSettings.mockReturnValue({ ...DEFAULT_SETTINGS });
-    mockUpdateSettings.mockImplementation((partial: any) => ({
+    mockUpdateSettings.mockImplementation((partial: Partial<typeof DEFAULT_SETTINGS>) => ({
       ...DEFAULT_SETTINGS,
       ...partial,
     }));
@@ -105,10 +105,10 @@ describe("ipc-handlers", () => {
 
     // Clear and setup handler registry
     registeredHandlers = new Map();
-    mockIpcMainHandle.mockImplementation((channel: string, handler: any) => {
+    mockIpcMainHandle.mockImplementation((channel: string, handler: (..._args: unknown[]) => unknown) => {
       registeredHandlers.set(channel, handler);
     });
-    mockIpcMainOn.mockImplementation((channel: string, handler: any) => {
+    mockIpcMainOn.mockImplementation((channel: string, handler: (..._args: unknown[]) => unknown) => {
       registeredHandlers.set(channel, handler);
     });
 

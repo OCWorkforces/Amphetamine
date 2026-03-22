@@ -78,6 +78,7 @@ export default [
         document: "readonly",
         HTMLElement: "readonly",
         HTMLInputElement: "readonly",
+        HTMLSelectElement: "readonly",
         HTMLButtonElement: "readonly",
         HTMLSpanElement: "readonly",
         EventListener: "readonly",
@@ -86,6 +87,7 @@ export default [
         setInterval: "readonly",
         clearInterval: "readonly",
         requestAnimationFrame: "readonly",
+        URL: "readonly",
         console: "readonly",
         // Vitest globals
         vi: "readonly",
@@ -109,11 +111,12 @@ export default [
         sourceType: "module",
       },
       },
+
     plugins: {
       "@typescript-eslint": tseslint,
     },
     rules: {
-      // TypeScript-specific
+      "no-unused-vars": "off",
       "@typescript-eslint/no-unused-vars": [
         "warn",
         { argsIgnorePattern: "^_" },

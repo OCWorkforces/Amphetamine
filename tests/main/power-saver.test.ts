@@ -25,7 +25,7 @@ describe("power-saver", () => {
   let startPreventingSleep: () => void;
   let stopPreventingSleep: () => void;
   let isPreventingSleep: () => boolean;
-  let syncPreventSleep: (enabled: boolean) => void;
+  let syncPreventSleep: (_enabled: boolean) => void;
 
   beforeEach(async () => {
     vi.resetModules();

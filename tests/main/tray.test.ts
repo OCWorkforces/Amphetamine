@@ -5,14 +5,12 @@ describe("tray module exports", () => {
   beforeEach(async () => {
     vi.resetModules();
     vi.mock("electron", () => ({
-      Tray: vi.fn().mockImplementation(function (this: any) {
+      Tray: vi.fn().mockImplementation(function (this: Record<string, ReturnType<typeof vi.fn>>) {
         this.setToolTip = vi.fn();
         this.setTitle = vi.fn();
         this.setImage = vi.fn();
         this.on = vi.fn();
-        this.getBounds = vi
-          .fn()
-          .mockReturnValue({ x: 100, y: 0, width: 22, height: 22 });
+        this.getBounds = vi.fn().mockReturnValue({ x: 100, y: 0, width: 22, height: 22 });
         this.popUpContextMenu = vi.fn();
       }),
       Menu: { buildFromTemplate: vi.fn().mockReturnValue({}) },
@@ -29,12 +27,12 @@ describe("tray module exports", () => {
         createEmpty: vi.fn().mockReturnValue({ addRepresentation: vi.fn() }),
       },
       nativeTheme: { shouldUseDarkColors: false, on: vi.fn() },
-      BrowserWindow: vi.fn().mockImplementation(function (this: any) {
+      BrowserWindow: vi.fn().mockImplementation(function (this: Record<string, ReturnType<typeof vi.fn>>) {
         this.on = vi.fn();
       }),
     }));
     vi.mock("../../src/main/settings.js", () => {
-      const settingsChangeCallbacks: Array<(s: any) => void> = [];
+      const settingsChangeCallbacks: Array<(_s: import("../../src/shared/types.js").AppSettings) => void> = [];
       return {
         getSettings: vi
           .fn()
@@ -42,7 +40,7 @@ describe("tray module exports", () => {
         updateSettings: vi
           .fn()
           .mockReturnValue({ launchAtLogin: false, preventSleep: false }),
-        onSettingsChanged: vi.fn().mockImplementation((cb: (s: any) => void) => {
+        onSettingsChanged: vi.fn().mockImplementation((cb: (_s: import("../../src/shared/types.js").AppSettings) => void) => {
           settingsChangeCallbacks.push(cb);
           return () => {
             const idx = settingsChangeCallbacks.indexOf(cb);
@@ -59,9 +57,9 @@ describe("tray module exports", () => {
 
   it("setupTray subscribes to settings changes via onSettingsChanged", async () => {
     const { setupTray } = await import("../../src/main/tray.js");
-    const settingsMod = (await import("../../src/main/settings.js")) as any;
+    const settingsMod = (await import("../../src/main/settings.js")) as unknown as Record<string, ReturnType<typeof vi.fn>>;
 
-    const mockWindow = {} as any;
+    const mockWindow = {} as unknown as Parameters<typeof import("../../src/main/tray.js").setupTray>[0];
     setupTray(mockWindow);
 
     expect(settingsMod.onSettingsChanged).toHaveBeenCalledWith(
@@ -72,9 +70,9 @@ describe("tray module exports", () => {
   it("tray icon updates when settings change (preventSleep toggle)", async () => {
     const { setupTray } = await import("../../src/main/tray.js");
     const { Tray } = await import("electron");
-    const settingsMod = (await import("../../src/main/settings.js")) as any;
+    const settingsMod = (await import("../../src/main/settings.js")) as unknown as Record<string, ReturnType<typeof vi.fn>>;
 
-    const mockWindow = {} as any;
+    const mockWindow = {} as unknown as Parameters<typeof import("../../src/main/tray.js").setupTray>[0];
     setupTray(mockWindow);
 
     const trayInstance = (Tray as ReturnType<typeof vi.fn>).mock.results[0]
@@ -96,7 +94,7 @@ describe("tray module exports", () => {
     const { setupTray } = await import("../../src/main/tray.js");
     const { nativeTheme } = await import("electron");
 
-    const mockWindow = {} as any;
+    const mockWindow = {} as unknown as Parameters<typeof import("../../src/main/tray.js").setupTray>[0];
     setupTray(mockWindow);
 
     expect(nativeTheme.on).toHaveBeenCalledWith(

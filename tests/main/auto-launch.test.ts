@@ -16,8 +16,8 @@ vi.mock("electron", () => ({
 
 describe("auto-launch", () => {
   let getAutoLaunchStatus: () => boolean;
-  let setAutoLaunch: (enabled: boolean) => void;
-  let syncAutoLaunch: (enabled: boolean) => void;
+  let setAutoLaunch: (_enabled: boolean) => void;
+  let syncAutoLaunch: (_enabled: boolean) => void;
 
   beforeEach(async () => {
     vi.resetModules();

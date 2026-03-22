@@ -78,8 +78,8 @@ function validateOnSender(event: IpcMainEvent): boolean {
 function typedHandle<K extends keyof IpcChannelMap>(
   channel: K,
   handler: (
-    event: IpcMainInvokeEvent,
-    request: IpcChannelMap[K]["request"],
+    _event: IpcMainInvokeEvent,
+    _request: IpcChannelMap[K]["request"],
   ) => Promise<IpcChannelMap[K]["response"]> | IpcChannelMap[K]["response"],
 ): void {
   ipcMain.handle(channel, handler as Parameters<typeof ipcMain.handle>[1]);

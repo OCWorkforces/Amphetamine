@@ -30,7 +30,7 @@ vi.mock("../../src/main/settings.js", () => ({
 }));
 
 describe("session-timer", () => {
-  let startSession: (durationMinutes: number | null) => {
+  let startSession: (_durationMinutes: number | null) => {
     isRunning: boolean;
     startedAt: number | null;
     expiresAt: number | null;

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { existsSync, readFileSync, writeFileSync, mkdirSync, rmSync } from "fs";
+import { existsSync, readFileSync, mkdirSync, rmSync } from "fs";
 import { join } from "path";
 
 vi.mock("electron", () => ({
