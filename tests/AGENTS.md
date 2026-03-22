@@ -6,14 +6,20 @@ Two-project Vitest workspace for Electron app testing. Main process uses Node en
 
 ```
 tests/
-├── setup.main.ts     # Electron API mocks
+├── setup.main.ts              # Global Electron API mocks
 ├── main/
-│   ├── power-saver.test.ts  # powerSaveBlocker state machine
-│   ├── settings.test.ts     # file I/O, validation, defaults
-│   ├── tray.test.ts         # tray module, about window
-│   └── ipc.test.ts          # validateSender, origin check
+│   ├── index.test.ts          # createWindow config, error handlers
+│   ├── ipc.test.ts            # validateSender, ALLOWED_ORIGINS
+│   ├── ipc-handlers.test.ts   # All 9 IPC channel handlers
+│   ├── power-saver.test.ts    # powerSaveBlocker state machine
+│   ├── power-saver-edge.test.ts # Edge cases: idempotency, invalid IDs
+│   ├── settings.test.ts       # File I/O, validation, defaults, cache
+│   ├── session-timer.test.ts  # Session start/cancel/expiry with timers
+│   ├── settings-window.test.ts # Settings window singleton
+│   ├── tray.test.ts           # Tray icon, context menu, theme
+│   └── auto-launch.test.ts    # macOS login item management
 └── renderer/
-    └── delegation.test.ts   # event delegation on #app
+    └── delegation.test.ts     # Event delegation on #app
 ```
 
 ## CONFIGURATION
@@ -26,45 +32,123 @@ projects: [
     environment: "node",
     include: ["tests/main/**/*.test.ts"],
     setupFiles: ["./tests/setup.main.ts"],
+    coverage: { provider: "v8", include: ["src/main/**/*.ts"] },
   },
   {
     name: "renderer",
     environment: "jsdom",
     include: ["tests/renderer/**/*.test.ts"],
+    coverage: { provider: "v8", include: ["src/renderer/**/*.ts"] },
   },
 ];
+// passWithNoTests: true
 ```
 
-## MAIN PROCESS TESTS (32 tests)
+## MAIN PROCESS TESTS (90 tests)
 
-**Mock Pattern**:
-
-```typescript
-vi.hoisted(() => { const mockX = vi.fn(); return { mockX }; });
-vi.mock("electron", () => ({ shell, Notification, powerSaveBlocker, ... }));
-// beforeEach: vi.resetModules() + vi.clearAllMocks() + re-apply mock defaults
-// dynamic import: const mod = await import("../../src/main/foo.js");
-```
-
-| File                | Tests | Focus                                          |
-| ------------------- | ----- | ---------------------------------------------- |
-| power-saver.test.ts | 12    | powerSaveBlocker: start/stop/isPreventingSleep |
-| settings.test.ts    | 9     | File I/O, validation, defaults, cache behavior |
-| tray.test.ts        | 3     | Tray icon, context menu, about window          |
-| ipc.test.ts         | 8     | validateSender, ALLOWED_ORIGINS                |
-
-**Key Test Patterns**:
-
-- `vi.hoisted()` + `vi.mock()` for Electron API mocking
-- `vi.resetModules()` + `await import(...)` for fresh module state per test
-- `vi.clearAllMocks()` in `beforeEach` with mock behavior re-applied after clear
-- `as any` type assertion allowed in test mocks only
+| File                       | Tests | Focus                                         |
+| -------------------------- | ----- | --------------------------------------------- |
+| `ipc-handlers.test.ts`     | 19    | All 9 IPC channel handler registrations       |
+| `power-saver-edge.test.ts` | 18    | Edge cases: idempotency, invalid blocker IDs  |
+| `session-timer.test.ts`    | 16    | Session lifecycle: start/cancel/expiry/timers |
+| `auto-launch.test.ts`      | 13    | Login item: get/set/sync, error handling      |
+| `power-saver.test.ts`      | 12    | Core: start/stop/isPreventingSleep/sync       |
+| `settings.test.ts`         | 10    | File I/O, validation, defaults, cache         |
+| `settings-window.test.ts`  | 9     | Singleton: create/focus/close/destroy         |
+| `index.test.ts`            | 7     | createWindow: config, sandbox, preload        |
+| `ipc.test.ts`              | 8     | validateSender: origins, rejection cases      |
+| `tray.test.ts`             | 4     | setupTray: icon update, theme, settings       |
 
 ## RENDERER TESTS (3 tests)
 
-| File               | Tests | Focus                    |
-| ------------------ | ----- | ------------------------ |
-| delegation.test.ts | 3     | Event delegation on #app |
+| File                 | Tests | Focus                      |
+| -------------------- | ----- | -------------------------- |
+| `delegation.test.ts` | 3     | Event delegation on `#app` |
+
+**Total: 93 tests across 11 files**
+
+## MOCK PATTERNS
+
+### Pattern 1: `vi.hoisted()` + `vi.mock("electron", async (importOriginal) => ...)`
+
+Preserve actual Electron exports while overriding specific ones:
+
+```typescript
+const { mockStart, mockStop, mockIsStarted } = vi.hoisted(() => ({ ... }));
+vi.mock("electron", async (importOriginal) => {
+  const actual = await importOriginal();
+  return { ...actual, powerSaveBlocker: { start: mockStart, ... } };
+});
+```
+
+### Pattern 2: `vi.mock("electron", () => ({ ... }))` — Direct mock
+
+Full replacement when no preservation needed.
+
+### Pattern 3: Internal module mocking
+
+```typescript
+vi.mock("../../src/main/settings.js", () => ({
+  getSettings: mockGetSettings,
+  updateSettings: mockUpdateSettings,
+  onSettingsChanged: vi.fn(),
+}));
+```
+
+### Pattern 4: electron-log mock
+
+```typescript
+vi.mock("electron-log", () => ({
+  default: { error: mockLogError, info: mockLogInfo, warn: vi.fn() },
+}));
+```
+
+### Pattern 5: Mutable state closure for settings
+
+```typescript
+let settingsState = { launchAtLogin: false, preventSleep: false, sessionDuration: null };
+mockGetSettings.mockImplementation(() => ({ ...settingsState }));
+mockUpdateSettings.mockImplementation((partial) => {
+  settingsState = { ...settingsState, ...partial };
+  return { ...settingsState };
+});
+```
+
+## BEFORE EACH PATTERN
+
+All main process tests follow:
+
+```typescript
+beforeEach(async () => {
+  vi.clearAllMocks();
+  vi.resetModules();
+  // Re-apply default mock return values after clearAllMocks
+  mockStart.mockReturnValue(42);
+  const mod = await import("../../src/main/module.js");
+  // assign exported functions
+});
+```
+
+Key: `vi.resetModules()` + dynamic `import()` for fresh module state per test.
+
+## SETUP FILE
+
+`tests/setup.main.ts` mocks full Electron API:
+
+| Module             | Key Methods                                                                               |
+| ------------------ | ----------------------------------------------------------------------------------------- |
+| `app`              | getVersion, quit, dock.{hide,show}, whenReady, on, getPath, getAppPath                    |
+| `BrowserWindow`    | loadURL, show, hide, destroy, getBounds, setPosition, on, webContents.send, getAllWindows |
+| `ipcMain`          | handle, on, off                                                                           |
+| `Tray`             | setToolTip, setTitle, on, getBounds, popUpContextMenu                                     |
+| `Menu`             | buildFromTemplate                                                                         |
+| `powerSaveBlocker` | start (→1), stop, isStarted (→true)                                                       |
+| `screen`           | getDisplayNearestPoint                                                                    |
+| `nativeImage`      | createFromPath, createEmpty                                                               |
+| `nativeTheme`      | shouldUseDarkColors, on                                                                   |
+| `shell`            | openExternal                                                                              |
+| `dialog`           | showErrorBox, showMessageBox                                                              |
+| `Notification`     | show                                                                                      |
 
 ## COMMANDS
 
@@ -73,13 +157,3 @@ bun run test          # Run all tests once
 bun run test:watch    # Watch mode
 bun run test:coverage # With v8 coverage
 ```
-
-## SETUP FILE
-
-Mocked Electron APIs in `tests/setup.main.ts`:
-
-- `app`: getVersion, quit, dock, isPackaged, whenReady, on, getPath
-- `BrowserWindow`: loadURL, show, hide, destroy, getBounds, setPosition, webContents, getAllWindows
-- `ipcMain`: handle, on, off
-- `Tray`: setToolTip, setTitle, on, getBounds, popUpContextMenu
-- `Menu`, `screen`, `nativeImage`, `shell`, `dialog`, `nativeTheme`, `Notification`, `powerSaveBlocker`

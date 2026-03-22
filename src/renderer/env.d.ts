@@ -1,5 +1,19 @@
 import type { AppSettings } from "../shared/types.js";
 
+interface SessionStartResponse {
+  startedAt: number;
+  durationMinutes: number | null;
+  expiresAt: number | null;
+}
+
+interface SessionStatusResponse {
+  isRunning: boolean;
+  startedAt: number | null;
+  expiresAt: number | null;
+  remainingSeconds: number | null;
+  durationMinutes: number | null;
+}
+
 declare global {
   interface Window {
     api: {
@@ -12,6 +26,24 @@ declare global {
       settings: {
         get(): Promise<AppSettings>;
         set(partial: Partial<AppSettings>): Promise<AppSettings>;
+        open(): Promise<void>;
+      };
+      session: {
+        start(durationMinutes: number | null): Promise<SessionStartResponse>;
+        cancel(): Promise<{ cancelled: boolean }>;
+        getStatus(): Promise<SessionStatusResponse | null>;
+      };
+      onSettingsChanged(callback: (settings: AppSettings) => void): () => void;
+      autoUpdater: {
+        checkForUpdates(): Promise<{ version: string; releaseDate: string } | null>;
+        onStatus(
+          callback: (data: {
+            status: "checking" | "available" | "not-available" | "downloading" | "downloaded" | "error";
+            info?: { version: string; releaseDate: string; releaseNotes?: string };
+            progress?: { percent: number; transferred: number; total: number };
+            error?: string;
+          }) => void,
+        ): () => void;
       };
     };
   }

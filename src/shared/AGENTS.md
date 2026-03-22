@@ -11,39 +11,68 @@ Type definitions shared across main, preload, and renderer processes. Single sou
 ## IPC CHANNELS
 
 ```typescript
-// types.ts:2-7
+// types.ts:2-11
 export const IPC_CHANNELS = {
   WINDOW_SET_HEIGHT: "window:set-height",
   APP_GET_VERSION: "app:get-version",
   SETTINGS_GET: "settings:get",
   SETTINGS_SET: "settings:set",
+  SESSION_START: "session:start",
+  SESSION_CANCEL: "session:cancel",
+  SESSION_STATUS: "session:status",
+  SETTINGS_CHANGED: "settings:changed", // push from main
+  SETTINGS_OPEN: "settings:open",
 } as const;
 ```
 
-`IpcChannelMap` (types.ts:10) maps each channel to its `request` / `response` types.
+`IpcChannelMap` (types.ts:15) maps each channel to its `request` / `response` types.
 
 ## DATA MODELS
 
 ### AppSettings
 
 ```typescript
-// types.ts:35-40
+// types.ts:66-76
 export interface AppSettings {
   launchAtLogin: boolean; // macOS login item toggle
   preventSleep: boolean; // powerSaveBlocker toggle
+  sessionDuration: number | null; // null = indefinite, number = minutes
+  batteryThreshold?: number; // auto-disable on battery below this %
+  shortcut?: string; // global shortcut accelerator string
 }
 
-// types.ts:43-46
+// types.ts:80-85
 export const DEFAULT_SETTINGS: AppSettings = {
   launchAtLogin: false,
   preventSleep: false,
+  sessionDuration: null,
+  batteryThreshold: 50,
+  shortcut: "CommandOrControl+Shift+A",
 };
+```
+
+### Session Types
+
+```typescript
+// types.ts:22-28 (inline in IpcChannelMap)
+// session:start request
+{ durationMinutes: number | null }
+
+// session:start response
+{ startedAt: number; durationMinutes: number | null; expiresAt: number | null }
+
+// session:cancel response
+{ cancelled: boolean }
+
+// session:status response
+{ isRunning: boolean; startedAt: number | null; expiresAt: number | null;
+  remainingSeconds: number | null; durationMinutes: number | null } | null
 ```
 
 ## TYPE UTILITIES
 
 ```typescript
-// types.ts:30-32
+// types.ts:61-63
 export type IpcChannel = keyof IpcChannelMap;
 export type IpcRequest<K extends IpcChannel> = IpcChannelMap[K]["request"];
 export type IpcResponse<K extends IpcChannel> = IpcChannelMap[K]["response"];
@@ -51,7 +80,7 @@ export type IpcResponse<K extends IpcChannel> = IpcChannelMap[K]["response"];
 
 ## USAGE PATTERN
 
-1. **Add new channel**: Add to `IPC_CHANNELS` object + `IpcChannelMap`
+1. **Add new channel**: Add to `IPC_CHANNELS` object + `IpcChannelMap` (both request and response)
 2. **Add new data type**: Define interface/type export
 3. **Use in processes**: `import { ... } from '../shared/types.js'`
 

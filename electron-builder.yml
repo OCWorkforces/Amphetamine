@@ -25,12 +25,14 @@ electronLanguages:
 mac:
   target:
     - target: dmg
-      arch: arm64
+      arch:
+        - arm64
     - target: zip
-      arch: arm64
-  # ARM64-only: minimum macOS version aligns with Apple Silicon debut
+      arch:
+        - arm64
+        - x64
+  # Apple Silicon + Intel support
   minimumSystemVersion: "11.0.0"
-  # No universal build - don't merge ASARs
   mergeASARs: false
   hardenedRuntime: false
   gatekeeperAssess: false
@@ -50,3 +52,7 @@ dmg:
   sign: false
 
 afterPack: build/after-pack.cjs
+
+publish:
+  - provider: github
+    releaseType: release

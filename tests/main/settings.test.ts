@@ -138,7 +138,7 @@ describe("settings", () => {
       const result = updateSettings({ launchAtLogin: true });
 
       expect(Object.keys(result).sort()).toEqual(
-        ["launchAtLogin", "preventSleep"].sort(),
+        ["launchAtLogin", "preventSleep", "sessionDuration", "batteryThreshold", "shortcut"].sort(),
       );
     });
 

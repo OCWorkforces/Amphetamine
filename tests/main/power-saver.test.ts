@@ -6,13 +6,20 @@ const { mockStart, mockStop, mockIsStarted } = vi.hoisted(() => ({
   mockIsStarted: vi.fn().mockReturnValue(true),
 }));
 
-vi.mock("electron", () => ({
-  powerSaveBlocker: {
-    start: mockStart,
-    stop: mockStop,
-    isStarted: mockIsStarted,
-  },
-}));
+vi.mock("electron", async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    powerSaveBlocker: {
+      start: mockStart,
+      stop: mockStop,
+      isStarted: mockIsStarted,
+    },
+    app: {
+      getPath: vi.fn().mockReturnValue("/tmp/test-user-data"),
+    },
+  };
+});
 
 describe("power-saver", () => {
   let startPreventingSleep: () => void;

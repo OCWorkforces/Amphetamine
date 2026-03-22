@@ -6,3 +6,9 @@ You should create a concise README that covers:
     5. Development commands
 
 Let's write a clean, professional README without excessive emojis or fluff.
+
+
+Uses `electron.powerSaveBlocker.start('prevent-app-suspension')`
+
+ Uses `electron.powerSaveBlocker.start('prevent-display-sleep')`
+ 

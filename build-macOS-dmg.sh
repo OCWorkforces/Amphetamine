@@ -17,26 +17,33 @@ success() { echo -e "${GREEN}✔ $*${RESET}"; }
 error()   { echo -e "${RED}✘ $*${RESET}" >&2; exit 1; }
 
 # ── Argument parsing ──────────────────────────────────────────────────────────
-ENVIRONMENT=""
+ENVIRONMENT="prd"
+ARCH="arm64"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --environment)
+      ENVIRONMENT="${2:-prd}"
+      shift 2
+      ;;
+    --arch)
       if [[ -z "${2:-}" ]]; then
-        error "--environment requires a value (e.g., stable, beta, dev)"
+        error "--arch requires a value (e.g., arm64, x64, universal)"
       fi
-      ENVIRONMENT="$2"
+      ARCH="$2"
       shift 2
       ;;
     -h|--help)
       echo "Usage: $0 [OPTIONS]"
       echo ""
       echo "Options:"
-      echo "  --environment <name>  Append environment name to DMG filename (e.g., stable, beta)"
+      echo "  --environment <name>  Append environment name to DMG filename (default: prd, e.g., stable, beta)", 
+      echo "  --arch <arch>           Target architecture: arm64, x64, universal (default: arm64)"
       echo "  -h, --help            Show this help message"
       echo ""
       echo "Examples:"
-      echo "  $0                              # Build DMG with default name"
+      echo "  $0                              # Build arm64 DMG (default env: prd)"
+      echo "  $0 --arch x64                     # Build x64 DMG"
       echo "  $0 --environment stable         # Build DMG: Amphetamine-1.0.0-arm64-stable.dmg"
       exit 0
       ;;
@@ -50,9 +57,14 @@ if [[ -n "$ENVIRONMENT" ]]; then
   info "Environment suffix: ${ENVIRONMENT}"
 fi
 
+# Default to arm64 if not specified
+if [[ -z "$ARCH" ]]; then
+  ARCH="arm64"
+fi
+info "Target architecture: ${ARCH}"
+
 # ── Prerequisite checks ───────────────────────────────────────────────────────
 [[ "$(uname -s)" == "Darwin" ]] || error "This script must run on macOS."
-[[ "$(uname -m)" == "arm64"  ]] || error "This script requires an Apple Silicon (arm64) Mac."
 
 command -v bun              >/dev/null 2>&1 || error "'bun' is not installed."
 command -v codesign         >/dev/null 2>&1 || error "'codesign' not found — install Xcode Command Line Tools."
@@ -90,18 +102,18 @@ info "Building TypeScript sources (main + preload + renderer)…"
 bun run build
 success "Source build complete."
 
-# ── 4. Package → DMG (arm64 only) ────────────────────────────────────────────
-info "Packaging macOS arm64 DMG…"
+# ── 4. Package → DMG ─────────────────────────────────────────────────────
+info "Packaging macOS ${ARCH} DMG…"
 
 if [[ "$SIGN_MODE" == "developer-id" ]]; then
   # Full Developer ID signing — Gatekeeper will accept the app
-  CSC_NAME="$DEVELOPER_ID" bun x electron-builder --mac dmg --arm64
+  CSC_NAME="$DEVELOPER_ID" bun x electron-builder --mac dmg --${ARCH}
 else
   # Ad-hoc signing — usable on the same machine after quarantine removal
-  CSC_IDENTITY_AUTO_DISCOVERY=false bun x electron-builder --mac dmg --arm64
+  CSC_IDENTITY_AUTO_DISCOVERY=false bun x electron-builder --mac dmg --${ARCH}
 fi
 
-success "DMG build complete."
+success "DMG build complete.",
 
 # ── 5. Re-sign .app (ad-hoc deep) + sign the DMG ────────────────────────────
 # electron-builder signs with --runtime (hardened runtime) which causes macOS
@@ -111,7 +123,7 @@ success "DMG build complete."
 # Fix: deep-re-sign the whole .app *without* --runtime so all components are
 # consistently plain-adhoc, then sign the DMG for quarantine compatibility.
 if [[ "$SIGN_MODE" == "adhoc" ]]; then
-  APP_BUNDLE=$(find dist/mac-arm64 -maxdepth 1 -name '*.app' | head -1)
+  APP_BUNDLE=$(find dist/mac-* -maxdepth 1 -name '*.app' | head -1)
   if [[ -n "$APP_BUNDLE" ]]; then
     info "Re-signing app bundle (deep, ad-hoc, no hardened runtime): ${APP_BUNDLE}…"
     codesign --force --deep --sign - "$APP_BUNDLE"

@@ -25,7 +25,7 @@ describe("tray module exports", () => {
       nativeImage: {
         createFromPath: vi
           .fn()
-          .mockReturnValue({ toPNG: vi.fn().mockReturnValue(Buffer.alloc(0)) }),
+          .mockReturnValue({ toPNG: vi.fn().mockReturnValue(Buffer.alloc(0)), isEmpty: vi.fn().mockReturnValue(false) }),
         createEmpty: vi.fn().mockReturnValue({ addRepresentation: vi.fn() }),
       },
       nativeTheme: { shouldUseDarkColors: false, on: vi.fn() },

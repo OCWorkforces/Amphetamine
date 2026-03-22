@@ -14,9 +14,12 @@ import {
   type IpcResponse,
 } from "../shared/types.js";
 
-import { getSettings, updateSettings } from "./settings.js";
+import { getSettings, updateSettings, onSettingsChanged } from "./settings.js";
 import { syncPreventSleep } from "./power-saver.js";
 import { syncAutoLaunch } from "./auto-launch.js";
+import { createSettingsWindow } from "./settings-window.js";
+import { registerAutoUpdaterIpc } from "./auto-updater.js";
+import * as sessionTimer from "./session-timer.js";
 
 /** Accepted URL origins for IPC senders (renderer served from file:// or localhost in dev) */
 const ALLOWED_ORIGINS = new Set([
@@ -52,8 +55,8 @@ function validateSenderUrl(senderUrl: string): boolean {
     // file:// origin check (packaged app) - validate path is within app bundle
     if (url.protocol === "file:") {
       const filePath = url.pathname;
-      // Accept if path contains .asar (app bundle) or is empty (main window)
-      return filePath.includes(".asar") || filePath.length === 0;
+      // Accept if path is within the app bundle, or is empty (main window)
+      return filePath.startsWith(app.getAppPath()) || filePath.length === 0;
     }
 
     return false;
@@ -99,7 +102,7 @@ export function registerIpcHandlers(win: BrowserWindow): void {
           win.setSize(WINDOW_WIDTH, clampedHeight, true);
         }
       } catch (err) {
-        console.error("[ipc] WINDOW_SET_HEIGHT error:", err);
+        log.error("[ipc] WINDOW_SET_HEIGHT error:", err);
       }
     },
   );
@@ -138,8 +141,70 @@ export function registerIpcHandlers(win: BrowserWindow): void {
       if (typeof partial.launchAtLogin === "boolean") {
         syncAutoLaunch(updated.launchAtLogin);
       }
-
       return updated;
     },
   );
+
+  // Session timer handlers
+  typedHandle(IPC_CHANNELS.SESSION_START, async (_event, request) => {
+    const result = sessionTimer.startSession(request.durationMinutes);
+    // startSession always sets startedAt, but SessionState allows null for getStatus()
+    const startedAt = result.startedAt ?? Date.now();
+    return {
+      startedAt,
+      durationMinutes: result.durationMinutes,
+      expiresAt: result.expiresAt,
+    };
+  });
+
+  typedHandle(IPC_CHANNELS.SESSION_CANCEL, async () => {
+    sessionTimer.cancelSession();
+    return { cancelled: true };
+  });
+
+  typedHandle(IPC_CHANNELS.SESSION_STATUS, async () => {
+    const result = sessionTimer.getStatus();
+    if (!result.isRunning) {
+      return null;
+    }
+    const now = Date.now();
+    const remainingSeconds = result.expiresAt
+      ? Math.max(0, Math.round((result.expiresAt - now) / 1000))
+      : null;
+    return {
+      isRunning: result.isRunning,
+      startedAt: result.startedAt,
+      expiresAt: result.expiresAt,
+      remainingSeconds,
+      durationMinutes: result.durationMinutes,
+    };
+  });
+
+  // Open settings window from renderer
+  typedHandle(IPC_CHANNELS.SETTINGS_OPEN, async (event) => {
+    if (!validateSender(event)) return;
+    createSettingsWindow();
+  });
+
+  // Auto-updater IPC (separate module, registered here for consistency)
+  registerAutoUpdaterIpc();
+
+
+
+  let prevPreventSleep = getSettings().preventSleep;
+
+  // Push settings changes to all renderer windows
+  onSettingsChanged((settings) => {
+    // Cancel running session when preventSleep transitions true → false
+    if (prevPreventSleep && !settings.preventSleep) {
+      prevPreventSleep = settings.preventSleep;
+      sessionTimer.cancelSession();
+    } else {
+      prevPreventSleep = settings.preventSleep;
+    }
+
+    for (const win of BrowserWindow.getAllWindows()) {
+      win.webContents.send(IPC_CHANNELS.SETTINGS_CHANGED, settings);
+    }
+  });
 }
