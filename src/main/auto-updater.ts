@@ -56,7 +56,7 @@ export function initAutoUpdater(): void {
     );
   });
 
-  autoUpdater.on("updatehttps://github.com/OCWorkforces/Amphetamine
+  autoUpdater.on("update-not-available", (info: UpdateInfo) => {
     log.info("[auto-updater] No update available. Current version:", info.version);
     broadcastToWindows(IPC_CHANNELS.AUTO_UPDATER_STATUS, {
       status: "not-available",
