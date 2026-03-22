@@ -40,7 +40,7 @@ jobs:
         include:
           - runs-on: macos-latest
             arch: arm64
-          - runs-on: macos-13
+          - runs-on: macos-15-intel
             arch: x64
       fail-fast: false
     runs-on: ${{ matrix.runs-on }}
