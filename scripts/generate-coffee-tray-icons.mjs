@@ -13,6 +13,8 @@
  */
 
 import sharp from "sharp";
+import { Buffer } from "node:buffer";
+import process from "node:process";
 import { writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -182,9 +184,12 @@ const ICONS = [
   },
 ];
 
+const log = (...msg) => process.stdout.write(msg.join(" ") + "\n");
+const logErr = (...msg) => process.stderr.write(msg.join(" ") + "\n");
+
 // --- Main ---
 
-console.log("Generating coffee cup tray icons...\n");
+log("Generating coffee cup tray icons...\n");
 
 for (const icon of ICONS) {
   const svg = coffeeCupSvg({
@@ -202,11 +207,11 @@ for (const icon of ICONS) {
 
     const outPath = join(ASSETS_DIR, icon.name);
     writeFileSync(outPath, png);
-    console.log(`  OK: ${icon.name} (${icon.size}x${icon.size})`);
+    log(`  OK: ${icon.name} (${icon.size}x${icon.size})`);
   } catch (err) {
-    console.error(`  FAIL: ${icon.name}: ${err.message}`);
+    logErr(`  FAIL: ${icon.name}: ${err.message}`);
     process.exitCode = 1;
   }
 }
 
-console.log("\nDone. 8 icons generated.");
+log("\nDone. 8 icons generated.");
