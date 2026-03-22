@@ -1,25 +1,17 @@
 import { app } from "electron";
 import log from "electron-log";
-import {
-  existsSync,
-  readFileSync,
-  writeFileSync,
-  renameSync,
-  mkdirSync,
-} from "fs";
+import { existsSync, readFileSync, writeFileSync, renameSync, mkdirSync } from "fs";
 import { join } from "path";
 import { DEFAULT_SETTINGS } from "../shared/types.js";
 import type { AppSettings } from "../shared/types.js";
 
 /** Callback invoked when settings change (partial or full update) */
-type SettingsChangeCallback = (settings: AppSettings) => void;
+type SettingsChangeCallback = (_settings: AppSettings) => void;
 
 const settingsListeners = new Set<SettingsChangeCallback>();
 
 /** Subscribe to settings changes. Returns an unsubscribe function. */
-export function onSettingsChanged(
-  callback: SettingsChangeCallback,
-): () => void {
+export function onSettingsChanged(callback: SettingsChangeCallback): () => void {
   settingsListeners.add(callback);
   return () => {
     settingsListeners.delete(callback);
@@ -59,6 +51,20 @@ export function loadSettings(): AppSettings {
         typeof parsed.preventSleep === "boolean"
           ? parsed.preventSleep
           : DEFAULT_SETTINGS.preventSleep,
+      sessionDuration:
+        typeof parsed.sessionDuration === "number" && parsed.sessionDuration > 0
+          ? parsed.sessionDuration
+          : DEFAULT_SETTINGS.sessionDuration,
+      batteryThreshold:
+        typeof parsed.batteryThreshold === "number" &&
+        parsed.batteryThreshold >= 0 &&
+        parsed.batteryThreshold <= 100
+          ? parsed.batteryThreshold
+          : DEFAULT_SETTINGS.batteryThreshold,
+      shortcut:
+        typeof parsed.shortcut === "string" && parsed.shortcut.length > 0
+          ? parsed.shortcut
+          : DEFAULT_SETTINGS.shortcut,
     };
     return settingsCache;
   } catch {
@@ -95,6 +101,18 @@ export function updateSettings(partial: Partial<AppSettings>): AppSettings {
   if (typeof partial.preventSleep === "boolean") {
     merged.preventSleep = partial.preventSleep;
   }
+
+  if (typeof partial.batteryThreshold === "number") {
+    const val = partial.batteryThreshold;
+    if (val >= 0 && val <= 100) {
+      merged.batteryThreshold = val;
+    }
+  }
+
+  if (typeof partial.shortcut === "string" && partial.shortcut.length > 0) {
+    merged.shortcut = partial.shortcut;
+  }
+
   // Save and update cache
   saveSettings(merged);
   settingsCache = { ...merged };

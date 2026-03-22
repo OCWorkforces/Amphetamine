@@ -1,4 +1,10 @@
-import { powerSaveBlocker } from "electron";
+import { powerSaveBlocker, powerMonitor } from "electron";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+import log from "electron-log";
+import { getSettings } from "./settings.js";
+
+const execFileAsync = promisify(execFile);
 
 let blockerId: number | null = null;
 
@@ -10,8 +16,13 @@ export function startPreventingSleep(): void {
   if (blockerId !== null && powerSaveBlocker.isStarted(blockerId)) {
     return;
   }
-  blockerId = powerSaveBlocker.start("prevent-display-sleep");
-  console.log("[power-saver] Started preventing sleep (id:", blockerId, ")");
+  const id = powerSaveBlocker.start("prevent-display-sleep");
+  if (id > 0) {
+    blockerId = id;
+    log.info("[power-saver] Started preventing sleep (id:", blockerId, ")");
+  } else {
+    log.error("[power-saver] Failed to start preventing sleep (id:", id, ")");
+  }
 }
 
 /**
@@ -25,7 +36,7 @@ export function stopPreventingSleep(): void {
     }
     blockerId = null;
   }
-  console.log("[power-saver] Stopped preventing sleep");
+  log.info("[power-saver] Stopped preventing sleep");
 }
 
 /**
@@ -44,5 +55,66 @@ export function syncPreventSleep(enabled: boolean): void {
     startPreventingSleep();
   } else {
     stopPreventingSleep();
+  }
+}
+
+/**
+ * Initialize battery monitoring.
+ * Sets up listeners for battery/ac power events.
+ */
+export async function initBatteryMonitoring(): Promise<void> {
+  powerMonitor.on("on-battery", () => {
+    void checkBatteryAndStop();
+  });
+
+  powerMonitor.on("on-ac", () => {
+    log.info("[power-saver] On AC power, battery monitoring reset");
+  });
+}
+
+/**
+ * Check battery level and auto-stop sleep prevention if below threshold.
+ */
+async function checkBatteryAndStop(): Promise<void> {
+  const settings = getSettings();
+  const threshold = settings.batteryThreshold ?? 0;
+
+  // threshold 0 = disabled
+  if (threshold <= 0) return;
+
+  // Not preventing sleep — nothing to do
+  if (!isPreventingSleep()) return;
+
+  try {
+    const percent = await getBatteryPercent();
+    if (percent !== null && percent <= threshold) {
+      stopPreventingSleep();
+      log.info(`[power-saver] Auto-stopped: battery at ${percent}% (threshold: ${threshold}%)`);
+      // Also cancel any active session
+      const { cancelSession } = await import("./session-timer.js");
+      cancelSession();
+    }
+  } catch (err) {
+    log.warn("[power-saver] Failed to check battery level:", err);
+  }
+}
+
+/**
+ * Get battery percentage using pmset.
+ * Returns null if unable to determine.
+ */
+async function getBatteryPercent(): Promise<number | null> {
+  try {
+    const { stdout } = await execFileAsync("pmset", ["-g", "batt"], {
+      timeout: 5000,
+    });
+    // Parse: "Battery Power" or "AC Power", then "InternalBattery-0 (id=12345)\t123%;"
+    const match = stdout.match(/(\d+)%/);
+    if (match && match[1] !== undefined) {
+      return parseInt(match[1], 10);
+    }
+    return null;
+  } catch {
+    return null;
   }
 }

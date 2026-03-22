@@ -1,4 +1,5 @@
 import { app, BrowserWindow, dialog } from "electron";
+import log from "electron-log";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -7,8 +8,10 @@ import { registerIpcHandlers } from "./ipc.js";
 import { getPackageInfo } from "./utils/packageInfo.js";
 import { getSettings } from "./settings.js";
 import { syncAutoLaunch } from "./auto-launch.js";
-import { syncPreventSleep, stopPreventingSleep } from "./power-saver.js";
+import { syncPreventSleep, stopPreventingSleep, initBatteryMonitoring } from "./power-saver.js";
+import { registerGlobalShortcut, unregisterGlobalShortcut } from "./shortcut.js";
 import { closeSettingsWindow } from "./settings-window.js";
+import { initAutoUpdater, stopAutoUpdater } from "./auto-updater.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -16,23 +19,17 @@ const isDev = !app.isPackaged;
 
 // === Process-level error handlers ===
 process.on("uncaughtException", (error: Error) => {
-  console.error("[main] Uncaught exception:", error);
+  log.error("[main] Uncaught exception:", error);
   if (!isDev) {
-    dialog.showErrorBox(
-      "Unexpected Error",
-      error.message || "An unexpected error occurred.",
-    );
+    dialog.showErrorBox("Unexpected Error", error.message || "An unexpected error occurred.");
     app.exit(1);
   }
 });
 
-process.on(
-  "unhandledRejection",
-  (reason: unknown, promise: Promise<unknown>) => {
-    console.error("[main] Unhandled rejection at:", promise, "reason:", reason);
-    // Do not exit on unhandled rejection - these are often recoverable
-  },
-);
+process.on("unhandledRejection", (reason: unknown, promise: Promise<unknown>) => {
+  log.error("[main] Unhandled rejection at:", promise, "reason:", reason);
+  // Do not exit on unhandled rejection - these are often recoverable
+});
 
 const packageJson = getPackageInfo();
 const platform = [os.type(), os.release(), os.arch()].join(", ");
@@ -46,6 +43,7 @@ app.setAboutPanelOptions({
 
 let mainWindow: BrowserWindow | null = null;
 let isQuitting = false;
+let cleanupTray: (() => void) | null = null;
 
 function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
@@ -72,8 +70,7 @@ function createWindow(): BrowserWindow {
   });
 
   if (isDev) {
-    const devUrl =
-      process.env["DEV_SERVER_URL"] ?? "http://localhost:5173";
+    const devUrl = process.env["DEV_SERVER_URL"] ?? "http://localhost:5173";
     win.loadURL(devUrl);
   } else {
     win.loadFile(path.join(__dirname, "..", "renderer", "index.html"));
@@ -87,13 +84,27 @@ function createWindow(): BrowserWindow {
   });
 
   win.on("minimize", () => {
-    win.hide();
+    if (!win.isDestroyed()) {
+      win.webContents.send("popover:hide");
+      setTimeout(() => {
+        if (!win.isDestroyed()) {
+          win.hide();
+        }
+      }, 160);
+    }
   });
 
   // Hide when focus lost (popover behavior)
   win.on("blur", () => {
     if (!isDev) {
-      win.hide();
+      if (!win.isDestroyed()) {
+        win.webContents.send("popover:hide");
+        setTimeout(() => {
+          if (!win.isDestroyed()) {
+            win.hide();
+          }
+        }, 160);
+      }
     }
   });
 
@@ -106,12 +117,15 @@ app.whenReady().then(() => {
 
   mainWindow = createWindow();
   registerIpcHandlers(mainWindow);
-  setupTray();
+  cleanupTray = setupTray();
 
   // Sync auto-launch setting on startup
   const settings = getSettings();
   syncAutoLaunch(settings.launchAtLogin);
   syncPreventSleep(settings.preventSleep);
+  void initBatteryMonitoring();
+  registerGlobalShortcut();
+  initAutoUpdater();
 });
 
 app.on("window-all-closed", () => {
@@ -121,8 +135,11 @@ app.on("window-all-closed", () => {
 
 app.on("before-quit", () => {
   isQuitting = true;
+  cleanupTray?.();
   closeSettingsWindow();
+  unregisterGlobalShortcut();
   stopPreventingSleep();
+  stopAutoUpdater();
   if (mainWindow) {
     mainWindow.destroy();
   }

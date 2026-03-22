@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from "electron";
 import { IPC_CHANNELS } from "../shared/types.js";
-import type { IpcRequest, IpcResponse } from "../shared/types.js";
+import type { AppSettings, IpcRequest, IpcResponse } from "../shared/types.js";
 
 const api = {
   window: {
@@ -22,8 +22,60 @@ const api = {
       partial: IpcRequest<typeof IPC_CHANNELS.SETTINGS_SET>,
     ): Promise<IpcResponse<typeof IPC_CHANNELS.SETTINGS_SET>> =>
       ipcRenderer.invoke(IPC_CHANNELS.SETTINGS_SET, partial),
+
+    open: () =>
+      ipcRenderer.invoke(
+        IPC_CHANNELS.SETTINGS_OPEN,
+        undefined as IpcRequest<typeof IPC_CHANNELS.SETTINGS_OPEN>,
+      ),
+  },
+
+  session: {
+    start: (durationMinutes: number | null) =>
+      ipcRenderer.invoke(
+        IPC_CHANNELS.SESSION_START,
+        { durationMinutes } as IpcRequest<typeof IPC_CHANNELS.SESSION_START>,
+      ),
+    cancel: () =>
+      ipcRenderer.invoke(
+        IPC_CHANNELS.SESSION_CANCEL,
+        undefined as IpcRequest<typeof IPC_CHANNELS.SESSION_CANCEL>,
+      ),
+    getStatus: () =>
+      ipcRenderer.invoke(
+        IPC_CHANNELS.SESSION_STATUS,
+        undefined as IpcRequest<typeof IPC_CHANNELS.SESSION_STATUS>,
+      ),
+  },
+
+  onSettingsChanged: (callback: (_settings: AppSettings) => void) => {
+    const listener = (_event: unknown, settings: AppSettings) => {
+      callback(settings);
+    };
+    ipcRenderer.on(IPC_CHANNELS.SETTINGS_CHANGED, listener);
+    return () => {
+      ipcRenderer.removeListener(IPC_CHANNELS.SETTINGS_CHANGED, listener);
+    };
+  },
+
+  autoUpdater: {
+    checkForUpdates: () =>
+      ipcRenderer.invoke(
+        IPC_CHANNELS.AUTO_UPDATER_CHECK,
+        undefined as IpcRequest<typeof IPC_CHANNELS.AUTO_UPDATER_CHECK>,
+      ),
+    onStatus: (callback: (_data: IpcResponse<typeof IPC_CHANNELS.AUTO_UPDATER_STATUS>) => void) => {
+      const listener = (_event: unknown, data: IpcResponse<typeof IPC_CHANNELS.AUTO_UPDATER_STATUS>) => {
+        callback(data);
+      };
+      ipcRenderer.on(IPC_CHANNELS.AUTO_UPDATER_STATUS, listener);
+      return () => {
+        ipcRenderer.removeListener(IPC_CHANNELS.AUTO_UPDATER_STATUS, listener);
+      };
+    },
   },
 };
+
 
 contextBridge.exposeInMainWorld("api", api);
 

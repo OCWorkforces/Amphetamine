@@ -13,6 +13,8 @@
  */
 
 import sharp from "sharp";
+import { Buffer } from "node:buffer";
+import process from "node:process";
 import { writeFileSync, mkdirSync, rmSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -118,9 +120,11 @@ function appIconSvg(size) {
 </svg>`;
 }
 
+const log = (...msg) => process.stdout.write(msg.join(" ") + "\n");
+
 // --- Main ---
 
-console.log("Generating macOS app icon...\n");
+log("Generating macOS app icon...\n");
 
 // Create iconset directory
 if (ICONSET_DIR) rmSync(ICONSET_DIR, { recursive: true, force: true });
@@ -133,13 +137,13 @@ for (const { name, size } of ICON_SIZES) {
 
   const outPath = join(ICONSET_DIR, name);
   writeFileSync(outPath, png);
-  console.log(`  OK: ${name} (${size}x${size})`);
+  log(`  OK: ${name} (${size}x${size})`);
 }
 
 // Convert iconset to .icns
-console.log("\n  Converting iconset to .icns...");
+log("\n  Converting iconset to .icns...");
 execSync(`iconutil -c icns "${ICONSET_DIR}" -o "${OUTPUT_ICNS}"`);
-console.log(`  OK: ${OUTPUT_ICNS}`);
+log(`  OK: ${OUTPUT_ICNS}`);
 
 // Cleanup iconset
 rmSync(ICONSET_DIR, { recursive: true, force: true });
@@ -151,6 +155,6 @@ const heroPng = await sharp(Buffer.from(heroSvg))
   .png()
   .toBuffer();
 writeFileSync(SETTINGS_HERO_ICON, heroPng);
-console.log(`  OK: ${SETTINGS_HERO_ICON}`);
+log(`  OK: ${SETTINGS_HERO_ICON}`);
 
-console.log("\nDone.");
+log("\nDone.");

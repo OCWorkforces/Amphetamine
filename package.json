@@ -1,12 +1,12 @@
 {
   "name": "amphetamine",
-  "version": "1.0.8",
+  "version": "1.1.0",
   "author": "OCWorkforces Engineers",
   "authorEmail": "kennydizi@ocworkforces.com",
   "repository": "https://github.com/OCWorkforces/Amphetamine",
   "main": "lib/main/index.cjs",
   "devDependencies": {
-    "@electron/notarize": "^3.1.1",
+    "@electron/fuses": "^2.1.0",
     "@eslint/js": "^10.0.1",
     "@rsbuild/core": "^1.7.3",
     "@rslib/core": "^0.20.0",
@@ -19,8 +19,7 @@
     "@vitest/ui": "^4.1.0",
     "electron": "^41.0.3",
     "electron-builder": "^26.8.1",
-    "esbuild": "^0.27.4",
-    "eslint": "^10.0.3",
+    "eslint": "^10.1.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-prettier": "^5.5.5",
     "jsdom": "^29.0.1",
@@ -33,7 +32,7 @@
   "description": "Amphetamine is a desktop application that helps macOS always stay awake.",
   "engineStrict": true,
   "engines": {
-    "node": ">=24.14.0",
+    "node": ">=22.0.0",
     "bun": ">=1.3.11"
   },
   "homepage": "https://github.com/OCWorkforces/Amphetamine",
@@ -47,16 +46,23 @@
     "build:preload": "rslib build -c rslib.config.preload.ts",
     "build:renderer": "rsbuild build",
     "package": "bun run build && electron-builder --mac --arm64",
+    "package:x64": "bun run build && electron-builder --mac --x64",
+    "package:universal": "bun run build && electron-builder --mac --universal",
     "package:dir": "bun run build && electron-builder --mac --arm64 --dir",
+    "flip-fuses": "electron-builder --mac --arm64 --dir && node build/flip-fuses.cjs",
     "typecheck": "tsc -b",
     "test": "vitest run -c vitest.workspace.ts",
     "test:watch": "vitest -c vitest.workspace.ts",
     "test:coverage": "vitest run -c vitest.workspace.ts --coverage",
-    "clean": "rimraf lib dist"
+    "clean": "rimraf lib dist",
+    "lint": "eslint src/ tests/",
+    "lint:fix": "eslint src/ tests/ --fix",
+    "format": "prettier --write 'src/**/*.{ts,html,css}' 'tests/**/*.ts'"
   },
   "sideEffects": false,
   "type": "module",
   "dependencies": {
-    "electron-log": "^5.4.3"
+    "electron-log": "^5.4.3",
+    "electron-updater": "^6.8.3"
   }
 }

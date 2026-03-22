@@ -24,8 +24,7 @@
   --radius-sm: 7px;
   --shadow: 0 4px 24px rgba(0, 0, 0, 0.18);
   --shadow-sm: 0 1px 4px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04);
-  font-family:
-    -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
   font-size: 13px;
   -webkit-font-smoothing: antialiased;
 }
@@ -51,13 +50,13 @@
 html,
 body {
   width: 520px;
-  height: 380px;
+  height: 430px;
   background: transparent;
 }
 
 #app {
   width: 520px;
-  height: 380px;
+  height: 430px;
   backdrop-filter: blur(20px) saturate(180%);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
   border: 1px solid var(--border);
@@ -185,15 +184,20 @@ body {
   color: var(--success);
   font-weight: 600;
   opacity: 0;
-  transition:
-    opacity 0.2s ease,
-    transform 0.2s ease;
   white-space: nowrap;
   background: var(--success-bg);
   padding: 2px 8px;
   border-radius: 100px;
   letter-spacing: 0.01em;
   transform: scale(0.9);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .save-indicator {
+    transition:
+      opacity 0.2s ease,
+      transform 0.2s ease;
+  }
 }
 
 .save-indicator.visible {
@@ -271,12 +275,17 @@ body {
   height: 26px;
   background: var(--border);
   border-radius: 100px;
-  transition:
-    background-color 0.24s cubic-bezier(0.22, 1, 0.36, 1),
-    box-shadow 0.24s cubic-bezier(0.22, 1, 0.36, 1),
-    transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
   box-shadow: inset 0 0 0 1px var(--border);
   will-change: background-color, box-shadow, transform;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .toggle-track {
+    transition:
+      background-color 0.24s cubic-bezier(0.22, 1, 0.36, 1),
+      box-shadow 0.24s cubic-bezier(0.22, 1, 0.36, 1),
+      transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
 }
 
 .toggle-track::before {
@@ -284,14 +293,15 @@ body {
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background: linear-gradient(
-    180deg,
-    rgba(255, 255, 255, 0.26) 0%,
-    rgba(255, 255, 255, 0) 62%
-  );
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.26) 0%, rgba(255, 255, 255, 0) 62%);
   opacity: 0;
-  transition: opacity 0.24s cubic-bezier(0.22, 1, 0.36, 1);
   pointer-events: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .toggle-track::before {
+    transition: opacity 0.24s cubic-bezier(0.22, 1, 0.36, 1);
+  }
 }
 
 .toggle-input:checked + .toggle-track {
@@ -307,11 +317,7 @@ body {
 
 @media (prefers-color-scheme: dark) {
   .toggle-track::before {
-    background: linear-gradient(
-      180deg,
-      rgba(255, 255, 255, 0.18) 0%,
-      rgba(255, 255, 255, 0) 62%
-    );
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0) 62%);
   }
 
   .toggle-input:checked + .toggle-track {
@@ -334,10 +340,15 @@ body {
     0 2px 6px rgba(0, 0, 0, 0.12);
   transform: translateX(0) scale(1);
   transform-origin: center;
-  transition:
-    transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1),
-    box-shadow 0.24s cubic-bezier(0.22, 1, 0.36, 1);
   will-change: transform;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .toggle-thumb {
+    transition:
+      transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1),
+      box-shadow 0.24s cubic-bezier(0.22, 1, 0.36, 1);
+  }
 }
 
 .toggle-input:checked + .toggle-track .toggle-thumb {
@@ -366,4 +377,49 @@ body {
 .toggle-input:focus-visible + .toggle-track {
   outline: 3px solid var(--accent-bg);
   outline-offset: 2px;
+}
+
+.setting-row--select {
+  margin-top: 10px;
+}
+
+.setting-select {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 140px;
+  height: 30px;
+  padding: 0 28px 0 10px;
+  font-size: 12.5px;
+  font-family: inherit;
+  font-weight: 500;
+  color: var(--text-primary);
+  background: var(--surface-elevated);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%236e6e73' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 10px 6px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .setting-select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2398989d' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  }
+}
+
+.setting-select:hover {
+  border-color: var(--accent);
+}
+
+.setting-select:focus-visible {
+  outline: 3px solid var(--accent-bg);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .setting-select {
+    transition: border-color 120ms ease;
+  }
 }

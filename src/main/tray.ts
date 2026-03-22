@@ -6,12 +6,12 @@ import {
   app,
   type MenuItemConstructorOptions,
 } from "electron";
+import log from "electron-log";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { createSettingsWindow } from "./settings-window.js";
-import { getSettings, onSettingsChanged } from "./settings.js";
-
+import { getSettings, onSettingsChanged, updateSettings } from "./settings.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 let tray: Tray | null = null;
@@ -28,7 +28,7 @@ function showAbout(): void {
  */
 const iconCache = new Map<string, Electron.NativeImage>();
 
-export function setupTray(): void {
+export function setupTray(): () => void {
   // In dev:      __dirname = lib/main/   → ../../src/assets
   // In packaged: __dirname = app.asar/lib/main/ → ../../src/assets (inside asar)
   //
@@ -50,6 +50,20 @@ export function setupTray(): void {
     const icon2x = nativeImage.createFromPath(
       path.join(assetsDir, `tray-icon-${statePrefix}${suffix}@2x.png`),
     );
+    // Fall back to a programmatic icon if image files are missing or corrupted
+    if (icon1x.isEmpty() || icon2x.isEmpty()) {
+      log.warn("[tray] Tray icon files missing or corrupted, using fallback");
+      const size = 16;
+      const fallback = nativeImage.createFromBuffer(
+        Buffer.from(
+          `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">` +
+          `<circle cx="${size / 2}" cy="${size / 2}" r="${size / 2 - 1}" fill="${
+            isDark ? "#007AFF" : "#FF9500"
+          }"/></svg>`
+        ),
+      );
+      return fallback;
+    }
     const icon = nativeImage.createEmpty();
     icon.addRepresentation({ scaleFactor: 1.0, buffer: icon1x.toPNG() });
     icon.addRepresentation({ scaleFactor: 2.0, buffer: icon2x.toPNG() });
@@ -86,7 +100,18 @@ export function setupTray(): void {
 
   // Left-click → static context menu
   tray.on("click", () => {
+    const preventSleep = getSettings().preventSleep;
+
     const template: MenuItemConstructorOptions[] = [
+      {
+        label: "Prevent Sleep",
+        type: "checkbox",
+        checked: preventSleep,
+        click: () => {
+          const current = getSettings().preventSleep;
+          updateSettings({ preventSleep: !current });
+        },
+      },
       { type: "separator" },
       { label: "Settings...", click: () => createSettingsWindow() },
       { label: "About Amphetamine", click: () => showAbout() },
@@ -94,4 +119,9 @@ export function setupTray(): void {
     ];
     tray!.popUpContextMenu(Menu.buildFromTemplate(template));
   });
+  return () => {
+    nativeTheme.removeListener("updated", onThemeUpdated);
+    tray = null;
+    iconCache.clear();
+  };
 }

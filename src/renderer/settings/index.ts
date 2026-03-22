@@ -1,13 +1,16 @@
 import "./styles.css";
+import log from "electron-log";
 import type { AppSettings } from "../../shared/types.js";
-import heroIcon from "../../assets/settings-hero-icon.png";
+
+const heroIcon = new URL("../../assets/settings-hero-icon.png", import.meta.url).toString();
 
 let settings: AppSettings = {
   launchAtLogin: false,
   preventSleep: false,
+  sessionDuration: null,
 };
+let saveTimer: ReturnType<typeof setTimeout> | null = null;
 let isSaving = false;
-let pendingSave: Partial<AppSettings> | null = null;
 const saveIndicatorTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 function render(errorMessage?: string): void {
@@ -37,7 +40,7 @@ function render(errorMessage?: string): void {
         <div class="setting-control">
           <span class="save-indicator" id="launch-save-indicator"></span>
           <label class="toggle-switch">
-            <input type="checkbox" id="launch-at-login-toggle" class="toggle-input"${settings.launchAtLogin ? " checked" : ""} />
+            <input type="checkbox" id="launch-at-login-toggle" class="toggle-input" role="switch" aria-checked="${settings.launchAtLogin}"${settings.launchAtLogin ? " checked" : ""} />
             <span class="toggle-track">
               <span class="toggle-thumb"></span>
             </span>
@@ -54,11 +57,30 @@ function render(errorMessage?: string): void {
         <div class="setting-control">
           <span class="save-indicator" id="sleep-save-indicator"></span>
           <label class="toggle-switch">
-            <input type="checkbox" id="prevent-sleep-toggle" class="toggle-input"${settings.preventSleep ? " checked" : ""} />
+            <input type="checkbox" id="prevent-sleep-toggle" class="toggle-input" role="switch" aria-checked="${settings.preventSleep}"${settings.preventSleep ? " checked" : ""} />
             <span class="toggle-track">
               <span class="toggle-thumb"></span>
             </span>
           </label>
+        </div>
+      </div>
+      <div class="setting-row setting-row--select">
+        <div class="setting-row-inner">
+          <label class="setting-label" for="session-duration-select">
+            ⏱ Activate for
+          </label>
+          <span class="setting-description">Duration to keep your Mac awake</span>
+        </div>
+        <div class="setting-control">
+          <span class="save-indicator" id="duration-save-indicator"></span>
+          <select id="session-duration-select" class="setting-select">
+            <option value=""${settings.sessionDuration === null ? " selected" : ""}>Indefinitely</option>
+            <option value="15"${settings.sessionDuration === 15 ? " selected" : ""}>15 Minutes</option>
+            <option value="30"${settings.sessionDuration === 30 ? " selected" : ""}>30 Minutes</option>
+            <option value="60"${settings.sessionDuration === 60 ? " selected" : ""}>1 Hour</option>
+            <option value="120"${settings.sessionDuration === 120 ? " selected" : ""}>2 Hours</option>
+            <option value="240"${settings.sessionDuration === 240 ? " selected" : ""}>4 Hours</option>
+          </select>
         </div>
       </div>
     </div>
@@ -98,27 +120,30 @@ function showSaveIndicator(id: string, text: string): void {
 }
 
 function setupToggleListener(): void {
-  const launchToggle = document.getElementById(
-    "launch-at-login-toggle",
-  ) as HTMLInputElement | null;
+  const launchToggle = document.getElementById("launch-at-login-toggle") as HTMLInputElement | null;
   if (launchToggle) {
     launchToggle.addEventListener("change", () => {
-      void saveSettings(
-        { launchAtLogin: launchToggle.checked },
-        "launch-save-indicator",
-      );
+      void saveSettings({ launchAtLogin: launchToggle.checked }, "launch-save-indicator");
     });
   }
 
-  const sleepToggle = document.getElementById(
-    "prevent-sleep-toggle",
-  ) as HTMLInputElement | null;
+  const sleepToggle = document.getElementById("prevent-sleep-toggle") as HTMLInputElement | null;
   if (sleepToggle) {
     sleepToggle.addEventListener("change", () => {
-      void saveSettings(
-        { preventSleep: sleepToggle.checked },
-        "sleep-save-indicator",
-      );
+      void saveSettings({ preventSleep: sleepToggle.checked }, "sleep-save-indicator");
+    });
+  }
+
+  const durationSelect = document.getElementById(
+    "session-duration-select",
+  ) as HTMLSelectElement | null;
+  if (durationSelect) {
+    durationSelect.addEventListener("change", () => {
+      const raw = durationSelect.value;
+      const duration: number | null = raw === "" ? null : parseInt(raw, 10);
+      settings.sessionDuration = duration;
+      void window.api.session.start(duration);
+      void saveSettings({ sessionDuration: duration, preventSleep: true }, "duration-save-indicator");
     });
   }
 }
@@ -127,40 +152,43 @@ async function saveSettings(
   partial: Partial<AppSettings>,
   indicatorId: string = "launch-save-indicator",
 ): Promise<void> {
-  // If a save is already in progress, store the latest partial and return.
-  // When the current save completes, it will process the pending one.
-  // Rapid toggles → last toggle's value wins (latest-wins queue).
-  if (isSaving) {
-    pendingSave = partial;
-    return;
-  }
-  isSaving = true;
+  // Merge partial into settings immediately for UI responsiveness
+  settings = { ...settings, ...partial };
 
-  try {
-    const updated = await window.api.settings.set(partial);
-    settings = updated;
-    showSaveIndicator(indicatorId, "✓ Saved");
-  } catch (err) {
-    const message =
-      err instanceof Error ? err.message : "Failed to save settings";
-    render(message);
-  } finally {
-    isSaving = false;
-    // Process any pending save that arrived while we were working
-    if (pendingSave) {
-      const savedPartial = pendingSave;
-      pendingSave = null;
-      await saveSettings(savedPartial, indicatorId);
+  // Debounce the actual persistence
+  if (saveTimer) clearTimeout(saveTimer);
+  saveTimer = setTimeout(async () => {
+    saveTimer = null;
+    if (isSaving) return;
+    isSaving = true;
+    try {
+      await window.api.settings.set(settings);
+      showSaveIndicator(indicatorId, "✓ Saved");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to save settings";
+      render(message);
+    } finally {
+      isSaving = false;
     }
-  }
+  }, 300);
 }
 
 async function init(): Promise<void> {
   try {
     settings = await window.api.settings.get();
-  } catch {
-    // Use default if load fails; render will show no error
+  } catch (e1) {
+    log.info("[settings] Failed to load settings, using defaults", e1);
   }
+
+  try {
+    const status = await window.api.session.getStatus();
+    if (status?.isRunning) {
+      settings.sessionDuration = status.durationMinutes;
+    }
+  } catch (e2) {
+    log.info("[settings] Failed to get session status", e2);
+  }
+
   render();
 }
 

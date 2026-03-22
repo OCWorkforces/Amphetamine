@@ -41,9 +41,9 @@ export function createSettingsWindow(): BrowserWindow {
 
   const win = new BrowserWindow({
     width: 520,
-    height: 380,
+    height: 430,
     minWidth: 520,
-    minHeight: 380,
+    minHeight: 430,
     resizable: false,
     minimizable: false,
     maximizable: false,
@@ -62,8 +62,7 @@ export function createSettingsWindow(): BrowserWindow {
 
   // Load settings page
   if (isDev) {
-    const devUrl =
-      process.env["DEV_SERVER_URL"] ?? "http://localhost:5173";
+    const devUrl = process.env["DEV_SERVER_URL"] ?? "http://localhost:5173";
     win.loadURL(`${devUrl}/settings.html`);
   } else {
     win.loadFile(path.join(__dirname, "..", "renderer", "settings.html"));

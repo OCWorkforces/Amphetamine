@@ -1,4 +1,5 @@
 import { app } from "electron";
+import log from "electron-log";
 
 /**
  * Get the current auto-launch (login item) status.
@@ -9,7 +10,7 @@ export function getAutoLaunchStatus(): boolean {
     const settings = app.getLoginItemSettings();
     return settings.openAtLogin;
   } catch (error) {
-    console.error("[auto-launch] Failed to get login item status:", error);
+    log.error("[auto-launch] Failed to get login item status:", error);
     return false;
   }
 }
@@ -28,7 +29,7 @@ export function setAutoLaunch(enabled: boolean): void {
       `[auto-launch] ${enabled ? "Enabled" : "Disabled"} launch at login`,
     );
   } catch (error) {
-    console.error("[auto-launch] Failed to set login item:", error);
+    log.error("[auto-launch] Failed to set login item:", error);
   }
 }
 
