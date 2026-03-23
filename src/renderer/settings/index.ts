@@ -67,7 +67,7 @@ function render(errorMessage?: string): void {
       <div class="setting-row setting-row--select">
         <div class="setting-row-inner">
           <label class="setting-label" for="session-duration-select">
-            ⏱ Activate for
+            ⏳ Activate for
           </label>
           <span class="setting-description">Duration to keep your Mac awake</span>
         </div>
