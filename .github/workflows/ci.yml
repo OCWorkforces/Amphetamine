@@ -61,6 +61,7 @@ jobs:
       - run: bunx electron-builder --mac --${{ matrix.arch }}
         env:
           ELECTRON_BUILDER_CACHE: ${{ runner.temp }}/.cache/electron-builder
+          CSC_IDENTITY_AUTO_DISCOVERY: false
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
@@ -68,4 +69,5 @@ jobs:
           path: |
             dist/*.dmg
             dist/*.zip
+          compression-level: 0
           retention-days: 14
