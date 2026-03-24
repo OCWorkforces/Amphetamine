@@ -16,6 +16,7 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noUncheckedIndexedAccess": true,
+    "rootDir": "./src",
     "outDir": "./lib",
     "pretty": true,
     "sourceMap": false,
