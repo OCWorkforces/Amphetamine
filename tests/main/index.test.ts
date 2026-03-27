@@ -89,6 +89,12 @@ vi.mock("../../src/main/power-saver.js", () => ({
   syncPreventSleep: mockSyncPreventSleep,
   stopPreventingSleep: mockStopPreventingSleep,
   initBatteryMonitoring: mockInitBatteryMonitoring,
+  setBatteryAutoStopCallback: vi.fn(),
+}));
+
+vi.mock("../../src/main/session-timer.js", () => ({
+  cancelSession: vi.fn(),
+  cleanup: vi.fn(),
 }));
 
 vi.mock("../../src/main/settings-window.js", () => ({
