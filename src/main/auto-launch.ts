@@ -25,7 +25,7 @@ export function setAutoLaunch(enabled: boolean): void {
       openAtLogin: enabled,
       openAsHidden: false,
     });
-    console.log(
+    log.info(
       `[auto-launch] ${enabled ? "Enabled" : "Disabled"} launch at login`,
     );
   } catch (error) {
