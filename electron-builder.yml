@@ -40,8 +40,8 @@ mac:
   entitlementsInherit: build/entitlements.mac.inherit.plist
   extendInfo:
     LSUIElement: true
-  notarize: false,
-  afterSign: "build/notarize.cjs",
+  notarize: false
+  afterSign: "build/notarize.cjs"
 
 # === DMG-SPECIFIC ===
 dmg:
