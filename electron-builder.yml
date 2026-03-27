@@ -41,7 +41,6 @@ mac:
   extendInfo:
     LSUIElement: true
   notarize: false
-  afterSign: "build/notarize.cjs"
 
 # === DMG-SPECIFIC ===
 dmg:
