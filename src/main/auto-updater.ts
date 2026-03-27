@@ -51,9 +51,14 @@ export function initAutoUpdater(): void {
         ...(typeof info.releaseNotes === "string" ? { releaseNotes: info.releaseNotes } : {}),
       },
     });
-    void shell.openExternal(
-      `https://github.com/CCWorkforce/OpenAmphetamine/releases/tag/v${info.version}`,
-    );
+    // Validate version is a semver-like string before constructing URL
+    if (/^\d+\.\d+\.\d+/.test(info.version)) {
+      void shell.openExternal(
+        `https://github.com/CCWorkforce/OpenAmphetamine/releases/tag/v${info.version}`,
+      );
+    } else {
+      log.warn("[auto-updater] Skipping release URL — invalid version format:", info.version);
+    }
   });
 
   autoUpdater.on("update-not-available", (info: UpdateInfo) => {

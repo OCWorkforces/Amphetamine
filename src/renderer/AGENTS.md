@@ -9,6 +9,7 @@ Electron renderer (web context). Vanilla TypeScript UI with native macOS popover
 | `index.ts`            | Main popover UI (session status + timer)      |
 | `index.html`          | CSP-protected HTML template                   |
 | `env.d.ts`            | TypeScript declarations for `window.api`      |
+| `css.d.ts`            | CSS module declarations                       |
 | `styles/main.css`     | Native macOS styling, dark mode support       |
 | `settings/index.ts`   | Settings form logic, toggle + dropdown        |
 | `settings/index.html` | Settings HTML template                        |
@@ -20,11 +21,12 @@ Interactive session status display. Shows prevent-sleep state, session timer cou
 
 - Renders on `DOMContentLoaded`, loads settings + session status
 - Session polling: 1-second interval when session is active, stops when idle
-- `shouldPollSession()` — returns true only when preventSleep is on
+- `shouldPollSession()` — returns true only when popover visible + preventSleep on
 - Timer formatting: `formatTimerLabel()` handles hours/minutes/seconds display
-- Binds click events via `addEventListener` (no event delegation for interactive elements)
+- Binds click events via `addEventListener` per button (settings + quit)
 - Resizes window via `window.api.window.setHeight()` after render
 - Hides popover on visibility change (document hidden) and beforeunload
+- Popover visibility tracked via `isPopoverVisible` flag + `visible` CSS class
 
 ## SETTINGS WINDOW
 
@@ -35,6 +37,7 @@ Separate renderer entry at `settings/`. Three controls: Launch at Login (toggle)
 - Singleton BrowserWindow (focus if already open)
 - Auto-saves on change with "✓ Saved" indicator (1.5s fade)
 - `isSaving` guard prevents concurrent saves
+- Per-indicator save timers (Map<string, timeout>) for independent fade timing
 - Dropdown options: Indefinitely, 15min, 30min, 1h, 2h, 4h
 - Dropdown change starts session AND sets `preventSleep: true`
 - `session.start(duration)` called from dropdown, not from popover
@@ -53,6 +56,7 @@ Separate renderer entry at `settings/`. Three controls: Launch at Login (toggle)
 // Shared across both renderer entries
 window.api.window.setHeight(height); // → void (fire-and-forget)
 window.api.app.getVersion(); // → Promise<string>
+window.api.app.quit(); // → Promise<void>
 window.api.settings.get(); // → Promise<AppSettings>
 window.api.settings.set(partial); // → Promise<AppSettings>
 window.api.settings.open(); // → Promise<void>
@@ -60,6 +64,8 @@ window.api.session.start(durationMinutes); // → Promise<SessionStartResponse>
 window.api.session.cancel(); // → Promise<{ cancelled: boolean }>
 window.api.session.getStatus(); // → Promise<SessionStatusResponse | null>
 window.api.onSettingsChanged(callback); // → () => void (unsubscribe)
+window.api.autoUpdater.checkForUpdates(); // → Promise<...>
+window.api.autoUpdater.onStatus(callback); // → () => void (unsubscribe)
 ```
 
 ## CSS CONVENTIONS
@@ -74,12 +80,13 @@ window.api.onSettingsChanged(callback); // → () => void (unsubscribe)
 
 | Class                | Use                               |
 | -------------------- | --------------------------------- |
-| `.state-screen`      | Status display in popover         |
-| `.state-title`       | "Amphetamine is running"          |
-| `.state-desc`        | Description text below title      |
-| `.session-status`    | Session active/idle indicator     |
+| `.popover`           | Main popover container            |
+| `.popover-header`    | App title + version               |
+| `.popover-status`    | Status indicator section          |
 | `.status-dot`        | Green/gray status indicator dot   |
-| `.timer-text`        | Session countdown display         |
+| `.popover-timer`     | Session countdown display         |
+| `.popover-footer`    | Settings + Quit buttons           |
+| `.popover-divider`   | Horizontal divider                |
 | `.settings-titlebar` | Settings window title bar         |
 | `.settings-hero`     | App icon + name + description     |
 | `.setting-row`       | Control row container             |
@@ -95,6 +102,7 @@ window.api.onSettingsChanged(callback); // → () => void (unsubscribe)
 
 - CSP in `index.html`: `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:`
 - Identical CSP in `settings/index.html`
+- Settings error messages set via `textContent` (prevents XSS)
 
 ## TESTS
 

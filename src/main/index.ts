@@ -8,10 +8,11 @@ import { registerIpcHandlers } from "./ipc.js";
 import { getPackageInfo } from "./utils/packageInfo.js";
 import { getSettings } from "./settings.js";
 import { syncAutoLaunch } from "./auto-launch.js";
-import { syncPreventSleep, stopPreventingSleep, initBatteryMonitoring } from "./power-saver.js";
+import { syncPreventSleep, stopPreventingSleep, initBatteryMonitoring, setBatteryAutoStopCallback } from "./power-saver.js";
 import { registerGlobalShortcut, unregisterGlobalShortcut } from "./shortcut.js";
 import { closeSettingsWindow } from "./settings-window.js";
 import { initAutoUpdater, stopAutoUpdater } from "./auto-updater.js";
+import { cancelSession } from "./session-timer.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -123,6 +124,7 @@ app.whenReady().then(() => {
   const settings = getSettings();
   syncAutoLaunch(settings.launchAtLogin);
   syncPreventSleep(settings.preventSleep);
+  setBatteryAutoStopCallback(cancelSession);
   void initBatteryMonitoring();
   registerGlobalShortcut();
   initAutoUpdater();

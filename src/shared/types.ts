@@ -9,6 +9,7 @@ export const IPC_CHANNELS = {
   SESSION_STATUS: "session:status",
   SETTINGS_CHANGED: "settings:changed",
   SETTINGS_OPEN: "settings:open",
+  APP_QUIT: "app:quit",
   AUTO_UPDATER_CHECK: "auto-updater:check",
   AUTO_UPDATER_STATUS: "auto-updater:status",
 } as const;
@@ -54,6 +55,10 @@ export type IpcChannelMap = {
     response: AppSettings;
   };
   [IPC_CHANNELS.SETTINGS_OPEN]: {
+    request: undefined;
+    response: void;
+  };
+  [IPC_CHANNELS.APP_QUIT]: {
     request: undefined;
     response: void;
   };

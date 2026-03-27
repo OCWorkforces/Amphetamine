@@ -146,7 +146,10 @@ export function registerIpcHandlers(win: BrowserWindow): void {
   );
 
   // Session timer handlers
-  typedHandle(IPC_CHANNELS.SESSION_START, async (_event, request) => {
+  typedHandle(IPC_CHANNELS.SESSION_START, async (event, request) => {
+    if (!validateSender(event)) {
+      return { startedAt: 0, durationMinutes: null, expiresAt: null };
+    }
     const result = sessionTimer.startSession(request.durationMinutes);
     // startSession always sets startedAt, but SessionState allows null for getStatus()
     const startedAt = result.startedAt ?? Date.now();
@@ -157,12 +160,14 @@ export function registerIpcHandlers(win: BrowserWindow): void {
     };
   });
 
-  typedHandle(IPC_CHANNELS.SESSION_CANCEL, async () => {
+  typedHandle(IPC_CHANNELS.SESSION_CANCEL, async (event) => {
+    if (!validateSender(event)) return { cancelled: false };
     sessionTimer.cancelSession();
     return { cancelled: true };
   });
 
-  typedHandle(IPC_CHANNELS.SESSION_STATUS, async () => {
+  typedHandle(IPC_CHANNELS.SESSION_STATUS, async (event) => {
+    if (!validateSender(event)) return null;
     const result = sessionTimer.getStatus();
     if (!result.isRunning) {
       return null;
@@ -184,6 +189,12 @@ export function registerIpcHandlers(win: BrowserWindow): void {
   typedHandle(IPC_CHANNELS.SETTINGS_OPEN, async (event) => {
     if (!validateSender(event)) return;
     createSettingsWindow();
+  });
+
+  // Quit app from renderer
+  typedHandle(IPC_CHANNELS.APP_QUIT, async (event) => {
+    if (!validateSender(event)) return;
+    app.quit();
   });
 
   // Auto-updater IPC (separate module, registered here for consistency)

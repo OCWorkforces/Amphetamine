@@ -59,6 +59,22 @@ export function syncPreventSleep(enabled: boolean): void {
 }
 
 /**
+ * Callback invoked when battery drops below threshold.
+ * The caller wires this to session cancellation logic.
+ */
+type BatteryAutoStopCallback = () => void;
+
+let onBatteryAutoStop: BatteryAutoStopCallback | null = null;
+
+/**
+ * Set the callback for battery auto-stop events.
+ * Must be called before initBatteryMonitoring().
+ */
+export function setBatteryAutoStopCallback(callback: BatteryAutoStopCallback): void {
+  onBatteryAutoStop = callback;
+}
+
+/**
  * Initialize battery monitoring.
  * Sets up listeners for battery/ac power events.
  */
@@ -90,9 +106,8 @@ async function checkBatteryAndStop(): Promise<void> {
     if (percent !== null && percent <= threshold) {
       stopPreventingSleep();
       log.info(`[power-saver] Auto-stopped: battery at ${percent}% (threshold: ${threshold}%)`);
-      // Also cancel any active session
-      const { cancelSession } = await import("./session-timer.js");
-      cancelSession();
+      // Notify caller to cancel any active session
+      onBatteryAutoStop?.();
     }
   } catch (err) {
     log.warn("[power-saver] Failed to check battery level:", err);

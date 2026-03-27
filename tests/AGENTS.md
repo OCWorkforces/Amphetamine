@@ -6,20 +6,23 @@ Two-project Vitest workspace for Electron app testing. Main process uses Node en
 
 ```
 tests/
-├── setup.main.ts              # Global Electron API mocks
+├── setup.main.ts                # Global Electron API mocks
 ├── main/
-│   ├── index.test.ts          # createWindow config, error handlers
-│   ├── ipc.test.ts            # validateSender, ALLOWED_ORIGINS
-│   ├── ipc-handlers.test.ts   # All 9 IPC channel handlers
-│   ├── power-saver.test.ts    # powerSaveBlocker state machine
+│   ├── index.test.ts            # createWindow config, error handlers
+│   ├── ipc.test.ts              # validateSender, ALLOWED_ORIGINS
+│   ├── ipc-handlers.test.ts     # All 12 IPC channel handlers
+│   ├── power-saver.test.ts      # powerSaveBlocker state machine
 │   ├── power-saver-edge.test.ts # Edge cases: idempotency, invalid IDs
-│   ├── settings.test.ts       # File I/O, validation, defaults, cache
-│   ├── session-timer.test.ts  # Session start/cancel/expiry with timers
-│   ├── settings-window.test.ts # Settings window singleton
-│   ├── tray.test.ts           # Tray icon, context menu, theme
-│   └── auto-launch.test.ts    # macOS login item management
+│   ├── settings.test.ts         # File I/O, validation, defaults, cache
+│   ├── session-timer.test.ts    # Session start/cancel/expiry with timers
+│   ├── settings-window.test.ts  # Settings window singleton
+│   ├── settings-window-edge.test.ts # Edge cases: ready-to-show, constraints, close
+│   ├── tray.test.ts             # Tray icon, context menu, theme
+│   ├── auto-launch.test.ts      # macOS login item management
+│   ├── shortcut.test.ts         # Global shortcut registration + toggle
+│   └── auto-updater.test.ts     # Auto-updater init, events, IPC
 └── renderer/
-    └── delegation.test.ts     # Event delegation on #app
+    └── delegation.test.ts       # Event delegation on #app
 ```
 
 ## CONFIGURATION
@@ -44,20 +47,22 @@ projects: [
 // passWithNoTests: true
 ```
 
-## MAIN PROCESS TESTS (90 tests)
+## MAIN PROCESS TESTS (107 tests)
 
-| File                       | Tests | Focus                                         |
-| -------------------------- | ----- | --------------------------------------------- |
-| `ipc-handlers.test.ts`     | 19    | All 9 IPC channel handler registrations       |
-| `power-saver-edge.test.ts` | 18    | Edge cases: idempotency, invalid blocker IDs  |
-| `session-timer.test.ts`    | 16    | Session lifecycle: start/cancel/expiry/timers |
-| `auto-launch.test.ts`      | 13    | Login item: get/set/sync, error handling      |
-| `power-saver.test.ts`      | 12    | Core: start/stop/isPreventingSleep/sync       |
-| `settings.test.ts`         | 10    | File I/O, validation, defaults, cache         |
-| `settings-window.test.ts`  | 9     | Singleton: create/focus/close/destroy         |
-| `index.test.ts`            | 7     | createWindow: config, sandbox, preload        |
-| `ipc.test.ts`              | 8     | validateSender: origins, rejection cases      |
-| `tray.test.ts`             | 4     | setupTray: icon update, theme, settings       |
+| File                           | Tests | Focus                                          |
+| ------------------------------ | ----- | ---------------------------------------------- |
+| `ipc-handlers.test.ts`         | 19    | All 12 IPC channel handler registrations       |
+| `power-saver-edge.test.ts`     | 18    | Edge cases: idempotency, invalid blocker IDs   |
+| `session-timer.test.ts`        | 16    | Session lifecycle: start/cancel/expiry/timers  |
+| `auto-updater.test.ts`         | 11    | Auto-updater: init, events, semver validation  |
+| `auto-launch.test.ts`          | 13    | Login item: get/set/sync, error handling       |
+| `settings-window-edge.test.ts` | 6     | Ready-to-show, constraints, close behavior     |
+| `power-saver.test.ts`          | 12    | Core: start/stop/isPreventingSleep/sync        |
+| `settings.test.ts`             | 10    | File I/O, validation, defaults, cache          |
+| `shortcut.test.ts`             | 8     | Shortcut: registration, toggle, error handling |
+| `settings-window.test.ts`      | 9     | Singleton: create/focus/close/destroy          |
+| `index.test.ts`                | 7     | createWindow: config, sandbox, preload         |
+| `tray.test.ts`                 | 4     | setupTray: icon update, theme, settings        |
 
 ## RENDERER TESTS (3 tests)
 
@@ -65,7 +70,7 @@ projects: [
 | -------------------- | ----- | -------------------------- |
 | `delegation.test.ts` | 3     | Event delegation on `#app` |
 
-**Total: 93 tests across 11 files**
+**Total: 110 tests across 14 files** (107 main + 3 renderer)
 
 ## MOCK PATTERNS
 
@@ -103,7 +108,22 @@ vi.mock("electron-log", () => ({
 }));
 ```
 
-### Pattern 5: Mutable state closure for settings
+### Pattern 5: electron-updater mock
+
+```typescript
+vi.mock("electron-updater", () => ({
+  autoUpdater: {
+    on: mockOn,
+    checkForUpdates: mockCheckForUpdates, // vi.fn().mockResolvedValue(null)
+    removeAllListeners: mockRemoveAllListeners,
+    logger: null,
+    autoDownload: false,
+    autoInstallOnAppQuit: false,
+  },
+}));
+```
+
+### Pattern 6: Mutable state closure for settings
 
 ```typescript
 let settingsState = { launchAtLogin: false, preventSleep: false, sessionDuration: null };
@@ -131,6 +151,25 @@ beforeEach(async () => {
 
 Key: `vi.resetModules()` + dynamic `import()` for fresh module state per test.
 
+## MOCK ISOLATION PITFALL
+
+`vi.resetModules()` does NOT re-run `vi.mock()` factories. Mocked properties (like `app.isPackaged`) persist across `resetModules` calls. If a test mutates a hoisted mock property, it MUST restore the original value before the next `beforeEach`:
+
+```typescript
+// WRONG — pollutes subsequent tests
+const { app } = await import("electron");
+vi.mocked(app).isPackaged = false;
+
+// CORRECT — restore after mutation
+const { app } = await import("electron");
+const original = app.isPackaged;
+vi.mocked(app).isPackaged = false;
+// ... test ...
+vi.mocked(app).isPackaged = original;
+vi.resetModules();
+await import("../../src/main/module.js"); // re-import to restore
+```
+
 ## SETUP FILE
 
 `tests/setup.main.ts` mocks full Electron API:
@@ -157,3 +196,8 @@ bun run test          # Run all tests once
 bun run test:watch    # Watch mode
 bun run test:coverage # With v8 coverage
 ```
+
+## PRE-EXISTING FAILURES
+
+- `tests/main/ipc.test.ts`: Module load error — `app.getPath("userData")` undefined in settings.ts top-level `loadSettings()`. Test file has 0 tests; the suite-level import fails.
+- `tests/renderer/delegation.test.ts`: `document is not defined` — jsdom environment not loading in Vitest workspace. 3 tests fail.
