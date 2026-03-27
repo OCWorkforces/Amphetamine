@@ -2,19 +2,21 @@ import { app } from "electron";
 import log from "electron-log";
 import { existsSync, readFileSync, writeFileSync, renameSync, mkdirSync } from "fs";
 import { join } from "path";
+import { EventEmitter } from "node:events";
 import { DEFAULT_SETTINGS } from "../shared/types.js";
 import type { AppSettings } from "../shared/types.js";
 
 /** Callback invoked when settings change (partial or full update) */
 type SettingsChangeCallback = (_settings: AppSettings) => void;
 
-const settingsListeners = new Set<SettingsChangeCallback>();
+/** Internal event emitter for settings changes */
+const settingsEmitter = new EventEmitter();
 
 /** Subscribe to settings changes. Returns an unsubscribe function. */
 export function onSettingsChanged(callback: SettingsChangeCallback): () => void {
-  settingsListeners.add(callback);
+  settingsEmitter.on("change", callback);
   return () => {
-    settingsListeners.delete(callback);
+    settingsEmitter.off("change", callback);
   };
 }
 let settingsCache: AppSettings = { ...DEFAULT_SETTINGS };
@@ -117,11 +119,9 @@ export function updateSettings(partial: Partial<AppSettings>): AppSettings {
   saveSettings(merged);
   settingsCache = { ...merged };
 
-  // Notify settings change listeners
+  // Notify settings change listeners via EventEmitter
   const snapshot = getSettings();
-  for (const listener of settingsListeners) {
-    listener(snapshot);
-  }
+  settingsEmitter.emit("change", snapshot);
 
   return snapshot;
 }
