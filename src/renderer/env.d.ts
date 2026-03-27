@@ -22,6 +22,7 @@ declare global {
       };
       app: {
         getVersion(): Promise<string>;
+        quit(): Promise<void>;
       };
       settings: {
         get(): Promise<AppSettings>;

@@ -266,14 +266,17 @@ describe("ipc-handlers", () => {
   });
 
   describe("session handlers", () => {
+    const validEvent = {
+      senderFrame: { url: "file:///mock/app/src/renderer/index.html" },
+    };
+
     it("SESSION_START calls startSession", async () => {
       const mockWindow = {};
       registerIpcHandlers(mockWindow);
 
       const handler = registeredHandlers.get(IPC_CHANNELS.SESSION_START);
-      const mockEvent = {};
 
-      await handler(mockEvent, { durationMinutes: null });
+      await handler(validEvent, { durationMinutes: null });
 
       expect(mockStartSession).toHaveBeenCalledWith(null);
     });
@@ -283,9 +286,19 @@ describe("ipc-handlers", () => {
       registerIpcHandlers(mockWindow);
 
       const handler = registeredHandlers.get(IPC_CHANNELS.SESSION_CANCEL);
-      const mockEvent = {};
 
-      await handler(mockEvent);
+      await handler(validEvent);
+
+      expect(mockCancelSession).toHaveBeenCalledTimes(1);
+    });
+
+    it("SESSION_CANCEL calls cancelSession", async () => {
+      const mockWindow = {};
+      registerIpcHandlers(mockWindow);
+
+      const handler = registeredHandlers.get(IPC_CHANNELS.SESSION_CANCEL);
+
+      await handler(validEvent);
 
       expect(mockCancelSession).toHaveBeenCalledTimes(1);
     });
@@ -302,9 +315,8 @@ describe("ipc-handlers", () => {
       });
 
       const handler = registeredHandlers.get(IPC_CHANNELS.SESSION_STATUS);
-      const mockEvent = {};
 
-      const result = await handler(mockEvent);
+      const result = await handler(validEvent);
       expect(result).toBeNull();
     });
   });

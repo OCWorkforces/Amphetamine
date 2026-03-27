@@ -14,6 +14,12 @@ const api = {
       ipcRenderer.invoke(IPC_CHANNELS.APP_GET_VERSION),
   },
 
+  quit: () =>
+    ipcRenderer.invoke(
+      IPC_CHANNELS.APP_QUIT,
+      undefined as IpcRequest<typeof IPC_CHANNELS.APP_QUIT>,
+    ),
+
   settings: {
     get: (): Promise<IpcResponse<typeof IPC_CHANNELS.SETTINGS_GET>> =>
       ipcRenderer.invoke(IPC_CHANNELS.SETTINGS_GET),

@@ -132,7 +132,7 @@ function bindEvents(): void {
   });
 
   quitButton?.addEventListener("click", () => {
-    // TODO: Add QUIT IPC channel
+    void window.api.app.quit();
   });
 }
 
