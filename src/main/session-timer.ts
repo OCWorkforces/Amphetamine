@@ -1,5 +1,6 @@
 import { getSettings, updateSettings } from "./settings.js";
 import { syncPreventSleep } from "./power-saver.js";
+import log from "electron-log";
 
 export interface SessionState {
   isRunning: boolean;
@@ -44,12 +45,16 @@ export function startSession(durationMinutes: number | null): SessionState {
 
   expiryTimer = setTimeout(
     () => {
-      expiryTimer = null;
-      sessionStartedAt = null;
-      sessionExpiresAt = null;
-      // Session expired — stop preventing sleep
-      syncPreventSleep(false);
-      updateSettings({ sessionDuration: null, preventSleep: false });
+      try {
+        expiryTimer = null;
+        sessionStartedAt = null;
+        sessionExpiresAt = null;
+        // Session expired — stop preventing sleep
+        syncPreventSleep(false);
+        updateSettings({ sessionDuration: null, preventSleep: false });
+      } catch (err) {
+        log.error("[session-timer] Error in session expiry callback:", err);
+      }
     },
     durationMinutes * 60 * 1000,
   );
