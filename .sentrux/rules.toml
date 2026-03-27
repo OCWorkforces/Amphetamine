@@ -1,0 +1,21 @@
+# Architectural constraints for Amphetamine
+# Enforces layer separation between Electron processes
+
+[[rules]]
+name = "renderer-no-main-import"
+description = "Renderer must not import from main process modules"
+deny = ["src.renderer -> src.main"]
+
+[[rules]]
+name = "shared-leaf"
+description = "Shared types cannot import from process-specific modules"
+deny = [
+  "src.shared -> src.main",
+  "src.shared -> src.renderer",
+  "src.shared -> src.preload",
+]
+
+[[rules]]
+name = "preload-no-renderer"
+description = "Preload must not import from renderer process"
+deny = ["src.preload -> src.renderer"]
