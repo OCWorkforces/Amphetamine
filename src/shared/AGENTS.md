@@ -11,7 +11,7 @@ Type definitions shared across main, preload, and renderer processes. Single sou
 ## IPC CHANNELS
 
 ```typescript
-// types.ts:2-11
+// types.ts:2-15
 export const IPC_CHANNELS = {
   WINDOW_SET_HEIGHT: "window:set-height",
   APP_GET_VERSION: "app:get-version",
@@ -22,17 +22,20 @@ export const IPC_CHANNELS = {
   SESSION_STATUS: "session:status",
   SETTINGS_CHANGED: "settings:changed", // push from main
   SETTINGS_OPEN: "settings:open",
+  APP_QUIT: "app:quit",
+  AUTO_UPDATER_CHECK: "auto-updater:check",
+  AUTO_UPDATER_STATUS: "auto-updater:status", // push from main
 } as const;
 ```
 
-`IpcChannelMap` (types.ts:15) maps each channel to its `request` / `response` types.
+`IpcChannelMap` (types.ts:18) maps each channel to its `request` / `response` types.
 
 ## DATA MODELS
 
 ### AppSettings
 
 ```typescript
-// types.ts:66-76
+// types.ts:86-97
 export interface AppSettings {
   launchAtLogin: boolean; // macOS login item toggle
   preventSleep: boolean; // powerSaveBlocker toggle
@@ -41,20 +44,20 @@ export interface AppSettings {
   shortcut?: string; // global shortcut accelerator string
 }
 
-// types.ts:80-85
+// types.ts:100-106
 export const DEFAULT_SETTINGS: AppSettings = {
   launchAtLogin: false,
   preventSleep: false,
   sessionDuration: null,
-  batteryThreshold: 50,
-  shortcut: "CommandOrControl+Shift+A",
+  batteryThreshold: 0,
+  shortcut: "",
 };
 ```
 
 ### Session Types
 
 ```typescript
-// types.ts:22-28 (inline in IpcChannelMap)
+// Inline in IpcChannelMap
 // session:start request
 { durationMinutes: number | null }
 
@@ -72,7 +75,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
 ## TYPE UTILITIES
 
 ```typescript
-// types.ts:61-63
+// types.ts:81-83
 export type IpcChannel = keyof IpcChannelMap;
 export type IpcRequest<K extends IpcChannel> = IpcChannelMap[K]["request"];
 export type IpcResponse<K extends IpcChannel> = IpcChannelMap[K]["response"];
