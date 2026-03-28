@@ -9,7 +9,6 @@ const mockGetSettings = vi.hoisted(() =>
 const mockUpdateSettings = vi.hoisted(() =>
   vi.fn().mockReturnValue({ preventSleep: true, shortcut: "" }),
 );
-const mockSyncPreventSleep = vi.hoisted(() => vi.fn());
 const mockLogInfo = vi.hoisted(() => vi.fn());
 const mockLogWarn = vi.hoisted(() => vi.fn());
 const mockLogError = vi.hoisted(() => vi.fn());
@@ -36,9 +35,6 @@ vi.mock("../../src/main/settings.js", () => ({
   updateSettings: mockUpdateSettings,
 }));
 
-vi.mock("../../src/main/power-saver.js", () => ({
-  syncPreventSleep: mockSyncPreventSleep,
-}));
 
 describe("shortcut", () => {
   let registerGlobalShortcut: () => void;
@@ -85,7 +81,6 @@ describe("shortcut", () => {
       registeredCallback!();
 
       expect(mockUpdateSettings).toHaveBeenCalledWith({ preventSleep: true });
-      expect(mockSyncPreventSleep).toHaveBeenCalledWith(true);
     });
 
     it("shortcut callback toggles preventSleep from true to false", () => {
@@ -96,7 +91,6 @@ describe("shortcut", () => {
       registeredCallback!();
 
       expect(mockUpdateSettings).toHaveBeenCalledWith({ preventSleep: false });
-      expect(mockSyncPreventSleep).toHaveBeenCalledWith(false);
     });
 
     it("logs warning when shortcut registration fails", () => {

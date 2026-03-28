@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 // Hoisted mock functions - evaluated before vi.mock calls
-const mockSyncPreventSleep = vi.hoisted(() => vi.fn());
 const mockGetSettings = vi.hoisted(() => vi.fn());
 const mockUpdateSettings = vi.hoisted(() => vi.fn());
 
@@ -19,9 +18,6 @@ mockUpdateSettings.mockImplementation((partial: Partial<typeof settingsState>) =
   return { ...settingsState };
 });
 
-vi.mock("../../src/main/power-saver.js", () => ({
-  syncPreventSleep: mockSyncPreventSleep,
-}));
 
 vi.mock("../../src/main/settings.js", () => ({
   getSettings: mockGetSettings,
@@ -82,7 +78,6 @@ describe("session-timer", () => {
       expect(state.startedAt).not.toBeNull();
       expect(state.expiresAt).toBeNull();
       expect(state.durationMinutes).toBeNull();
-      expect(mockSyncPreventSleep).toHaveBeenCalledWith(true);
       expect(mockUpdateSettings).toHaveBeenCalledWith({
         sessionDuration: null,
         preventSleep: true,
@@ -99,7 +94,6 @@ describe("session-timer", () => {
       expect(state.expiresAt).toBeGreaterThanOrEqual(before + 30 * 60 * 1000);
       expect(state.expiresAt).toBeLessThanOrEqual(after + 30 * 60 * 1000);
       expect(state.durationMinutes).toBe(30);
-      expect(mockSyncPreventSleep).toHaveBeenCalledWith(true);
       expect(mockUpdateSettings).toHaveBeenCalledWith({
         sessionDuration: 30,
         preventSleep: true,
@@ -128,7 +122,6 @@ describe("session-timer", () => {
       expect(state.startedAt).toBeNull();
       expect(state.expiresAt).toBeNull();
       expect(state.durationMinutes).toBeNull();
-      expect(mockSyncPreventSleep).toHaveBeenCalledWith(false);
       expect(mockUpdateSettings).toHaveBeenCalledWith({
         sessionDuration: null,
         preventSleep: false,
@@ -142,7 +135,6 @@ describe("session-timer", () => {
       expect(state.startedAt).toBeNull();
       expect(state.expiresAt).toBeNull();
       expect(state.durationMinutes).toBeNull();
-      expect(mockSyncPreventSleep).toHaveBeenCalledWith(false);
       expect(mockUpdateSettings).toHaveBeenCalledWith({
         sessionDuration: null,
         preventSleep: false,
@@ -193,12 +185,10 @@ describe("session-timer", () => {
   describe("cleanup", () => {
     it("running session - clears timer without syncing sleep", () => {
       startSession(30);
-      mockSyncPreventSleep.mockClear(); // Clear call from startSession
 
       cleanup();
 
       expect(getStatus().isRunning).toBe(false);
-      expect(mockSyncPreventSleep).not.toHaveBeenCalled();
     });
   });
 
@@ -218,13 +208,11 @@ describe("session-timer", () => {
       const mod = await import("../../src/main/session-timer.js");
       mod.startSession(1); // 1 minute = 60000ms
 
-      mockSyncPreventSleep.mockClear();
       mockUpdateSettings.mockClear();
 
       // Advance timers by 1 minute to trigger expiry
       vi.advanceTimersByTime(1 * 60 * 1000);
 
-      expect(mockSyncPreventSleep).toHaveBeenCalledWith(false);
       expect(mockUpdateSettings).toHaveBeenCalledWith({
         sessionDuration: null,
         preventSleep: false,

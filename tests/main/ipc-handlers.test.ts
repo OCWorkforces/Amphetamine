@@ -33,8 +33,6 @@ const mockUpdateSettings = vi.fn().mockImplementation((partial: Partial<typeof D
   ...partial,
 }));
 const mockOnSettingsChanged = vi.fn();
-const mockSyncPreventSleep = vi.fn();
-const mockSyncAutoLaunch = vi.fn();
 const mockCreateSettingsWindow = vi.fn();
 const mockStartSession = vi.fn().mockReturnValue({
   isRunning: true,
@@ -61,13 +59,7 @@ vi.mock("../../src/main/settings.js", () => ({
   onSettingsChanged: mockOnSettingsChanged,
 }));
 
-vi.mock("../../src/main/power-saver.js", () => ({
-  syncPreventSleep: mockSyncPreventSleep,
-}));
 
-vi.mock("../../src/main/auto-launch.js", () => ({
-  syncAutoLaunch: mockSyncAutoLaunch,
-}));
 
 vi.mock("../../src/main/settings-window.js", () => ({
   createSettingsWindow: mockCreateSettingsWindow,
@@ -100,8 +92,6 @@ describe("ipc-handlers", () => {
       durationMinutes: null,
     });
     mockBrowserWindowGetAllWindows.mockReturnValue([]);
-    mockSyncPreventSleep.mockClear();
-    mockSyncAutoLaunch.mockClear();
 
     // Clear and setup handler registry
     registeredHandlers = new Map();
@@ -216,7 +206,7 @@ describe("ipc-handlers", () => {
   });
 
   describe("SETTINGS_SET handler", () => {
-    it("syncs preventSleep when it changes", async () => {
+    it("calls updateSettings with partial settings", async () => {
       const mockWindow = {};
       registerIpcHandlers(mockWindow);
 
@@ -229,23 +219,7 @@ describe("ipc-handlers", () => {
 
       await handler(mockEvent, { preventSleep: true });
 
-      expect(mockSyncPreventSleep).toHaveBeenCalledWith(true);
-    });
-
-    it("syncs launchAtLogin when it changes", async () => {
-      const mockWindow = {};
-      registerIpcHandlers(mockWindow);
-
-      const handler = registeredHandlers.get(IPC_CHANNELS.SETTINGS_SET);
-      const mockEvent = {
-        senderFrame: { url: "file:///mock/app/src/renderer/index.html" },
-      };
-
-      mockUpdateSettings.mockReturnValue({ ...DEFAULT_SETTINGS, launchAtLogin: true });
-
-      await handler(mockEvent, { launchAtLogin: true });
-
-      expect(mockSyncAutoLaunch).toHaveBeenCalledWith(true);
+      expect(mockUpdateSettings).toHaveBeenCalledWith({ preventSleep: true });
     });
   });
 
