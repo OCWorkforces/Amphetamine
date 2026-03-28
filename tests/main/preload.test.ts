@@ -1,0 +1,150 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { IPC_CHANNELS } from "../../src/shared/types.js";
+
+const mockSend = vi.fn();
+const mockInvoke = vi.fn();
+const mockOn = vi.fn();
+const mockRemoveListener = vi.fn();
+const mockExposeInMainWorld = vi.fn();
+
+vi.mock("electron", () => ({
+  contextBridge: { exposeInMainWorld: mockExposeInMainWorld },
+  ipcRenderer: {
+    send: mockSend,
+    invoke: mockInvoke,
+    on: mockOn,
+    removeListener: mockRemoveListener,
+  },
+}));
+
+describe("preload", () => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let api: any;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    vi.resetModules();
+
+    // Capture the API object passed to exposeInMainWorld
+    mockExposeInMainWorld.mockImplementation(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (_name: string, exposedApi: any) => {
+        api = exposedApi;
+      },
+    );
+
+    await import("../../src/preload/index.js");
+  });
+
+  it("exposes api to main world via contextBridge", () => {
+    expect(mockExposeInMainWorld).toHaveBeenCalledWith("api", expect.any(Object));
+  });
+
+  it("window.setHeight calls ipcRenderer.send with channel and height", () => {
+    api.window.setHeight(300);
+
+    expect(mockSend).toHaveBeenCalledWith(IPC_CHANNELS.WINDOW_SET_HEIGHT, 300);
+  });
+
+  it("app.getVersion calls ipcRenderer.invoke with correct channel", () => {
+    api.app.getVersion();
+
+    expect(mockInvoke).toHaveBeenCalledWith(IPC_CHANNELS.APP_GET_VERSION);
+  });
+
+  it("settings.get calls ipcRenderer.invoke with correct channel", () => {
+    api.settings.get();
+
+    expect(mockInvoke).toHaveBeenCalledWith(IPC_CHANNELS.SETTINGS_GET);
+  });
+
+  it("settings.set calls ipcRenderer.invoke with partial settings", () => {
+    const partial = { preventSleep: true };
+    api.settings.set(partial);
+
+    expect(mockInvoke).toHaveBeenCalledWith(IPC_CHANNELS.SETTINGS_SET, partial);
+  });
+
+  it("settings.open calls ipcRenderer.invoke with correct channel", () => {
+    api.settings.open();
+
+    expect(mockInvoke).toHaveBeenCalledWith(IPC_CHANNELS.SETTINGS_OPEN, undefined);
+  });
+
+  it("session.start calls ipcRenderer.invoke with durationMinutes", () => {
+    api.session.start(30);
+
+    expect(mockInvoke).toHaveBeenCalledWith(IPC_CHANNELS.SESSION_START, {
+      durationMinutes: 30,
+    });
+  });
+
+  it("session.start with null calls ipcRenderer.invoke with null duration", () => {
+    api.session.start(null);
+
+    expect(mockInvoke).toHaveBeenCalledWith(IPC_CHANNELS.SESSION_START, {
+      durationMinutes: null,
+    });
+  });
+
+  it("session.cancel calls ipcRenderer.invoke with correct channel", () => {
+    api.session.cancel();
+
+    expect(mockInvoke).toHaveBeenCalledWith(IPC_CHANNELS.SESSION_CANCEL, undefined);
+  });
+
+  it("session.getStatus calls ipcRenderer.invoke with correct channel", () => {
+    api.session.getStatus();
+
+    expect(mockInvoke).toHaveBeenCalledWith(IPC_CHANNELS.SESSION_STATUS, undefined);
+  });
+
+  it("quit calls ipcRenderer.invoke with correct channel", () => {
+    api.quit();
+
+    expect(mockInvoke).toHaveBeenCalledWith(IPC_CHANNELS.APP_QUIT, undefined);
+  });
+
+  it("onSettingsChanged registers listener and returns unsubscribe function", () => {
+    const callback = vi.fn();
+    const unsubscribe = api.onSettingsChanged(callback);
+
+    expect(mockOn).toHaveBeenCalledWith(IPC_CHANNELS.SETTINGS_CHANGED, expect.any(Function));
+
+    // Simulate settings push from main process
+    const listener = mockOn.mock.calls[0][1];
+    const testSettings = { preventSleep: true, launchAtLogin: false, sessionDuration: null };
+    listener({}, testSettings);
+    expect(callback).toHaveBeenCalledWith(testSettings);
+
+    // Unsubscribe removes the listener
+    unsubscribe();
+    expect(mockRemoveListener).toHaveBeenCalledWith(IPC_CHANNELS.SETTINGS_CHANGED, listener);
+  });
+
+  it("autoUpdater.checkForUpdates calls ipcRenderer.invoke with correct channel", () => {
+    api.autoUpdater.checkForUpdates();
+
+    expect(mockInvoke).toHaveBeenCalledWith(IPC_CHANNELS.AUTO_UPDATER_CHECK, undefined);
+  });
+
+  it("autoUpdater.onStatus registers listener and returns unsubscribe function", () => {
+    const callback = vi.fn();
+    const unsubscribe = api.autoUpdater.onStatus(callback);
+
+    expect(mockOn).toHaveBeenCalledWith(IPC_CHANNELS.AUTO_UPDATER_STATUS, expect.any(Function));
+
+    // Simulate status push from main process
+    const listener = mockOn.mock.calls[0][1];
+    const testStatus = {
+      status: "available",
+      info: { version: "2.0.0", releaseDate: "2025-01-01" },
+    };
+    listener({}, testStatus);
+    expect(callback).toHaveBeenCalledWith(testStatus);
+
+    // Unsubscribe removes the listener
+    unsubscribe();
+    expect(mockRemoveListener).toHaveBeenCalledWith(IPC_CHANNELS.AUTO_UPDATER_STATUS, listener);
+  });
+});

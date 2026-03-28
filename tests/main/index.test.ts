@@ -4,10 +4,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const mockGetSettings = vi.hoisted(() =>
   vi.fn().mockReturnValue({ launchAtLogin: false, preventSleep: false }),
 );
-const mockSyncAutoLaunch = vi.hoisted(() => vi.fn());
-const mockSyncPreventSleep = vi.hoisted(() => vi.fn());
-const mockStopPreventingSleep = vi.hoisted(() => vi.fn());
-const mockInitBatteryMonitoring = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+const mockInitCoordinator = vi.hoisted(() => vi.fn());
+const mockCleanupCoordinator = vi.hoisted(() => vi.fn());
 const mockSetupTray = vi.hoisted(() => vi.fn().mockReturnValue(() => {}));
 const mockRegisterIpcHandlers = vi.hoisted(() => vi.fn());
 const mockCloseSettingsWindow = vi.hoisted(() => vi.fn());
@@ -81,20 +79,10 @@ vi.mock("../../src/main/settings.js", () => ({
   getSettings: mockGetSettings,
 }));
 
-vi.mock("../../src/main/auto-launch.js", () => ({
-  syncAutoLaunch: mockSyncAutoLaunch,
-}));
 
-vi.mock("../../src/main/power-saver.js", () => ({
-  syncPreventSleep: mockSyncPreventSleep,
-  stopPreventingSleep: mockStopPreventingSleep,
-  initBatteryMonitoring: mockInitBatteryMonitoring,
-  setBatteryAutoStopCallback: vi.fn(),
-}));
-
-vi.mock("../../src/main/session-timer.js", () => ({
-  cancelSession: vi.fn(),
-  cleanup: vi.fn(),
+vi.mock("../../src/main/coordinator.js", () => ({
+  initCoordinator: mockInitCoordinator,
+  cleanupCoordinator: mockCleanupCoordinator,
 }));
 
 vi.mock("../../src/main/settings-window.js", () => ({

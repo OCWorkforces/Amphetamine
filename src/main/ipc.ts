@@ -1,10 +1,4 @@
-import {
-  ipcMain,
-  app,
-  BrowserWindow,
-  type IpcMainEvent,
-  type IpcMainInvokeEvent,
-} from "electron";
+import { ipcMain, app, BrowserWindow, type IpcMainEvent } from "electron";
 import log from "electron-log";
 import {
   IPC_CHANNELS,
@@ -14,9 +8,7 @@ import {
   type IpcResponse,
 } from "../shared/types.js";
 
-import { getSettings, updateSettings, onSettingsChanged } from "./settings.js";
-import { syncPreventSleep } from "./power-saver.js";
-import { syncAutoLaunch } from "./auto-launch.js";
+import { getSettings, updateSettings } from "./settings.js";
 import { createSettingsWindow } from "./settings-window.js";
 import { registerAutoUpdaterIpc } from "./auto-updater.js";
 import * as sessionTimer from "./session-timer.js";
@@ -29,21 +21,17 @@ const ALLOWED_ORIGINS = new Set([
 
 /** Window dimensions for the popover */
 const WINDOW_WIDTH = 360;
-
 /** Acceptable height bounds for the popover window */
 const MIN_WINDOW_HEIGHT = 220;
 const MAX_WINDOW_HEIGHT = 480;
-
 /** Returns true if the sender's origin is the app's own renderer */
-export function validateSender(event: IpcMainInvokeEvent): boolean {
+export function validateSender(event: IpcMainEvent): boolean {
   const senderUrl = event.senderFrame?.url ?? "";
   return validateSenderUrl(senderUrl);
-}
-
+ }
 function validateSenderUrl(senderUrl: string): boolean {
   try {
     const url = new URL(senderUrl);
-
     // Dev server origins - use URL origin for proper comparison
     if (url.protocol === "http:") {
       return (
@@ -51,37 +39,32 @@ function validateSenderUrl(senderUrl: string): boolean {
         ALLOWED_ORIGINS.has(`${url.protocol}//${url.host}`)
       );
     }
-
     // file:// origin check (packaged app) - validate path is within app bundle
     if (url.protocol === "file:") {
       const filePath = url.pathname;
       // Accept if path is within the app bundle, or is empty (main window)
       return filePath.startsWith(app.getAppPath()) || filePath.length === 0;
     }
-
     return false;
   } catch {
     log.warn("[ipc] Invalid sender URL:", senderUrl);
     return false;
   }
 }
-
 function validateOnSender(event: IpcMainEvent): boolean {
   const senderUrl = event.senderFrame?.url ?? "";
   return validateSenderUrl(senderUrl);
-}
-
+ }
 /**
  * Type-safe IPC handler wrapper.
  * Ensures handler return type matches IpcChannelMap response type at compile time.
  */
-function typedHandle<K extends keyof IpcChannelMap>(
-  channel: K,
-  handler: (
-    _event: IpcMainInvokeEvent,
-    _request: IpcChannelMap[K]["request"],
-  ) => Promise<IpcChannelMap[K]["response"]> | IpcChannelMap[K]["response"],
-): void {
+type IpcHandler<K extends keyof IpcChannelMap> = (
+  _event: IpcMainEvent,
+  _request: IpcChannelMap[K]["request"],
+) => Promise<IpcChannelMap[K]["response"]> | IpcChannelMap[K]["response"];
+
+function typedHandle<K extends keyof IpcChannelMap>(channel: K, handler: IpcHandler<K>): void {
   ipcMain.handle(channel, handler as Parameters<typeof ipcMain.handle>[1]);
 }
 
@@ -91,7 +74,6 @@ export function registerIpcHandlers(win: BrowserWindow): void {
     IPC_CHANNELS.WINDOW_SET_HEIGHT,
     (event, height: IpcRequest<typeof IPC_CHANNELS.WINDOW_SET_HEIGHT>) => {
       if (!validateOnSender(event)) return;
-
       try {
         if (typeof height === "number" && height > 0) {
           // Clamp height to acceptable bounds
@@ -106,7 +88,6 @@ export function registerIpcHandlers(win: BrowserWindow): void {
       }
     },
   );
-
   // App utilities
   typedHandle(
     IPC_CHANNELS.APP_GET_VERSION,
@@ -115,7 +96,6 @@ export function registerIpcHandlers(win: BrowserWindow): void {
       return app.getVersion();
     },
   );
-
   // Settings
   typedHandle(
     IPC_CHANNELS.SETTINGS_GET,
@@ -124,7 +104,6 @@ export function registerIpcHandlers(win: BrowserWindow): void {
       return getSettings();
     },
   );
-
   typedHandle(
     IPC_CHANNELS.SETTINGS_SET,
     (
@@ -132,19 +111,10 @@ export function registerIpcHandlers(win: BrowserWindow): void {
       partial: IpcRequest<typeof IPC_CHANNELS.SETTINGS_SET>,
     ): IpcResponse<typeof IPC_CHANNELS.SETTINGS_SET> => {
       if (!validateSender(event)) return getSettings();
-      const updated = updateSettings(partial);
-
-      // Sync system behaviors to match the new settings
-      if (typeof partial.preventSleep === "boolean") {
-        syncPreventSleep(updated.preventSleep);
-      }
-      if (typeof partial.launchAtLogin === "boolean") {
-        syncAutoLaunch(updated.launchAtLogin);
-      }
-      return updated;
+      // Coordinator handles system sync (power-saver, auto-launch, session cancel, broadcast) via settings change
+      return updateSettings(partial);
     },
   );
-
   // Session timer handlers
   typedHandle(IPC_CHANNELS.SESSION_START, async (event, request) => {
     if (!validateSender(event)) {
@@ -159,13 +129,11 @@ export function registerIpcHandlers(win: BrowserWindow): void {
       expiresAt: result.expiresAt,
     };
   });
-
   typedHandle(IPC_CHANNELS.SESSION_CANCEL, async (event) => {
     if (!validateSender(event)) return { cancelled: false };
     sessionTimer.cancelSession();
     return { cancelled: true };
   });
-
   typedHandle(IPC_CHANNELS.SESSION_STATUS, async (event) => {
     if (!validateSender(event)) return null;
     const result = sessionTimer.getStatus();
@@ -184,38 +152,16 @@ export function registerIpcHandlers(win: BrowserWindow): void {
       durationMinutes: result.durationMinutes,
     };
   });
-
   // Open settings window from renderer
   typedHandle(IPC_CHANNELS.SETTINGS_OPEN, async (event) => {
     if (!validateSender(event)) return;
     createSettingsWindow();
   });
-
   // Quit app from renderer
   typedHandle(IPC_CHANNELS.APP_QUIT, async (event) => {
     if (!validateSender(event)) return;
     app.quit();
   });
-
   // Auto-updater IPC (separate module, registered here for consistency)
   registerAutoUpdaterIpc();
-
-
-
-  let prevPreventSleep = getSettings().preventSleep;
-
-  // Push settings changes to all renderer windows
-  onSettingsChanged((settings) => {
-    // Cancel running session when preventSleep transitions true → false
-    if (prevPreventSleep && !settings.preventSleep) {
-      prevPreventSleep = settings.preventSleep;
-      sessionTimer.cancelSession();
-    } else {
-      prevPreventSleep = settings.preventSleep;
-    }
-
-    for (const win of BrowserWindow.getAllWindows()) {
-      win.webContents.send(IPC_CHANNELS.SETTINGS_CHANGED, settings);
-    }
-  });
 }
