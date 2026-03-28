@@ -6,18 +6,14 @@ import { fileURLToPath } from "node:url";
 import { setupTray } from "./tray.js";
 import { registerIpcHandlers } from "./ipc.js";
 import { getPackageInfo } from "./utils/packageInfo.js";
-import { getSettings } from "./settings.js";
-import { syncAutoLaunch } from "./auto-launch.js";
-import { syncPreventSleep, stopPreventingSleep, initBatteryMonitoring, setBatteryAutoStopCallback } from "./power-saver.js";
+import { initCoordinator, cleanupCoordinator } from "./coordinator.js";
 import { registerGlobalShortcut, unregisterGlobalShortcut } from "./shortcut.js";
 import { closeSettingsWindow } from "./settings-window.js";
 import { initAutoUpdater, stopAutoUpdater } from "./auto-updater.js";
-import { cancelSession } from "./session-timer.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const isDev = !app.isPackaged;
-
 // === Process-level error handlers ===
 process.on("uncaughtException", (error: Error) => {
   log.error("[main] Uncaught exception:", error);
@@ -26,26 +22,21 @@ process.on("uncaughtException", (error: Error) => {
     app.exit(1);
   }
 });
-
 process.on("unhandledRejection", (reason: unknown, promise: Promise<unknown>) => {
   log.error("[main] Unhandled rejection at:", promise, "reason:", reason);
   // Do not exit on unhandled rejection - these are often recoverable
 });
-
 const packageJson = getPackageInfo();
 const platform = [os.type(), os.release(), os.arch()].join(", ");
-
 app.setAboutPanelOptions({
   applicationName: "Amphetamine",
   applicationVersion: app.getVersion(),
   copyright: `Developed by ${packageJson.author}`,
   version: platform,
 });
-
 let mainWindow: BrowserWindow | null = null;
 let isQuitting = false;
 let cleanupTray: (() => void) | null = null;
-
 function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
     width: 360,
@@ -69,21 +60,17 @@ function createWindow(): BrowserWindow {
       nodeIntegration: false,
     },
   });
-
   if (isDev) {
     const devUrl = process.env["DEV_SERVER_URL"] ?? "http://localhost:5173";
     win.loadURL(devUrl);
   } else {
-    win.loadFile(path.join(__dirname, "..", "renderer", "index.html"));
-  }
-
+    win.loadFile(path.join(__dirname, "..", "renderer", "index.html"));  }
   // Intercept close/minimize → hide to tray (unless quitting)
   win.on("close", (event) => {
     if (isQuitting) return;
     event.preventDefault();
     win.hide();
   });
-
   win.on("minimize", () => {
     if (!win.isDestroyed()) {
       win.webContents.send("popover:hide");
@@ -94,7 +81,6 @@ function createWindow(): BrowserWindow {
       }, 160);
     }
   });
-
   // Hide when focus lost (popover behavior)
   win.on("blur", () => {
     if (!isDev) {
@@ -108,39 +94,30 @@ function createWindow(): BrowserWindow {
       }
     }
   });
-
   return win;
 }
-
 app.whenReady().then(() => {
   // Register as accessory app — no Dock icon, no menu bar
   app.setActivationPolicy("accessory");
-
   mainWindow = createWindow();
   registerIpcHandlers(mainWindow);
   cleanupTray = setupTray();
 
-  // Sync auto-launch setting on startup
-  const settings = getSettings();
-  syncAutoLaunch(settings.launchAtLogin);
-  syncPreventSleep(settings.preventSleep);
-  setBatteryAutoStopCallback(cancelSession);
-  void initBatteryMonitoring();
+  // Initialize coordinator — handles syncPreventSleep, syncAutoLaunch, session cancel, broadcast
+  initCoordinator();
   registerGlobalShortcut();
   initAutoUpdater();
 });
-
 app.on("window-all-closed", () => {
   // Prevent default quit — tray-only app stays alive
   // No-op: keep app running in tray
 });
-
 app.on("before-quit", () => {
   isQuitting = true;
   cleanupTray?.();
   closeSettingsWindow();
+  cleanupCoordinator();
   unregisterGlobalShortcut();
-  stopPreventingSleep();
   stopAutoUpdater();
   if (mainWindow) {
     mainWindow.destroy();

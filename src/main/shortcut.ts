@@ -1,7 +1,6 @@
 import { globalShortcut } from "electron";
 import log from "electron-log";
 import { getSettings, updateSettings } from "./settings.js";
-import { syncPreventSleep } from "./power-saver.js";
 
 const DEFAULT_SHORTCUT = "Cmd+Shift+A";
 
@@ -13,8 +12,8 @@ export function registerGlobalShortcut(): void {
     const registered = globalShortcut.register(shortcut, () => {
       const current = getSettings();
       const next = !current.preventSleep;
-      const updated = updateSettings({ preventSleep: next });
-      syncPreventSleep(updated.preventSleep);
+      updateSettings({ preventSleep: next });
+      // Coordinator handles syncPreventSleep via settings change
       log.info(`[shortcut] Sleep prevention ${next ? "enabled" : "disabled"} via ${shortcut}`);
     });
 
