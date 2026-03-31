@@ -1,0 +1,38 @@
+import { app } from "electron";
+
+// === Window Dimensions ===
+export const MAIN_WINDOW_WIDTH = 360;
+export const MAIN_WINDOW_HEIGHT = 480;
+export const SETTINGS_WINDOW_WIDTH = 520;
+export const SETTINGS_WINDOW_HEIGHT = 430;
+
+// === IPC Popover Height Bounds ===
+export const MIN_POPOVER_HEIGHT = 220;
+export const MAX_POPOVER_HEIGHT = 480;
+
+// === Timeouts (milliseconds) ===
+export const HIDE_DELAY_MS = 160;
+export const BATTERY_CHECK_TIMEOUT_MS = 5000;
+export const INITIAL_UPDATE_CHECK_DELAY_MS = 3000;
+export const PERIODIC_UPDATE_CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000; // 4 hours
+
+// === Time Conversion ===
+export const MS_PER_MINUTE = 60 * 1000;
+
+// === Dev Server ===
+const DEFAULT_DEV_PORT = 5173;
+const DEFAULT_DEV_URL = `http://localhost:${DEFAULT_DEV_PORT}`;
+
+/** Allowed URL origins for IPC sender validation in development */
+export const DEV_ORIGINS = [
+  `http://localhost:${DEFAULT_DEV_PORT}`,
+  `http://127.0.0.1:${DEFAULT_DEV_PORT}`,
+] as const;
+
+/** Resolve dev server URL from environment or default */
+export function getDevServerUrl(): string {
+  return process.env["DEV_SERVER_URL"] ?? DEFAULT_DEV_URL;
+}
+
+// === Environment ===
+export const isDev = !app.isPackaged;

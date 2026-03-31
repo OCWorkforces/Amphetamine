@@ -7,23 +7,15 @@ import {
   type IpcRequest,
   type IpcResponse,
 } from "../shared/types.js";
+import { MAIN_WINDOW_WIDTH, MIN_POPOVER_HEIGHT, MAX_POPOVER_HEIGHT, DEV_ORIGINS } from "./constants.js";
 
 import { getSettings, updateSettings } from "./settings.js";
 import { createSettingsWindow } from "./settings-window.js";
 import { registerAutoUpdaterIpc } from "./auto-updater.js";
 import * as sessionTimer from "./session-timer.js";
 
-/** Accepted URL origins for IPC senders (renderer served from file:// or localhost in dev) */
-const ALLOWED_ORIGINS = new Set([
-  "http://localhost:5173",
-  "http://127.0.0.1:5173",
-]);
 
-/** Window dimensions for the popover */
-const WINDOW_WIDTH = 360;
-/** Acceptable height bounds for the popover window */
-const MIN_WINDOW_HEIGHT = 220;
-const MAX_WINDOW_HEIGHT = 480;
+const ALLOWED_ORIGINS: ReadonlySet<string> = new Set(DEV_ORIGINS);
 /** Returns true if the sender's origin is the app's own renderer */
 export function validateSender(event: IpcMainEvent): boolean {
   const senderUrl = event.senderFrame?.url ?? "";
@@ -78,10 +70,10 @@ export function registerIpcHandlers(win: BrowserWindow): void {
         if (typeof height === "number" && height > 0) {
           // Clamp height to acceptable bounds
           const clampedHeight = Math.max(
-            MIN_WINDOW_HEIGHT,
-            Math.min(MAX_WINDOW_HEIGHT, Math.round(height)),
+            MIN_POPOVER_HEIGHT,
+            Math.min(MAX_POPOVER_HEIGHT, Math.round(height)),
           );
-          win.setSize(WINDOW_WIDTH, clampedHeight, true);
+          win.setSize(MAIN_WINDOW_WIDTH, clampedHeight, true);
         }
       } catch (err) {
         log.error("[ipc] WINDOW_SET_HEIGHT error:", err);
