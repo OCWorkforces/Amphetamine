@@ -90,6 +90,7 @@ async function refreshSessionStatus(): Promise<void> {
   try {
     sessionStatus = await window.api.session.getStatus();
   } catch {
+    // Silently set to null — UI falls back to default state
     sessionStatus = null;
   }
 
@@ -248,6 +249,7 @@ async function init() {
       );
     });
   } catch {
+    // Render fallback UI on init failure
     const version = "-";
     render(version);
     requestAnimationFrame(() => {

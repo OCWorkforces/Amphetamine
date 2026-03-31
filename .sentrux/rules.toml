@@ -19,3 +19,37 @@ deny = [
 name = "preload-no-renderer"
 description = "Preload must not import from renderer process"
 deny = ["src.preload -> src.renderer"]
+
+# Rules added after Phase 1-4 refactoring (constants extraction + DI decoupling)
+
+[[rules]]
+name = "settings-limited-fan-in"
+description = "settings.ts should only be imported by coordinator, ipc, session-timer — not by tray, shortcut, or power-saver (use DI instead)"
+deny = [
+  "src.main.tray -> src.main.settings",
+  "src.main.shortcut -> src.main.settings",
+  "src.main.power-saver -> src.main.settings",
+]
+
+[[rules]]
+name = "utils-leaf-modules"
+description = "Utility modules must not import from application modules (they are leaves in the dependency graph)"
+deny = [
+  "src.main.utils -> src.main.coordinator",
+  "src.main.utils -> src.main.settings",
+]
+
+[[rules]]
+name = "constants-leaf"
+description = "Constants module must not import from application modules (only electron and node builtins)"
+deny = [
+  "src.main.constants -> src.main.coordinator",
+  "src.main.constants -> src.main.settings",
+  "src.main.constants -> src.main.session-timer",
+  "src.main.constants -> src.main.power-saver",
+  "src.main.constants -> src.main.shortcut",
+  "src.main.constants -> src.main.tray",
+  "src.main.constants -> src.main.ipc",
+  "src.main.constants -> src.main.auto-updater",
+  "src.main.constants -> src.main.auto-launch",
+]
