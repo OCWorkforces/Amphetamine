@@ -3,14 +3,17 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // Hoisted mocks
 const mockGetSettings = vi.hoisted(() => vi.fn());
 const mockOnSettingsChanged = vi.hoisted(() => vi.fn());
+const mockUpdateSettings = vi.hoisted(() => vi.fn());
 const mockSyncPreventSleep = vi.hoisted(() => vi.fn());
 const mockSyncAutoLaunch = vi.hoisted(() => vi.fn());
 const mockInitBatteryMonitoring = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 const mockSetBatteryAutoStopCallback = vi.hoisted(() => vi.fn());
 const mockStopPreventingSleep = vi.hoisted(() => vi.fn());
+const mockSetBatteryThresholdGetter = vi.hoisted(() => vi.fn());
 const mockCancelSession = vi.hoisted(() => vi.fn());
 const mockGetAllWindows = vi.hoisted(() => vi.fn().mockReturnValue([]));
 const mockLogInfo = vi.hoisted(() => vi.fn());
+const mockRegisterGlobalShortcut = vi.hoisted(() => vi.fn());
 
 vi.mock("electron", async (importOriginal) => {
   const actual = await importOriginal();
@@ -27,12 +30,14 @@ vi.mock("electron-log", () => ({
 vi.mock("../../src/main/settings.js", () => ({
   getSettings: mockGetSettings,
   onSettingsChanged: mockOnSettingsChanged,
+  updateSettings: mockUpdateSettings,
 }));
 
 vi.mock("../../src/main/power-saver.js", () => ({
   syncPreventSleep: mockSyncPreventSleep,
   initBatteryMonitoring: mockInitBatteryMonitoring,
   setBatteryAutoStopCallback: mockSetBatteryAutoStopCallback,
+  setBatteryThresholdGetter: mockSetBatteryThresholdGetter,
   stopPreventingSleep: mockStopPreventingSleep,
 }));
 
@@ -44,6 +49,9 @@ vi.mock("../../src/main/session-timer.js", () => ({
   cancelSession: mockCancelSession,
 }));
 
+vi.mock("../../src/main/shortcut.js", () => ({
+  registerGlobalShortcut: mockRegisterGlobalShortcut,
+}));
 describe("coordinator", () => {
   let initCoordinator: () => void;
   let cleanupCoordinator: () => void;
@@ -94,6 +102,12 @@ describe("coordinator", () => {
       expect(mockSetBatteryAutoStopCallback).toHaveBeenCalledWith(mockCancelSession);
     });
 
+    it("wires battery threshold getter", () => {
+      initCoordinator();
+
+      expect(mockSetBatteryThresholdGetter).toHaveBeenCalledWith(expect.any(Function));
+    });
+
     it("initializes battery monitoring", () => {
       initCoordinator();
 
@@ -106,6 +120,17 @@ describe("coordinator", () => {
       expect(mockOnSettingsChanged).toHaveBeenCalledWith(expect.any(Function));
     });
 
+    it("registers global shortcut with deps", () => {
+      initCoordinator();
+
+      expect(mockRegisterGlobalShortcut).toHaveBeenCalledWith(
+        expect.objectContaining({
+          getShortcut: expect.any(Function),
+          getPreventSleep: expect.any(Function),
+          togglePreventSleep: expect.any(Function),
+        }),
+      );
+    });
     it("syncs preventSleep on settings change", () => {
       initCoordinator();
 

@@ -1,9 +1,9 @@
 import { app, BrowserWindow, nativeImage } from "electron";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { SETTINGS_WINDOW_WIDTH, SETTINGS_WINDOW_HEIGHT, getDevServerUrl, isDev } from "./constants.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const isDev = !app.isPackaged;
 
 // Resolve icon.icns path:
 //   Dev:      lib/main/ → ../../build/icon.icns
@@ -40,10 +40,10 @@ export function createSettingsWindow(): BrowserWindow {
   }
 
   const win = new BrowserWindow({
-    width: 520,
-    height: 430,
-    minWidth: 520,
-    minHeight: 430,
+    width: SETTINGS_WINDOW_WIDTH,
+    height: SETTINGS_WINDOW_HEIGHT,
+    minWidth: SETTINGS_WINDOW_WIDTH,
+    minHeight: SETTINGS_WINDOW_HEIGHT,
     resizable: false,
     minimizable: false,
     maximizable: false,
@@ -62,7 +62,7 @@ export function createSettingsWindow(): BrowserWindow {
 
   // Load settings page
   if (isDev) {
-    const devUrl = process.env["DEV_SERVER_URL"] ?? "http://localhost:5173";
+    const devUrl = getDevServerUrl();
     win.loadURL(`${devUrl}/settings.html`);
   } else {
     win.loadFile(path.join(__dirname, "..", "renderer", "settings.html"));

@@ -2,9 +2,16 @@ import { powerSaveBlocker, powerMonitor } from "electron";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import log from "electron-log";
-import { getSettings } from "./settings.js";
+import { BATTERY_CHECK_TIMEOUT_MS } from "./constants.js";
 
 const execFileAsync = promisify(execFile);
+
+type GetBatteryThresholdFn = () => number;
+let getBatteryThreshold: GetBatteryThresholdFn = () => 0;
+
+export function setBatteryThresholdGetter(fn: GetBatteryThresholdFn): void {
+  getBatteryThreshold = fn;
+}
 
 let blockerId: number | null = null;
 
@@ -92,8 +99,7 @@ export async function initBatteryMonitoring(): Promise<void> {
  * Check battery level and auto-stop sleep prevention if below threshold.
  */
 async function checkBatteryAndStop(): Promise<void> {
-  const settings = getSettings();
-  const threshold = settings.batteryThreshold ?? 0;
+  const threshold = getBatteryThreshold();
 
   // threshold 0 = disabled
   if (threshold <= 0) return;
@@ -121,7 +127,7 @@ async function checkBatteryAndStop(): Promise<void> {
 async function getBatteryPercent(): Promise<number | null> {
   try {
     const { stdout } = await execFileAsync("pmset", ["-g", "batt"], {
-      timeout: 5000,
+      timeout: BATTERY_CHECK_TIMEOUT_MS,
     });
     // Parse: "Battery Power" or "AC Power", then "InternalBattery-0 (id=12345)\t123%;"
     const match = stdout.match(/(\d+)%/);
@@ -129,7 +135,8 @@ async function getBatteryPercent(): Promise<number | null> {
       return parseInt(match[1], 10);
     }
     return null;
-  } catch {
+  } catch (err) {
+    log.warn("[power-saver] Failed to get battery percentage:", err);
     return null;
   }
 }

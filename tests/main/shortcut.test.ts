@@ -1,14 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import type { ShortcutDeps } from "../../src/main/shortcut.js";
 
 // --- Hoisted mocks ---
 const mockRegister = vi.hoisted(() => vi.fn().mockReturnValue(true));
 const mockUnregisterAll = vi.hoisted(() => vi.fn());
-const mockGetSettings = vi.hoisted(() =>
-  vi.fn().mockReturnValue({ preventSleep: false, shortcut: "" }),
-);
-const mockUpdateSettings = vi.hoisted(() =>
-  vi.fn().mockReturnValue({ preventSleep: true, shortcut: "" }),
-);
 const mockLogInfo = vi.hoisted(() => vi.fn());
 const mockLogWarn = vi.hoisted(() => vi.fn());
 const mockLogError = vi.hoisted(() => vi.fn());
@@ -30,28 +25,39 @@ vi.mock("electron-log", () => ({
   default: { info: mockLogInfo, warn: mockLogWarn, error: mockLogError },
 }));
 
-vi.mock("../../src/main/settings.js", () => ({
-  getSettings: mockGetSettings,
-  updateSettings: mockUpdateSettings,
-}));
-
-
 describe("shortcut", () => {
-  let registerGlobalShortcut: () => void;
+  let registerGlobalShortcut: (deps: ShortcutDeps) => void;
   let unregisterGlobalShortcut: () => void;
+
+  // Default deps state
+  let preventSleep: boolean;
+  let shortcut: string;
+  let toggleCalled: boolean;
+
+  function createDeps(): ShortcutDeps {
+    return {
+      getShortcut: () => shortcut,
+      getPreventSleep: () => preventSleep,
+      togglePreventSleep: () => {
+        toggleCalled = true;
+        preventSleep = !preventSleep;
+      },
+    };
+  }
 
   beforeEach(async () => {
     vi.resetModules();
     vi.clearAllMocks();
     registeredCallback = null;
+    preventSleep = false;
+    shortcut = "";
+    toggleCalled = false;
 
     // Re-apply default mock behavior — mockImplementation replaces the factory
     mockRegister.mockImplementation((_accelerator: string, callback: () => void) => {
       registeredCallback = callback;
       return true;
     });
-    mockGetSettings.mockReturnValue({ preventSleep: false, shortcut: "" });
-    mockUpdateSettings.mockReturnValue({ preventSleep: true, shortcut: "" });
 
     const mod = await import("../../src/main/shortcut.js");
     registerGlobalShortcut = mod.registerGlobalShortcut;
@@ -60,37 +66,33 @@ describe("shortcut", () => {
 
   describe("registerGlobalShortcut", () => {
     it("registers globalShortcut with default Cmd+Shift+A when shortcut is empty", () => {
-      mockGetSettings.mockReturnValue({ preventSleep: false, shortcut: "" });
-      registerGlobalShortcut();
+      shortcut = "";
+      registerGlobalShortcut(createDeps());
 
       expect(mockRegister).toHaveBeenCalledWith("Cmd+Shift+A", expect.any(Function));
     });
 
     it("registers globalShortcut with custom shortcut from settings", () => {
-      mockGetSettings.mockReturnValue({ preventSleep: false, shortcut: "Cmd+Shift+K" });
-      registerGlobalShortcut();
+      shortcut = "Cmd+Shift+K";
+      registerGlobalShortcut(createDeps());
 
       expect(mockRegister).toHaveBeenCalledWith("Cmd+Shift+K", expect.any(Function));
     });
 
     it("shortcut callback toggles preventSleep from false to true", () => {
-      mockGetSettings.mockReturnValue({ preventSleep: false, shortcut: "" });
-      mockUpdateSettings.mockReturnValue({ preventSleep: true, shortcut: "" });
-
-      registerGlobalShortcut();
+      preventSleep = false;
+      registerGlobalShortcut(createDeps());
       registeredCallback!();
 
-      expect(mockUpdateSettings).toHaveBeenCalledWith({ preventSleep: true });
+      expect(toggleCalled).toBe(true);
     });
 
     it("shortcut callback toggles preventSleep from true to false", () => {
-      mockGetSettings.mockReturnValue({ preventSleep: true, shortcut: "" });
-      mockUpdateSettings.mockReturnValue({ preventSleep: false, shortcut: "" });
-
-      registerGlobalShortcut();
+      preventSleep = true;
+      registerGlobalShortcut(createDeps());
       registeredCallback!();
 
-      expect(mockUpdateSettings).toHaveBeenCalledWith({ preventSleep: false });
+      expect(toggleCalled).toBe(true);
     });
 
     it("logs warning when shortcut registration fails", () => {
@@ -98,7 +100,7 @@ describe("shortcut", () => {
         registeredCallback = null;
         return false;
       });
-      registerGlobalShortcut();
+      registerGlobalShortcut(createDeps());
 
       expect(mockLogWarn).toHaveBeenCalled();
     });
@@ -108,7 +110,7 @@ describe("shortcut", () => {
         registeredCallback = null;
         throw new Error("Duplicate");
       });
-      registerGlobalShortcut();
+      registerGlobalShortcut(createDeps());
 
       expect(mockLogError).toHaveBeenCalled();
     });

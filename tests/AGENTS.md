@@ -11,6 +11,7 @@ tests/
 │   ├── index.test.ts            # createWindow config, error handlers
 │   ├── ipc.test.ts              # validateSender, ALLOWED_ORIGINS
 │   ├── ipc-handlers.test.ts     # All 12 IPC channel handlers
+│   ├── coordinator.test.ts      # Coordinator init/cleanup/settings sync
 │   ├── power-saver.test.ts      # powerSaveBlocker state machine
 │   ├── power-saver-edge.test.ts # Edge cases: idempotency, invalid IDs
 │   ├── settings.test.ts         # File I/O, validation, defaults, cache
@@ -20,8 +21,12 @@ tests/
 │   ├── tray.test.ts             # Tray icon, context menu, theme
 │   ├── auto-launch.test.ts      # macOS login item management
 │   ├── shortcut.test.ts         # Global shortcut registration + toggle
-│   └── auto-updater.test.ts     # Auto-updater init, events, IPC
+│   ├── auto-updater.test.ts     # Auto-updater init, events, IPC
+│   ├── packageInfo.test.ts      # Cached package.json reader
+│   └── preload.test.ts          # Preload context bridge API
 └── renderer/
+    ├── index.test.ts            # Popover UI rendering, session display
+    ├── settings.test.ts         # Settings form rendering, toggle/select
     └── delegation.test.ts       # Event delegation on #app
 ```
 
@@ -47,30 +52,36 @@ projects: [
 // passWithNoTests: true
 ```
 
-## MAIN PROCESS TESTS (107 tests)
+## TEST COUNTS (188 total)
+
+### Main Process (176 tests, 16 files)
 
 | File                           | Tests | Focus                                          |
 | ------------------------------ | ----- | ---------------------------------------------- |
 | `ipc-handlers.test.ts`         | 19    | All 12 IPC channel handler registrations       |
 | `power-saver-edge.test.ts`     | 18    | Edge cases: idempotency, invalid blocker IDs   |
 | `session-timer.test.ts`        | 16    | Session lifecycle: start/cancel/expiry/timers  |
-| `auto-updater.test.ts`         | 11    | Auto-updater: init, events, semver validation  |
 | `auto-launch.test.ts`          | 13    | Login item: get/set/sync, error handling       |
-| `settings-window-edge.test.ts` | 6     | Ready-to-show, constraints, close behavior     |
+| `auto-updater.test.ts`         | 11    | Auto-updater: init, events, semver validation  |
 | `power-saver.test.ts`          | 12    | Core: start/stop/isPreventingSleep/sync        |
 | `settings.test.ts`             | 10    | File I/O, validation, defaults, cache          |
-| `shortcut.test.ts`             | 8     | Shortcut: registration, toggle, error handling |
 | `settings-window.test.ts`      | 9     | Singleton: create/focus/close/destroy          |
+| `shortcut.test.ts`             | 8     | Shortcut: registration, toggle, error handling |
+| `coordinator.test.ts`          | 8     | Coordinator: init, cleanup, settings dispatch  |
 | `index.test.ts`                | 7     | createWindow: config, sandbox, preload         |
+| `settings-window-edge.test.ts` | 6     | Ready-to-show, constraints, close behavior     |
 | `tray.test.ts`                 | 4     | setupTray: icon update, theme, settings        |
+| `packageInfo.test.ts`          | ~5    | Cached package.json reader                     |
+| `preload.test.ts`              | ~5    | Context bridge API exposure                    |
+| `ipc.test.ts`                  | ~5    | validateSender, allowed origins                |
 
-## RENDERER TESTS (3 tests)
+### Renderer Process (12 tests, 3 files)
 
-| File                 | Tests | Focus                      |
-| -------------------- | ----- | -------------------------- |
-| `delegation.test.ts` | 3     | Event delegation on `#app` |
-
-**Total: 110 tests across 14 files** (107 main + 3 renderer)
+| File                 | Tests | Focus                                  |
+| -------------------- | ----- | -------------------------------------- |
+| `index.test.ts`      | ~6    | Popover UI rendering, session display  |
+| `settings.test.ts`   | ~6    | Settings form rendering, toggle/select |
+| `delegation.test.ts` | 3     | Event delegation on `#app`             |
 
 ## MOCK PATTERNS
 
@@ -114,7 +125,7 @@ vi.mock("electron-log", () => ({
 vi.mock("electron-updater", () => ({
   autoUpdater: {
     on: mockOn,
-    checkForUpdates: mockCheckForUpdates, // vi.fn().mockResolvedValue(null)
+    checkForUpdates: mockCheckForUpdates,
     removeAllListeners: mockRemoveAllListeners,
     logger: null,
     autoDownload: false,
@@ -170,6 +181,27 @@ vi.resetModules();
 await import("../../src/main/module.js"); // re-import to restore
 ```
 
+## RENDERER TEST PATTERN
+
+Renderer tests mock `window.api` globally via `vi.stubGlobal()`:
+
+```typescript
+const mockApi = {
+  window: { setHeight: vi.fn() },
+  app: { getVersion: vi.fn().mockResolvedValue("1.0.0"), quit: vi.fn() },
+  settings: { get: vi.fn(), set: vi.fn() },
+  session: { start: vi.fn(), cancel: vi.fn(), getStatus: vi.fn() },
+  onSettingsChanged: vi.fn(),
+};
+
+beforeEach(() => {
+  vi.stubGlobal("api", mockApi);
+  document.body.innerHTML = '<div id="app"></div>';
+});
+```
+
+Triggers `DOMContentLoaded` via `document.dispatchEvent(new Event("DOMContentLoaded"))` after import.
+
 ## SETUP FILE
 
 `tests/setup.main.ts` mocks full Electron API:
@@ -196,8 +228,3 @@ bun run test          # Run all tests once
 bun run test:watch    # Watch mode
 bun run test:coverage # With v8 coverage
 ```
-
-## PRE-EXISTING FAILURES
-
-- `tests/main/ipc.test.ts`: Module load error — `app.getPath("userData")` undefined in settings.ts top-level `loadSettings()`. Test file has 0 tests; the suite-level import fails.
-- `tests/renderer/delegation.test.ts`: `document is not defined` — jsdom environment not loading in Vitest workspace. 3 tests fail.

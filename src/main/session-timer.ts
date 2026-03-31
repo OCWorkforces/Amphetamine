@@ -1,5 +1,6 @@
 import { getSettings, updateSettings } from "./settings.js";
 import log from "electron-log";
+import { MS_PER_MINUTE } from "./constants.js";
 
 export interface SessionState {
   isRunning: boolean;
@@ -34,7 +35,7 @@ export function startSession(durationMinutes: number | null): SessionState {
 
   // Timed session
   const startedAt = Date.now();
-  const expiresAt = startedAt + durationMinutes * 60 * 1000;
+  const expiresAt = startedAt + durationMinutes * MS_PER_MINUTE;
   sessionStartedAt = startedAt;
   sessionExpiresAt = expiresAt;
 
@@ -52,7 +53,7 @@ export function startSession(durationMinutes: number | null): SessionState {
         log.error("[session-timer] Error in session expiry callback:", err);
       }
     },
-    durationMinutes * 60 * 1000,
+    durationMinutes * MS_PER_MINUTE,
   );
 
   return {

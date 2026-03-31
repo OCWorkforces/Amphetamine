@@ -1,26 +1,11 @@
 import { autoUpdater, type UpdateInfo } from "electron-updater";
-import { app, BrowserWindow, shell, ipcMain } from "electron";
+import { app, shell, ipcMain } from "electron";
 import log from "electron-log";
 import { IPC_CHANNELS } from "../shared/types.js";
+import { INITIAL_UPDATE_CHECK_DELAY_MS, PERIODIC_UPDATE_CHECK_INTERVAL_MS } from "./constants.js";
+import { broadcastToWindows } from "./utils/broadcast.js";
 
 let checkIntervalId: ReturnType<typeof setInterval> | null = null;
-
-/**
- * Broadcast a message to all renderer windows.
- */
-function broadcastToWindows(
-  channel: typeof IPC_CHANNELS.AUTO_UPDATER_STATUS,
-  data: {
-    status: "checking" | "available" | "not-available" | "downloading" | "downloaded" | "error";
-    info?: { version: string; releaseDate: string; releaseNotes?: string };
-    progress?: { percent: number; transferred: number; total: number };
-    error?: string;
-  },
-): void {
-  for (const win of BrowserWindow.getAllWindows()) {
-    win.webContents.send(channel, data);
-  }
-}
 
 /**
  * Initialize the auto-updater.
@@ -104,7 +89,7 @@ export function initAutoUpdater(): void {
   setTimeout(() => {
     log.info("[auto-updater] Running initial update check...");
     void autoUpdater.checkForUpdates();
-  }, 3000);
+  }, INITIAL_UPDATE_CHECK_DELAY_MS);
 
   // Periodic check every 4 hours
   checkIntervalId = setInterval(
@@ -112,7 +97,7 @@ export function initAutoUpdater(): void {
       log.info("[auto-updater] Running periodic update check...");
       void autoUpdater.checkForUpdates();
     },
-    4 * 60 * 60 * 1000,
+    PERIODIC_UPDATE_CHECK_INTERVAL_MS,
   );
 
   log.info("[auto-updater] Auto-updater initialized (packaged build)");
@@ -149,7 +134,8 @@ export function registerAutoUpdaterIpc(): void {
         };
       }
       return null;
-    } catch {
+    } catch (err) {
+      log.warn("[auto-updater] Failed to check for updates:", err);
       return null;
     }
   });

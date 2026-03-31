@@ -6,14 +6,14 @@ import { fileURLToPath } from "node:url";
 import { setupTray } from "./tray.js";
 import { registerIpcHandlers } from "./ipc.js";
 import { getPackageInfo } from "./utils/packageInfo.js";
-import { initCoordinator, cleanupCoordinator } from "./coordinator.js";
-import { registerGlobalShortcut, unregisterGlobalShortcut } from "./shortcut.js";
+import { initCoordinator, cleanupCoordinator, getTrayDeps } from "./coordinator.js";
+import { unregisterGlobalShortcut } from "./shortcut.js";
 import { closeSettingsWindow } from "./settings-window.js";
 import { initAutoUpdater, stopAutoUpdater } from "./auto-updater.js";
+import { MAIN_WINDOW_WIDTH, MAIN_WINDOW_HEIGHT, HIDE_DELAY_MS, getDevServerUrl, isDev } from "./constants.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const isDev = !app.isPackaged;
 // === Process-level error handlers ===
 process.on("uncaughtException", (error: Error) => {
   log.error("[main] Uncaught exception:", error);
@@ -39,8 +39,8 @@ let isQuitting = false;
 let cleanupTray: (() => void) | null = null;
 function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
-    width: 360,
-    height: 480,
+    width: MAIN_WINDOW_WIDTH,
+    height: MAIN_WINDOW_HEIGHT,
     show: false,
     frame: false,
     resizable: false,
@@ -61,7 +61,7 @@ function createWindow(): BrowserWindow {
     },
   });
   if (isDev) {
-    const devUrl = process.env["DEV_SERVER_URL"] ?? "http://localhost:5173";
+    const devUrl = getDevServerUrl();
     win.loadURL(devUrl);
   } else {
     win.loadFile(path.join(__dirname, "..", "renderer", "index.html"));  }
@@ -78,7 +78,7 @@ function createWindow(): BrowserWindow {
         if (!win.isDestroyed()) {
           win.hide();
         }
-      }, 160);
+      }, HIDE_DELAY_MS);
     }
   });
   // Hide when focus lost (popover behavior)
@@ -90,7 +90,7 @@ function createWindow(): BrowserWindow {
           if (!win.isDestroyed()) {
             win.hide();
           }
-        }, 160);
+        }, HIDE_DELAY_MS);
       }
     }
   });
@@ -101,11 +101,9 @@ app.whenReady().then(() => {
   app.setActivationPolicy("accessory");
   mainWindow = createWindow();
   registerIpcHandlers(mainWindow);
-  cleanupTray = setupTray();
-
-  // Initialize coordinator — handles syncPreventSleep, syncAutoLaunch, session cancel, broadcast
+  // Initialize coordinator — handles syncPreventSleep, syncAutoLaunch, session cancel, broadcast, shortcut
   initCoordinator();
-  registerGlobalShortcut();
+  cleanupTray = setupTray(getTrayDeps());
   initAutoUpdater();
 });
 app.on("window-all-closed", () => {

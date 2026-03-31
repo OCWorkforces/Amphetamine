@@ -82,6 +82,7 @@ export default [
         HTMLButtonElement: "readonly",
         HTMLSpanElement: "readonly",
         EventListener: "readonly",
+        Event: "readonly",
         setTimeout: "readonly",
         clearTimeout: "readonly",
         setInterval: "readonly",
