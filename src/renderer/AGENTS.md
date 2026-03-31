@@ -21,11 +21,8 @@ Interactive session status display. Shows prevent-sleep state, session timer cou
 
 - Renders on `DOMContentLoaded`, loads settings + session status
 - Session polling: 1-second interval when session is active, stops when idle
-- `shouldPollSession()` — returns true only when popover visible + preventSleep on
 - Timer formatting: `formatTimerLabel()` handles hours/minutes/seconds display
-- Binds click events via `addEventListener` per button (settings + quit)
 - Resizes window via `window.api.window.setHeight()` after render
-- Hides popover on visibility change (document hidden) and beforeunload
 - Popover visibility tracked via `isPopoverVisible` flag + `visible` CSS class
 
 ## SETTINGS WINDOW
@@ -40,13 +37,11 @@ Separate renderer entry at `settings/`. Three controls: Launch at Login (toggle)
 - Per-indicator save timers (Map<string, timeout>) for independent fade timing
 - Dropdown options: Indefinitely, 15min, 30min, 1h, 2h, 4h
 - Dropdown change starts session AND sets `preventSleep: true`
-- `session.start(duration)` called from dropdown, not from popover
 
 ## RENDERING PATTERN
 
 - No virtual DOM — direct `innerHTML` assignment
-- Popover uses individual `addEventListener` per button
-- Settings uses individual `addEventListener` per toggle/dropdown
+- Individual `addEventListener` per button/toggle/dropdown
 - `render()` function rebuilds entire DOM on each call
 - `resizeToContent()` measures `#app` height and sets window height
 
@@ -76,38 +71,17 @@ window.api.autoUpdater.onStatus(callback); // → () => void (unsubscribe)
 - Backdrop blur: `blur(20px) saturate(180%)`
 - Reduced motion: `@media (prefers-reduced-motion: reduce)` disables transitions
 
-## KEY CLASSES
-
-| Class                | Use                               |
-| -------------------- | --------------------------------- |
-| `.popover`           | Main popover container            |
-| `.popover-header`    | App title + version               |
-| `.popover-status`    | Status indicator section          |
-| `.status-dot`        | Green/gray status indicator dot   |
-| `.popover-timer`     | Session countdown display         |
-| `.popover-footer`    | Settings + Quit buttons           |
-| `.popover-divider`   | Horizontal divider                |
-| `.settings-titlebar` | Settings window title bar         |
-| `.settings-hero`     | App icon + name + description     |
-| `.setting-row`       | Control row container             |
-| `.setting-label`     | Control label text                |
-| `.toggle-switch`     | iOS-style toggle switch wrapper   |
-| `.toggle-track`      | Toggle track element              |
-| `.toggle-thumb`      | Toggle thumb (sliding circle)     |
-| `.setting-select`    | Duration dropdown select          |
-| `.save-indicator`    | "✓ Saved" text (fades after 1.5s) |
-| `.settings-footer`   | Copyright footer                  |
-
 ## SECURITY
 
-- CSP in `index.html`: `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:`
-- Identical CSP in `settings/index.html`
+- CSP in both HTML files: `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:`
 - Settings error messages set via `textContent` (prevents XSS)
 
 ## TESTS
 
 **Location**: `tests/renderer/*.test.ts`
 
-| File                 | Focus                                |
-| -------------------- | ------------------------------------ |
-| `delegation.test.ts` | Event delegation on `#app` (3 tests) |
+| File                 | Focus                                  |
+| -------------------- | -------------------------------------- |
+| `index.test.ts`      | Popover UI rendering, session display  |
+| `settings.test.ts`   | Settings form rendering, toggle/select |
+| `delegation.test.ts` | Event delegation on `#app`             |
