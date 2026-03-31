@@ -1,18 +1,21 @@
 import { globalShortcut } from "electron";
 import log from "electron-log";
-import { getSettings, updateSettings } from "./settings.js";
 
 const DEFAULT_SHORTCUT = "Cmd+Shift+A";
 
-export function registerGlobalShortcut(): void {
-  const settings = getSettings();
-  const shortcut = settings.shortcut || DEFAULT_SHORTCUT;
+export interface ShortcutDeps {
+  getShortcut: () => string;
+  getPreventSleep: () => boolean;
+  togglePreventSleep: () => void;
+}
+
+export function registerGlobalShortcut(deps: ShortcutDeps): void {
+  const shortcut = deps.getShortcut() || DEFAULT_SHORTCUT;
 
   try {
     const registered = globalShortcut.register(shortcut, () => {
-      const current = getSettings();
-      const next = !current.preventSleep;
-      updateSettings({ preventSleep: next });
+      const next = !deps.getPreventSleep();
+      deps.togglePreventSleep();
       // Coordinator handles syncPreventSleep via settings change
       log.info(`[shortcut] Sleep prevention ${next ? "enabled" : "disabled"} via ${shortcut}`);
     });

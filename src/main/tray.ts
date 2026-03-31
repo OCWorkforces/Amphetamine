@@ -11,7 +11,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { createSettingsWindow } from "./settings-window.js";
-import { getSettings, onSettingsChanged, updateSettings } from "./settings.js";
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 let tray: Tray | null = null;
@@ -28,7 +28,13 @@ function showAbout(): void {
  */
 const iconCache = new Map<string, Electron.NativeImage>();
 
-export function setupTray(): () => void {
+export interface TrayDeps {
+  getPreventSleep: () => boolean;
+  togglePreventSleep: () => void;
+  onSettingsChanged: (callback: () => void) => () => void;
+}
+
+export function setupTray(deps: TrayDeps): () => void {
   // In dev:      __dirname = lib/main/   → ../../src/assets
   // In packaged: __dirname = app.asar/lib/main/ → ../../src/assets (inside asar)
   //
@@ -57,9 +63,9 @@ export function setupTray(): () => void {
       const fallback = nativeImage.createFromBuffer(
         Buffer.from(
           `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">` +
-          `<circle cx="${size / 2}" cy="${size / 2}" r="${size / 2 - 1}" fill="${
-            isDark ? "#007AFF" : "#FF9500"
-          }"/></svg>`
+            `<circle cx="${size / 2}" cy="${size / 2}" r="${size / 2 - 1}" fill="${
+              isDark ? "#007AFF" : "#FF9500"
+            }"/></svg>`,
         ),
       );
       return fallback;
@@ -74,15 +80,11 @@ export function setupTray(): () => void {
 
   function refreshTrayIcon(): void {
     if (!tray) return;
-    tray.setImage(
-      buildIcon(nativeTheme.shouldUseDarkColors, getSettings().preventSleep),
-    );
+    tray.setImage(buildIcon(nativeTheme.shouldUseDarkColors, deps.getPreventSleep()));
   }
 
-  const initialSettings = getSettings();
-  tray = new Tray(
-    buildIcon(nativeTheme.shouldUseDarkColors, initialSettings.preventSleep),
-  );
+  const initialPreventSleep = deps.getPreventSleep();
+  tray = new Tray(buildIcon(nativeTheme.shouldUseDarkColors, initialPreventSleep));
   tray.setToolTip("Amphetamine");
 
   // Update icon whenever the system theme changes or settings change
@@ -92,7 +94,7 @@ export function setupTray(): () => void {
   nativeTheme.on("updated", onThemeUpdated);
 
   // Store unsubscribe for cleanup robustness
-  onSettingsChanged(() => {
+  deps.onSettingsChanged(() => {
     refreshTrayIcon();
   });
 
@@ -100,7 +102,7 @@ export function setupTray(): () => void {
 
   // Left-click → static context menu
   tray.on("click", () => {
-    const preventSleep = getSettings().preventSleep;
+    const preventSleep = deps.getPreventSleep();
 
     const template: MenuItemConstructorOptions[] = [
       {
@@ -108,8 +110,7 @@ export function setupTray(): () => void {
         type: "checkbox",
         checked: preventSleep,
         click: () => {
-          const current = getSettings().preventSleep;
-          updateSettings({ preventSleep: !current });
+          deps.togglePreventSleep();
         },
       },
       { type: "separator" },

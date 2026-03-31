@@ -6,6 +6,7 @@ const mockGetSettings = vi.hoisted(() =>
 );
 const mockInitCoordinator = vi.hoisted(() => vi.fn());
 const mockCleanupCoordinator = vi.hoisted(() => vi.fn());
+const mockGetTrayDeps = vi.hoisted(() => vi.fn().mockReturnValue({}));
 const mockSetupTray = vi.hoisted(() => vi.fn().mockReturnValue(() => {}));
 const mockRegisterIpcHandlers = vi.hoisted(() => vi.fn());
 const mockCloseSettingsWindow = vi.hoisted(() => vi.fn());
@@ -83,12 +84,16 @@ vi.mock("../../src/main/settings.js", () => ({
 vi.mock("../../src/main/coordinator.js", () => ({
   initCoordinator: mockInitCoordinator,
   cleanupCoordinator: mockCleanupCoordinator,
+  getTrayDeps: mockGetTrayDeps,
 }));
 
 vi.mock("../../src/main/settings-window.js", () => ({
   closeSettingsWindow: mockCloseSettingsWindow,
 }));
 
+vi.mock("../../src/main/shortcut.js", () => ({
+  unregisterGlobalShortcut: vi.fn(),
+}));
 vi.mock("../../src/main/utils/packageInfo.js", () => ({
   getPackageInfo: vi.fn().mockReturnValue({ author: "Test Author", version: "1.0.0" }),
 }));
