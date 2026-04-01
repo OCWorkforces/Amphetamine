@@ -23,6 +23,7 @@ const mockApi = {
     getStatus: vi.fn<() => Promise<SessionStatus | null>>(),
   },
   onSettingsChanged: vi.fn(() => vi.fn()),
+  onSessionStatusUpdate: vi.fn(() => vi.fn()),
   autoUpdater: {
     checkForUpdates: vi.fn(),
     onStatus: vi.fn(() => vi.fn()),

@@ -98,6 +98,27 @@ function render(errorMessage?: string): void {
   setupToggleListener();
 }
 
+function updateSettingsUI(s: AppSettings): void {
+  const launchToggle = document.getElementById("launch-at-login-toggle") as HTMLInputElement | null;
+  if (launchToggle) {
+    launchToggle.checked = s.launchAtLogin;
+    launchToggle.setAttribute("aria-checked", String(s.launchAtLogin));
+  }
+
+  const sleepToggle = document.getElementById("prevent-sleep-toggle") as HTMLInputElement | null;
+  if (sleepToggle) {
+    sleepToggle.checked = s.preventSleep;
+    sleepToggle.setAttribute("aria-checked", String(s.preventSleep));
+  }
+
+  const durationSelect = document.getElementById(
+    "session-duration-select",
+  ) as HTMLSelectElement | null;
+  if (durationSelect) {
+    durationSelect.value = s.sessionDuration === null ? "" : String(s.sessionDuration);
+  }
+}
+
 function showSaveIndicator(id: string, text: string): void {
   const indicator = document.getElementById(id);
   if (!indicator) return;
@@ -190,6 +211,11 @@ async function init(): Promise<void> {
   }
 
   render();
+
+  window.api.onSettingsChanged((newSettings: AppSettings) => {
+    settings = newSettings;
+    updateSettingsUI(settings);
+  });
 }
 
 document.addEventListener("DOMContentLoaded", () => {

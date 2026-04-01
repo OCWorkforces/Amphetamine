@@ -51,7 +51,7 @@ export function initCoordinator(): void {
   const shortcutDeps: ShortcutDeps = {
     getShortcut: () => getSettings().shortcut ?? "",
     getPreventSleep: () => getSettings().preventSleep,
-    togglePreventSleep: () => updateSettings({ preventSleep: !getSettings().preventSleep }),
+    togglePreventSleep: () => void updateSettings({ preventSleep: !getSettings().preventSleep }),
   };
   registerGlobalShortcut(shortcutDeps);
 
@@ -63,11 +63,15 @@ export function initCoordinator(): void {
     // Sync auto-launch state with settings
     syncAutoLaunch(settings.launchAtLogin);
 
+    // Update prevPreventSleep BEFORE cancelSession() to prevent infinite recursion.
+    // cancelSession() calls updateSettings() which re-triggers this subscriber synchronously.
+    const wasPreventingSleep = prevPreventSleep;
+    prevPreventSleep = settings.preventSleep;
+
     // Cancel active session when preventSleep transitions true → false
-    if (prevPreventSleep && !settings.preventSleep) {
+    if (wasPreventingSleep && !settings.preventSleep) {
       cancelSession();
     }
-    prevPreventSleep = settings.preventSleep;
 
     // Broadcast settings to all renderer windows
     broadcastToWindows(IPC_CHANNELS.SETTINGS_CHANGED, settings);
@@ -93,7 +97,7 @@ export function cleanupCoordinator(): void {
 export function getTrayDeps(): TrayDeps {
   return {
     getPreventSleep: () => getSettings().preventSleep,
-    togglePreventSleep: () => updateSettings({ preventSleep: !getSettings().preventSleep }),
+    togglePreventSleep: () => void updateSettings({ preventSleep: !getSettings().preventSleep }),
     onSettingsChanged: (cb: () => void) => onSettingsChanged(cb),
   };
 }

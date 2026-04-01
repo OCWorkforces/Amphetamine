@@ -47,12 +47,19 @@ export default defineConfig({
                 ],
           };
 
-          // Append electron external AFTER ElectronTargetPlugin has set its externals
+          // Externalize electron core and runtime dependencies (loaded from node_modules at runtime)
           const existing = config.externals ?? [];
           const arr = Array.isArray(existing) ? existing : [existing];
           arr.push(function(ctx, callback) {
             const req = ctx.request ?? '';
-            if (req === 'electron' || req.startsWith('electron/')) {
+            if (
+              req === 'electron' ||
+              req.startsWith('electron/') ||
+              req === 'electron-log' ||
+              req.startsWith('electron-log/') ||
+              req === 'electron-updater' ||
+              req.startsWith('electron-updater/')
+            ) {
               return callback(undefined, `commonjs ${req}`);
             }
             callback();

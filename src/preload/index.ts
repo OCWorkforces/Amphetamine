@@ -64,6 +64,21 @@ const api = {
     };
   },
 
+  onSessionStatusUpdate: (
+    callback: (_data: IpcResponse<typeof IPC_CHANNELS.SESSION_STATUS_UPDATE>) => void,
+  ) => {
+    const listener = (
+      _event: unknown,
+      data: IpcResponse<typeof IPC_CHANNELS.SESSION_STATUS_UPDATE>,
+    ) => {
+      callback(data);
+    };
+    ipcRenderer.on(IPC_CHANNELS.SESSION_STATUS_UPDATE, listener);
+    return () => {
+      ipcRenderer.removeListener(IPC_CHANNELS.SESSION_STATUS_UPDATE, listener);
+    };
+  },
+
   autoUpdater: {
     checkForUpdates: () =>
       ipcRenderer.invoke(

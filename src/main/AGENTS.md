@@ -9,7 +9,7 @@ Electron main process (Node.js). App lifecycle, system tray, IPC, session timer,
 | `index.ts`             | App bootstrap, BrowserWindow factory, lifecycle          |
 | `coordinator.ts`       | Central orchestrator (settings→system sync hub)          |
 | `tray.ts`              | System tray icon, context menu, window positioning       |
-| `ipc.ts`               | IPC handlers (12 channels), settings push, validation    |
+| `ipc.ts`               | IPC handlers (13 channels), settings push, validation    |
 | `settings.ts`          | Persistent app settings (JSON in userData, EventEmitter) |
 | `session-timer.ts`     | Session timer state machine (start/cancel/expiry)        |
 | `power-saver.ts`       | powerSaveBlocker + battery monitoring (pmset)            |
@@ -70,6 +70,7 @@ Electron main process (Node.js). App lifecycle, system tray, IPC, session timer,
 | `auto-updater:check`  | Manual update check      | `typedHandle`      | N/A (packaged only) |
 | `settings:changed`    | Push to all windows      | `webContents.send` | N/A (push)          |
 | `auto-updater:status` | Push update status       | `webContents.send` | N/A (push)          |
+| `session:status-update` | Push session status    | `webContents.send` | N/A (push)          |
 
 ## CONSTANTS
 

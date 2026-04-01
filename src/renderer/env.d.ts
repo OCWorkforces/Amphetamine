@@ -34,7 +34,10 @@ declare global {
         cancel(): Promise<{ cancelled: boolean }>;
         getStatus(): Promise<SessionStatusResponse | null>;
       };
-        onSettingsChanged(_callback: (settings: AppSettings) => void): () => void;
+      onSettingsChanged(_callback: (settings: AppSettings) => void): () => void;
+      onSessionStatusUpdate(
+        _callback: (_data: SessionStatusResponse | null) => void,
+      ): () => void;
       autoUpdater: {
         checkForUpdates(): Promise<{ version: string; releaseDate: string } | null>;
         onStatus(

@@ -15,6 +15,7 @@ import { createSettingsWindow } from "./settings-window.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 let tray: Tray | null = null;
+let cachedMenu: Menu | null = null;
 
 function showAbout(): void {
   // app.showAboutPanel() is a native macOS dialog, managed by the OS as a singleton.
@@ -94,14 +95,14 @@ export function setupTray(deps: TrayDeps): () => void {
   nativeTheme.on("updated", onThemeUpdated);
 
   // Store unsubscribe for cleanup robustness
-  deps.onSettingsChanged(() => {
+  const unsubscribe = deps.onSettingsChanged(() => {
     refreshTrayIcon();
+    cachedMenu = buildMenu();
   });
 
   // Listener is cleaned up on process exit (app.before-quit destroys the tray).
 
-  // Left-click → static context menu
-  tray.on("click", () => {
+  function buildMenu(): Menu {
     const preventSleep = deps.getPreventSleep();
 
     const template: MenuItemConstructorOptions[] = [
@@ -118,11 +119,21 @@ export function setupTray(deps: TrayDeps): () => void {
       { label: "About Amphetamine", click: () => showAbout() },
       { label: "Quit", accelerator: "Cmd+Q", click: () => app.quit() },
     ];
-    tray!.popUpContextMenu(Menu.buildFromTemplate(template));
+    return Menu.buildFromTemplate(template);
+  }
+
+  // Build initial cached menu
+  cachedMenu = buildMenu();
+
+  // Left-click → cached context menu
+  tray.on("click", () => {
+    tray!.popUpContextMenu(cachedMenu!);
   });
   return () => {
+    unsubscribe();
     nativeTheme.removeListener("updated", onThemeUpdated);
     tray = null;
+    cachedMenu = null;
     iconCache.clear();
   };
 }

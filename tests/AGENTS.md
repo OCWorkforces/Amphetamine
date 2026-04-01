@@ -52,13 +52,13 @@ projects: [
 // passWithNoTests: true
 ```
 
-## TEST COUNTS (188 total)
+## TEST COUNTS (189 total)
 
-### Main Process (176 tests, 16 files)
+### Main Process (177 tests, 16 files)
 
 | File                           | Tests | Focus                                          |
 | ------------------------------ | ----- | ---------------------------------------------- |
-| `ipc-handlers.test.ts`         | 19    | All 12 IPC channel handler registrations       |
+| `ipc-handlers.test.ts`         | 19    | All 13 IPC channel handler registrations       |
 | `power-saver-edge.test.ts`     | 18    | Edge cases: idempotency, invalid blocker IDs   |
 | `session-timer.test.ts`        | 16    | Session lifecycle: start/cancel/expiry/timers  |
 | `auto-launch.test.ts`          | 13    | Login item: get/set/sync, error handling       |

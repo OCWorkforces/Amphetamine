@@ -39,6 +39,7 @@ export default [
         beforeAll: "readonly",
         afterAll: "readonly",
         test: "readonly",
+        performance: "readonly",
         // Electron type namespaces
         Electron: "readonly",
       },
@@ -87,7 +88,9 @@ export default [
         clearTimeout: "readonly",
         setInterval: "readonly",
         clearInterval: "readonly",
+        performance: "readonly",
         requestAnimationFrame: "readonly",
+        cancelAnimationFrame: "readonly",
         URL: "readonly",
         console: "readonly",
         // Vitest globals

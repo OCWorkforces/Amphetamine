@@ -98,13 +98,13 @@ export function registerIpcHandlers(win: BrowserWindow): void {
   );
   typedHandle(
     IPC_CHANNELS.SETTINGS_SET,
-    (
+    async (
       event,
       partial: IpcRequest<typeof IPC_CHANNELS.SETTINGS_SET>,
-    ): IpcResponse<typeof IPC_CHANNELS.SETTINGS_SET> => {
+    ): Promise<IpcResponse<typeof IPC_CHANNELS.SETTINGS_SET>> => {
       if (!validateSender(event)) return getSettings();
       // Coordinator handles system sync (power-saver, auto-launch, session cancel, broadcast) via settings change
-      return updateSettings(partial);
+      return await updateSettings(partial);
     },
   );
   // Session timer handlers
@@ -132,7 +132,7 @@ export function registerIpcHandlers(win: BrowserWindow): void {
     if (!result.isRunning) {
       return null;
     }
-    const now = Date.now();
+    const now = performance.now();
     const remainingSeconds = result.expiresAt
       ? Math.max(0, Math.round((result.expiresAt - now) / 1000))
       : null;

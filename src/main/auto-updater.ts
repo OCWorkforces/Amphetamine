@@ -99,6 +99,7 @@ export function initAutoUpdater(): void {
     },
     PERIODIC_UPDATE_CHECK_INTERVAL_MS,
   );
+  checkIntervalId?.unref();
 
   log.info("[auto-updater] Auto-updater initialized (packaged build)");
 }

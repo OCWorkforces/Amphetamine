@@ -122,6 +122,36 @@ describe("preload", () => {
     expect(mockRemoveListener).toHaveBeenCalledWith(IPC_CHANNELS.SETTINGS_CHANGED, listener);
   });
 
+  it("onSessionStatusUpdate registers listener and returns unsubscribe function", () => {
+    const callback = vi.fn();
+    const unsubscribe = api.onSessionStatusUpdate(callback);
+
+    expect(mockOn).toHaveBeenCalledWith(IPC_CHANNELS.SESSION_STATUS_UPDATE, expect.any(Function));
+
+    // Simulate session status push from main process
+    const calls = mockOn.mock.calls;
+    const sessionCall = calls.find(
+      (c: unknown[]) => c[0] === IPC_CHANNELS.SESSION_STATUS_UPDATE,
+    );
+    const listener = sessionCall[1];
+    const testStatus = {
+      isRunning: true,
+      startedAt: 1000,
+      expiresAt: 2000,
+      remainingSeconds: 60,
+      durationMinutes: 30,
+    };
+    listener({}, testStatus);
+    expect(callback).toHaveBeenCalledWith(testStatus);
+
+    // Unsubscribe removes the listener
+    unsubscribe();
+    expect(mockRemoveListener).toHaveBeenCalledWith(
+      IPC_CHANNELS.SESSION_STATUS_UPDATE,
+      listener,
+    );
+  });
+
   it("autoUpdater.checkForUpdates calls ipcRenderer.invoke with correct channel", () => {
     api.autoUpdater.checkForUpdates();
 

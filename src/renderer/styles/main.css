@@ -52,8 +52,8 @@ body {
   width: 360px;
   min-height: 220px;
   background: var(--bg);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(10px) saturate(180%);
+  -webkit-backdrop-filter: blur(10px) saturate(180%);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   overflow: hidden;
@@ -72,8 +72,7 @@ body {
   #app {
     transition:
       opacity 150ms ease,
-      transform 150ms ease,
-      height 200ms ease;
+      transform 150ms ease;
   }
 
   #app.visible {
