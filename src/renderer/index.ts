@@ -12,9 +12,15 @@ let settings: AppSettings = {
   sessionDuration: null,
 };
 let sessionStatus: SessionStatus = null;
-let sessionPollTimer: ReturnType<typeof setInterval> | null = null;
 let unsubscribeSettings: (() => void) | null = null;
+let unsubscribeSessionStatus: (() => void) | null = null;
 let isPopoverVisible = false;
+
+// Cached DOM element references (populated after render)
+let statusDotEl: HTMLElement | null = null;
+let statusTextEl: HTMLElement | null = null;
+let timerTextEl: HTMLElement | null = null;
+let rafId: number | null = null;
 
 function getApp(): HTMLElement | null {
   return document.getElementById("app");
@@ -33,7 +39,7 @@ function formatTimerLabel(): string {
     sessionStatus.remainingSeconds ??
     (sessionStatus.expiresAt === null
       ? null
-      : Math.max(0, Math.floor((sessionStatus.expiresAt - Date.now()) / 1000)));
+      : Math.max(0, Math.floor((sessionStatus.expiresAt - performance.now()) / 1000)));
 
   if (computedRemaining === null) {
     return "⏱ Indefinitely";
@@ -60,24 +66,21 @@ function resizeToContent(): void {
 }
 
 function updateStatusUI(): void {
-  const app = getApp();
-  if (!app) return;
-
-  const statusDot = app.querySelector<HTMLElement>("#status-dot");
-  const statusText = app.querySelector<HTMLElement>("#status-text");
-  const timerText = app.querySelector<HTMLElement>("#timer-text");
-
-  statusDot?.classList.toggle("active", settings.preventSleep);
-
-  if (statusText) {
-    statusText.textContent = settings.preventSleep
-      ? "Preventing Sleep"
-      : "Sleep Prevention Off";
+  if (rafId !== null) {
+    cancelAnimationFrame(rafId);
   }
-
-  if (timerText) {
-    timerText.textContent = formatTimerLabel();
-  }
+  rafId = requestAnimationFrame(() => {
+    rafId = null;
+    statusDotEl?.classList.toggle("active", settings.preventSleep);
+    if (statusTextEl) {
+      statusTextEl.textContent = settings.preventSleep
+        ? "Preventing Sleep"
+        : "Sleep Prevention Off";
+    }
+    if (timerTextEl) {
+      timerTextEl.textContent = formatTimerLabel();
+    }
+  });
 }
 
 async function refreshSessionStatus(): Promise<void> {
@@ -96,29 +99,6 @@ async function refreshSessionStatus(): Promise<void> {
 
   updateStatusUI();
 }
-
-function shouldPollSession(): boolean {
-  return isPopoverVisible && document.visibilityState === "visible";
-}
-
-function stopSessionPolling(): void {
-  if (sessionPollTimer) {
-    clearInterval(sessionPollTimer);
-    sessionPollTimer = null;
-  }
-}
-
-function startSessionPolling(): void {
-  if (!shouldPollSession() || sessionPollTimer) {
-    return;
-  }
-
-  void refreshSessionStatus();
-  sessionPollTimer = setInterval(() => {
-    void refreshSessionStatus();
-  }, 1000);
-}
-
 
 function bindEvents(): void {
   const app = getApp();
@@ -167,6 +147,10 @@ function render(version: string): void {
   bindEvents();
 
   requestAnimationFrame(() => {
+    // Cache DOM element references for updateStatusUI
+    statusDotEl = app.querySelector("#status-dot");
+    statusTextEl = app.querySelector("#status-text");
+    timerTextEl = app.querySelector("#timer-text");
     resizeToContent();
 
     if (isPopoverVisible) {
@@ -181,7 +165,6 @@ function handlePopoverHide(): void {
 
   isPopoverVisible = false;
   app.classList.remove("visible");
-  stopSessionPolling();
 }
 
 function handleVisibilityChange(): void {
@@ -191,11 +174,8 @@ function handleVisibilityChange(): void {
   if (document.visibilityState === "visible") {
     isPopoverVisible = true;
     app.classList.add("visible");
-    startSessionPolling();
     return;
   }
-
-  stopSessionPolling();
 }
 
 async function init() {
@@ -208,9 +188,8 @@ async function init() {
     settings = nextSettings;
     isPopoverVisible = true;
 
-    render(version);
     await refreshSessionStatus();
-    startSessionPolling();
+    render(version);
 
     unsubscribeSettings = window.api.onSettingsChanged((next) => {
       settings = next;
@@ -219,12 +198,11 @@ async function init() {
       if (!settings.preventSleep) {
         sessionStatus = null;
       }
+    });
 
-      if (shouldPollSession()) {
-        startSessionPolling();
-      } else {
-        stopSessionPolling();
-      }
+    unsubscribeSessionStatus = window.api.onSessionStatusUpdate((status) => {
+      sessionStatus = status;
+      updateStatusUI();
     });
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
@@ -235,7 +213,15 @@ async function init() {
     window.addEventListener("popover:hide", handlePopoverHide as EventListener);
 
     window.addEventListener("beforeunload", () => {
-      stopSessionPolling();
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId);
+        rafId = null;
+      }
+      statusDotEl = null;
+      statusTextEl = null;
+      timerTextEl = null;
+      unsubscribeSessionStatus?.();
+      unsubscribeSessionStatus = null;
       unsubscribeSettings?.();
       unsubscribeSettings = null;
       document.removeEventListener("visibilitychange", handleVisibilityChange);
@@ -255,6 +241,11 @@ async function init() {
     requestAnimationFrame(() => {
       const app = getApp();
       if (!app) return;
+
+      // Cache DOM element references for updateStatusUI
+      statusDotEl = app.querySelector("#status-dot");
+      statusTextEl = app.querySelector("#status-text");
+      timerTextEl = app.querySelector("#timer-text");
 
       isPopoverVisible = true;
       app.classList.add("visible");
