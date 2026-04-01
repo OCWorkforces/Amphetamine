@@ -45,12 +45,19 @@ export default defineConfig({
                 ],
           };
 
-          // CRITICAL: electron must never be bundled in preload
+          // CRITICAL: electron and runtime dependencies must never be bundled in preload
           const existing = config.externals ?? [];
           const arr = Array.isArray(existing) ? existing : [existing];
           arr.push(function (ctx, callback) {
             const req = ctx.request ?? "";
-            if (req === "electron" || req.startsWith("electron/")) {
+            if (
+              req === "electron" ||
+              req.startsWith("electron/") ||
+              req === "electron-log" ||
+              req.startsWith("electron-log/") ||
+              req === "electron-updater" ||
+              req.startsWith("electron-updater/")
+            ) {
               return callback(undefined, `commonjs ${req}`);
             }
             callback();
