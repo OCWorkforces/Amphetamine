@@ -11,6 +11,7 @@ vi.mock("electron", () => ({
 vi.mock("electron-log", () => ({
   default: {
     warn: vi.fn(),
+    error: vi.fn(),
   },
 }));
 
@@ -79,10 +80,10 @@ describe("settings", () => {
   });
 
   describe("saveSettings", () => {
-    it("persists to disk", () => {
+    it("persists to disk", async () => {
       const settingsToSave = { launchAtLogin: true };
 
-      saveSettings(settingsToSave);
+      await saveSettings(settingsToSave);
 
       expect(existsSync(settingsPath)).toBe(true);
 
@@ -92,10 +93,10 @@ describe("settings", () => {
       expect(saved.launchAtLogin).toBe(true);
     });
 
-    it("writes atomically so final file only appears when write is complete", () => {
+    it("writes atomically so final file only appears when write is complete", async () => {
       const settingsToSave = { launchAtLogin: true, preventSleep: true };
 
-      saveSettings(settingsToSave);
+      await saveSettings(settingsToSave);
 
       // Final file should exist with correct content
       expect(existsSync(settingsPath)).toBe(true);
@@ -117,10 +118,10 @@ describe("settings", () => {
   });
 
   describe("updateSettings", () => {
-    it("merges partial, saves, and returns full settings", () => {
-      saveSettings({ launchAtLogin: false });
+    it("merges partial, saves, and returns full settings", async () => {
+      await saveSettings({ launchAtLogin: false });
 
-      const result = updateSettings({ launchAtLogin: true });
+      const result = await updateSettings({ launchAtLogin: true });
 
       expect(result.launchAtLogin).toBe(true);
 
@@ -132,20 +133,20 @@ describe("settings", () => {
       expect(cached.launchAtLogin).toBe(true);
     });
 
-    it("ignores unknown properties in partial", () => {
+    it("ignores unknown properties in partial", async () => {
       getSettings();
 
-      const result = updateSettings({ launchAtLogin: true });
+      const result = await updateSettings({ launchAtLogin: true });
 
       expect(Object.keys(result).sort()).toEqual(
         ["launchAtLogin", "preventSleep", "sessionDuration", "batteryThreshold", "shortcut"].sort(),
       );
     });
 
-    it("updates launchAtLogin correctly", () => {
-      saveSettings({ launchAtLogin: false });
+    it("updates launchAtLogin correctly", async () => {
+      await saveSettings({ launchAtLogin: false });
 
-      const result = updateSettings({ launchAtLogin: true });
+      const result = await updateSettings({ launchAtLogin: true });
 
       expect(result.launchAtLogin).toBe(true);
 
@@ -153,7 +154,7 @@ describe("settings", () => {
       const saved = JSON.parse(raw);
       expect(saved.launchAtLogin).toBe(true);
 
-      const result2 = updateSettings({ launchAtLogin: false });
+      const result2 = await updateSettings({ launchAtLogin: false });
       expect(result2.launchAtLogin).toBe(false);
     });
 

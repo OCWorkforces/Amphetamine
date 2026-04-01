@@ -1,6 +1,8 @@
 import { app } from "electron";
 import log from "electron-log";
-import { existsSync, readFileSync, writeFileSync, renameSync, mkdirSync } from "fs";
+import { existsSync, readFileSync, mkdirSync } from "node:fs";
+import { writeFile, rename } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import { join } from "path";
 import { EventEmitter } from "node:events";
 import { DEFAULT_SETTINGS } from "../shared/types.js";
@@ -76,21 +78,22 @@ export function loadSettings(): AppSettings {
   }
 }
 
-export function saveSettings(settings: AppSettings): void {
+export async function saveSettings(settings: AppSettings): Promise<void> {
   ensureUserDataDir();
   const settingsPath = getSettingsPath();
-  const tmpPath = settingsPath + ".tmp";
+  // Use unique tmp file per write to avoid concurrent rename races
+  const tmpPath = settingsPath + `.tmp-${randomUUID()}`;
   const raw = JSON.stringify(settings, null, 2);
   // Write to temp file first, then atomically rename
-  writeFileSync(tmpPath, raw, "utf-8");
-  renameSync(tmpPath, settingsPath);
+  await writeFile(tmpPath, raw, "utf-8");
+  await rename(tmpPath, settingsPath);
 }
 
 export function getSettings(): AppSettings {
   return { ...settingsCache };
 }
 
-export function updateSettings(partial: Partial<AppSettings>): AppSettings {
+export async function updateSettings(partial: Partial<AppSettings>): Promise<AppSettings> {
   // Merge with current cache
   const merged: AppSettings = {
     ...settingsCache,
@@ -115,13 +118,25 @@ export function updateSettings(partial: Partial<AppSettings>): AppSettings {
     merged.shortcut = partial.shortcut;
   }
 
-  // Save and update cache
-  saveSettings(merged);
-  settingsCache = { ...merged };
+  // Skip if nothing actually changed — prevents unnecessary cascade of events
+  const changed = (Object.keys(merged) as (keyof AppSettings)[]).some(
+    (key) => merged[key] !== settingsCache[key],
+  );
+  if (!changed) {
+    return getSettings();
+  }
 
-  // Notify settings change listeners via EventEmitter
+  // Update cache and notify BEFORE disk write
+  settingsCache = { ...merged };
   const snapshot = getSettings();
   settingsEmitter.emit("change", snapshot);
+
+  // Persist to disk asynchronously
+  try {
+    await saveSettings(merged);
+  } catch (err) {
+    log.error("[settings] Failed to save settings:", err);
+  }
 
   return snapshot;
 }
