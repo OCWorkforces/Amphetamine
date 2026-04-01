@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 // Hoisted mock functions - evaluated before vi.mock calls
 const mockGetSettings = vi.hoisted(() => vi.fn());
 const mockUpdateSettings = vi.hoisted(() => vi.fn());
+const mockBroadcastToWindows = vi.hoisted(() => vi.fn());
 
 // Mutable settings state - updated by mockUpdateSettings
 let settingsState = {
@@ -23,6 +24,10 @@ vi.mock("../../src/main/settings.js", () => ({
   getSettings: mockGetSettings,
   updateSettings: mockUpdateSettings,
   onSettingsChanged: vi.fn(),
+}));
+
+vi.mock("../../src/main/utils/broadcast.js", () => ({
+  broadcastToWindows: mockBroadcastToWindows,
 }));
 
 describe("session-timer", () => {
@@ -85,9 +90,9 @@ describe("session-timer", () => {
     });
 
     it("timed 30min - starts session with correct expiry", () => {
-      const before = Date.now();
+      const before = performance.now();
       const state = startSession(30);
-      const after = Date.now();
+      const after = performance.now();
 
       expect(state.isRunning).toBe(true);
       expect(state.startedAt).not.toBeNull();

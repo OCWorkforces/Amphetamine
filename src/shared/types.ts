@@ -7,6 +7,7 @@ export const IPC_CHANNELS = {
   SESSION_START: "session:start",
   SESSION_CANCEL: "session:cancel",
   SESSION_STATUS: "session:status",
+  SESSION_STATUS_UPDATE: "session:status-update",
   SETTINGS_CHANGED: "settings:changed",
   SETTINGS_OPEN: "settings:open",
   APP_QUIT: "app:quit",
@@ -41,6 +42,16 @@ export type IpcChannelMap = {
     response: { cancelled: boolean };
   };
   [IPC_CHANNELS.SESSION_STATUS]: {
+    request: undefined;
+    response: {
+      isRunning: boolean;
+      startedAt: number | null;
+      expiresAt: number | null;
+      remainingSeconds: number | null;
+      durationMinutes: number | null;
+    } | null;
+  };
+  [IPC_CHANNELS.SESSION_STATUS_UPDATE]: {
     request: undefined;
     response: {
       isRunning: boolean;
