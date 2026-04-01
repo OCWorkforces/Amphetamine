@@ -69,13 +69,13 @@ describe("power-saver edge cases", () => {
   });
 
   describe("startPreventingSleep edge cases", () => {
-    it("sets blockerId to null when powerSaveBlocker.start returns invalid id (0)", () => {
+    it("treats blocker id 0 as valid (Electron returns 0-based IDs)", () => {
       mockStart.mockReturnValue(0);
 
       startPreventingSleep();
 
       expect(mockStart).toHaveBeenCalledWith("prevent-display-sleep");
-      expect(isPreventingSleep()).toBe(false);
+      expect(isPreventingSleep()).toBe(true);
     });
 
     it("sets blockerId to null when powerSaveBlocker.start returns invalid id (-1)", () => {
@@ -87,17 +87,17 @@ describe("power-saver edge cases", () => {
       expect(isPreventingSleep()).toBe(false);
     });
 
-    it("isPreventingSleep returns false after failed start", () => {
+    it("isPreventingSleep returns true when id is 0 (valid Electron ID)", () => {
       mockStart.mockReturnValue(0);
 
       startPreventingSleep();
 
-      expect(isPreventingSleep()).toBe(false);
+      expect(isPreventingSleep()).toBe(true);
     });
 
     it("startPreventingSleep allows retry after failed start", () => {
-      // First start fails
-      mockStart.mockReturnValueOnce(0);
+      // First start fails with negative id
+      mockStart.mockReturnValueOnce(-1);
       startPreventingSleep();
       expect(isPreventingSleep()).toBe(false);
 
