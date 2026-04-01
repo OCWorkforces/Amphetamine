@@ -1,7 +1,7 @@
 # Amphetamine — Project Knowledge Base
 
-**Generated:** 2026-03-31
-**Commit:** bb86958
+**Generated:** 2026-04-01
+**Commit:** ce861b5
 **Branch:** develop
 
 ## OVERVIEW
@@ -14,7 +14,7 @@ macOS tray-only Electron app that prevents the system from sleeping. Session tim
 | Framework | Electron 41                               |
 | Build     | Rslib (main/preload) + Rsbuild (renderer) |
 | Package   | Bun                                       |
-| Test      | Vitest 4 (workspace, 188 tests)           |
+| Test      | Vitest 4 (workspace, 189 tests)           |
 
 ## STRUCTURE
 
@@ -24,7 +24,7 @@ src/
 │   ├── index.ts          # App bootstrap, window, lifecycle
 │   ├── coordinator.ts    # Central orchestrator (settings→system sync)
 │   ├── tray.ts           # System tray icon + context menu
-│   ├── ipc.ts            # IPC handlers (12 channels, typed)
+│   ├── ipc.ts            # IPC handlers (13 channels, typed)
 │   ├── settings.ts       # Persistent app settings (JSON in userData, EventEmitter)
 │   ├── session-timer.ts  # Session timer state machine
 │   ├── power-saver.ts    # Electron powerSaveBlocker + battery monitoring
@@ -50,7 +50,7 @@ src/
 ├── preload/            # Context bridge (sandbox)
 │   └── index.ts          # Exposes window.api to renderer
 └── shared/             # Types shared across processes
-    └── types.ts          # IPC_CHANNELS (12), AppSettings, IpcChannelMap
+    └── types.ts          # IPC_CHANNELS (13), AppSettings, IpcChannelMap
 ```
 
 ## WHERE TO LOOK
@@ -77,43 +77,48 @@ src/
 
 ## CODE MAP
 
-| Symbol                       | Type  | Location                       | Role                                                                           |
-| ---------------------------- | ----- | ------------------------------ | ------------------------------------------------------------------------------ |
-| `createWindow`               | fn    | src/main/index.ts:40           | BrowserWindow factory                                                          |
-| `setupTray`                  | fn    | src/main/tray.ts:37            | System tray init + Prevent Sleep checkbox                                      |
-| `showAbout`                  | fn    | src/main/tray.ts:19            | Native About panel (singleton)                                                 |
-| `initCoordinator`            | fn    | src/main/coordinator.ts:37     | Central orchestrator: settings→power/auto-launch/session/shortcut/broadcast    |
-| `cleanupCoordinator`         | fn    | src/main/coordinator.ts:83     | Unsubscribe + stop sleep prevention                                            |
-| `getTrayDeps`                | fn    | src/main/coordinator.ts:93     | Wires tray deps to settings                                                    |
-| `registerIpcHandlers`        | fn    | src/main/ipc.ts:63             | IPC registration (12 channels)                                                 |
-| `typedHandle`                | fn    | src/main/ipc.ts:59             | Type-safe IPC wrapper                                                          |
-| `validateSender`             | fn    | src/main/ipc.ts:20             | Origin validation                                                              |
-| `registerGlobalShortcut`     | fn    | src/main/shortcut.ts:12        | Global hotkey registration                                                     |
-| `startSession`               | fn    | src/main/session-timer.ts:16   | Start timed/indefinite session                                                 |
-| `cancelSession`              | fn    | src/main/session-timer.ts:67   | Cancel active session                                                          |
-| `getStatus`                  | fn    | src/main/session-timer.ts:84   | Get current session state                                                      |
-| `cleanup`                    | fn    | src/main/session-timer.ts:110  | Clear timer without syncing sleep                                              |
-| `syncPreventSleep`           | fn    | src/main/power-saver.ts:60     | Sync sleep blocker state                                                       |
-| `initBatteryMonitoring`      | fn    | src/main/power-saver.ts:88     | Battery drain auto-disable                                                     |
-| `startPreventingSleep`       | fn    | src/main/power-saver.ts:22     | Activate powerSaveBlocker                                                      |
-| `stopPreventingSleep`        | fn    | src/main/power-saver.ts:39     | Deactivate powerSaveBlocker                                                    |
-| `setBatteryAutoStopCallback` | fn    | src/main/power-saver.ts:80     | Wire battery auto-stop to session cancel                                       |
-| `loadSettings`               | fn    | src/main/settings.ts:34        | Load from userData/settings.json                                               |
-| `updateSettings`             | fn    | src/main/settings.ts:93        | Merge + persist + notify (EventEmitter) + return copy                          |
-| `getSettings`                | fn    | src/main/settings.ts:89        | Get cached settings copy                                                       |
-| `onSettingsChanged`          | fn    | src/main/settings.ts:16        | Subscribe to changes (returns unsubscribe)                                     |
-| `syncAutoLaunch`             | fn    | src/main/auto-launch.ts:41     | Sync login item with setting                                                   |
-| `createSettingsWindow`       | fn    | src/main/settings-window.ts:35 | Singleton settings window                                                      |
-| `closeSettingsWindow`        | fn    | src/main/settings-window.ts:95 | Close settings if open                                                         |
-| `initAutoUpdater`            | fn    | src/main/auto-updater.ts:15    | Register electron-updater event handlers                                       |
-| `stopAutoUpdater`            | fn    | src/main/auto-updater.ts:110   | Stop auto-updater + clear interval                                             |
-| `registerAutoUpdaterIpc`     | fn    | src/main/auto-updater.ts:123   | IPC handler for manual update check                                            |
-| `broadcastToWindows`         | fn    | src/main/utils/broadcast.ts:7  | Send to all BrowserWindows                                                     |
-| `IPC_CHANNELS`               | const | src/shared/types.ts:2          | 12 channel names                                                               |
-| `IpcChannelMap`              | type  | src/shared/types.ts:18         | Request/response type map                                                      |
-| `AppSettings`                | iface | src/shared/types.ts:86         | { launchAtLogin, preventSleep, sessionDuration, batteryThreshold?, shortcut? } |
-| `DEFAULT_SETTINGS`           | const | src/shared/types.ts:100        | Full defaults with batteryThreshold + shortcut                                 |
-| `api`                        | const | src/preload/index.ts:5         | Context bridge API                                                             |
+| Symbol                       | Type  | Location                        | Role                                                                           |
+| ---------------------------- | ----- | ------------------------------- | ------------------------------------------------------------------------------ |
+| `createWindow`               | fn    | src/main/index.ts:40            | BrowserWindow factory                                                          |
+| `setupTray`                  | fn    | src/main/tray.ts:38             | System tray init + Prevent Sleep checkbox                                      |
+| `showAbout`                  | fn    | src/main/tray.ts:20             | Native About panel (singleton)                                                 |
+| `initCoordinator`            | fn    | src/main/coordinator.ts:37      | Central orchestrator: settings→power/auto-launch/session/shortcut/broadcast    |
+| `cleanupCoordinator`         | fn    | src/main/coordinator.ts:83      | Unsubscribe + stop sleep prevention                                            |
+| `getTrayDeps`                | fn    | src/main/coordinator.ts:93      | Wires tray deps to settings                                                    |
+| `registerIpcHandlers`        | fn    | src/main/ipc.ts:63              | IPC registration (13 channels)                                                 |
+| `typedHandle`                | fn    | src/main/ipc.ts:59              | Type-safe IPC wrapper                                                          |
+| `validateSender`             | fn    | src/main/ipc.ts:20              | Origin validation                                                              |
+| `validateOnSender`           | fn    | src/main/ipc.ts:46              | Origin validation for ipcMain.on                                               |
+| `validateSenderUrl`          | fn    | src/main/ipc.ts:24              | Shared URL validation logic                                                    |
+| `registerGlobalShortcut`     | fn    | src/main/shortcut.ts:12         | Global hotkey registration                                                     |
+| `unregisterGlobalShortcut`   | fn    | src/main/shortcut.ts:33         | Global hotkey unregistration                                                   |
+| `SessionState`               | iface | src/main/session-timer.ts:8     | Session state shape (isRunning, startedAt, expiresAt, durationMinutes)         |
+| `startSession`               | fn    | src/main/session-timer.ts:20    | Start timed/indefinite session                                                 |
+| `cancelSession`              | fn    | src/main/session-timer.ts:77    | Cancel active session                                                          |
+| `getStatus`                  | fn    | src/main/session-timer.ts:96    | Get current session state                                                      |
+| `cleanup`                    | fn    | src/main/session-timer.ts:122   | Clear timer without syncing sleep                                              |
+| `broadcastSessionUpdate`     | fn    | src/main/session-timer.ts:133   | Broadcast session status to all windows                                        |
+| `syncPreventSleep`           | fn    | src/main/power-saver.ts:60      | Sync sleep blocker state                                                       |
+| `initBatteryMonitoring`      | fn    | src/main/power-saver.ts:88      | Battery drain auto-disable                                                     |
+| `startPreventingSleep`       | fn    | src/main/power-saver.ts:22      | Activate powerSaveBlocker                                                      |
+| `stopPreventingSleep`        | fn    | src/main/power-saver.ts:39      | Deactivate powerSaveBlocker                                                    |
+| `setBatteryAutoStopCallback` | fn    | src/main/power-saver.ts:80      | Wire battery auto-stop to session cancel                                       |
+| `loadSettings`               | fn    | src/main/settings.ts:35         | Load from userData/settings.json                                               |
+| `updateSettings`             | fn    | src/main/settings.ts:94         | Merge + persist + notify (EventEmitter) + return copy                          |
+| `getSettings`                | fn    | src/main/settings.ts:90         | Get cached settings copy                                                       |
+| `onSettingsChanged`          | fn    | src/main/settings.ts:16         | Subscribe to changes (returns unsubscribe)                                     |
+| `syncAutoLaunch`             | fn    | src/main/auto-launch.ts:41      | Sync login item with setting                                                   |
+| `createSettingsWindow`       | fn    | src/main/settings-window.ts:35  | Singleton settings window                                                      |
+| `closeSettingsWindow`        | fn    | src/main/settings-window.ts:95  | Close settings if open                                                         |
+| `initAutoUpdater`            | fn    | src/main/auto-updater.ts:15     | Register electron-updater event handlers                                       |
+| `stopAutoUpdater`            | fn    | src/main/auto-updater.ts:111    | Stop auto-updater + clear interval                                             |
+| `registerAutoUpdaterIpc`     | fn    | src/main/auto-updater.ts:124    | IPC handler for manual update check                                            |
+| `broadcastToWindows`         | fn    | src/main/utils/broadcast.ts:7   | Send to all BrowserWindows                                                     |
+| `IPC_CHANNELS`               | const | src/shared/types.ts:2           | 13 channel names                                                               |
+| `IpcChannelMap`              | type  | src/shared/types.ts:18          | Request/response type map                                                      |
+| `AppSettings`                | iface | src/shared/types.ts:97          | { launchAtLogin, preventSleep, sessionDuration, batteryThreshold?, shortcut? } |
+| `DEFAULT_SETTINGS`           | const | src/shared/types.ts:111         | Full defaults with batteryThreshold + shortcut                                 |
+| `api`                        | const | src/preload/index.ts:5          | Context bridge API                                                             |
 
 ## CONVENTIONS
 
@@ -166,7 +171,7 @@ bun run build          # Build all (main + preload + renderer)
 bun run package        # Build + DMG/ZIP + flip fuses (macOS arm64)
 bun run package:x64    # Build + DMG/ZIP + flip fuses (macOS x64)
 bun run typecheck      # TypeScript check (tsc -b)
-bun run test           # Run Vitest tests (188 tests, 19 files)
+bun run test           # Run Vitest tests (189 tests, 19 files)
 bun run test:watch     # Watch mode
 bun run test:coverage  # Run with v8 coverage
 bun run clean          # Remove lib/ dist/
@@ -203,7 +208,7 @@ Rsbuild HMR workaround: `globalObject: 'globalThis'` patches electron-renderer t
 
 | Project  | Env   | Tests | Focus                                                                               |
 | -------- | ----- | ----- | ----------------------------------------------------------------------------------- |
-| main     | node  | 176   | Coordinator, session timer, IPC, power-saver, settings, tray, shortcut, auto-launch |
+| main     | node  | 177   | Coordinator, session timer, IPC, power-saver, settings, tray, shortcut, auto-launch |
 | renderer | jsdom | 12    | Popover UI, settings UI, event delegation                                           |
 
 **Setup**: `tests/setup.main.ts` mocks full Electron API (app, BrowserWindow, ipcMain, Tray, Menu, etc.)

@@ -61,6 +61,7 @@ window.api.session.getStatus(); // → Promise<SessionStatusResponse | null>
 window.api.onSettingsChanged(callback); // → () => void (unsubscribe)
 window.api.autoUpdater.checkForUpdates(); // → Promise<...>
 window.api.autoUpdater.onStatus(callback); // → () => void (unsubscribe)
+window.api.onSessionStatusUpdate(callback); // → () => void (unsubscribe)
 ```
 
 ## CSS CONVENTIONS

@@ -11,7 +11,7 @@ Type definitions shared across main, preload, and renderer processes. Single sou
 ## IPC CHANNELS
 
 ```typescript
-// types.ts:2-15
+// types.ts:2-16
 export const IPC_CHANNELS = {
   WINDOW_SET_HEIGHT: "window:set-height",
   APP_GET_VERSION: "app:get-version",
@@ -20,6 +20,7 @@ export const IPC_CHANNELS = {
   SESSION_START: "session:start",
   SESSION_CANCEL: "session:cancel",
   SESSION_STATUS: "session:status",
+  SESSION_STATUS_UPDATE: "session:status-update", // push from main
   SETTINGS_CHANGED: "settings:changed", // push from main
   SETTINGS_OPEN: "settings:open",
   APP_QUIT: "app:quit",
@@ -28,14 +29,14 @@ export const IPC_CHANNELS = {
 } as const;
 ```
 
-`IpcChannelMap` (types.ts:18) maps each channel to its `request` / `response` types.
+`IpcChannelMap` (types.ts:19) maps each channel to its `request` / `response` types.
 
 ## DATA MODELS
 
 ### AppSettings
 
 ```typescript
-// types.ts:86-97
+// types.ts:97-107
 export interface AppSettings {
   launchAtLogin: boolean; // macOS login item toggle
   preventSleep: boolean; // powerSaveBlocker toggle
@@ -44,7 +45,7 @@ export interface AppSettings {
   shortcut?: string; // global shortcut accelerator string
 }
 
-// types.ts:100-106
+// types.ts:111-117
 export const DEFAULT_SETTINGS: AppSettings = {
   launchAtLogin: false,
   preventSleep: false,
@@ -75,7 +76,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
 ## TYPE UTILITIES
 
 ```typescript
-// types.ts:81-83
+// types.ts:92-94
 export type IpcChannel = keyof IpcChannelMap;
 export type IpcRequest<K extends IpcChannel> = IpcChannelMap[K]["request"];
 export type IpcResponse<K extends IpcChannel> = IpcChannelMap[K]["response"];
