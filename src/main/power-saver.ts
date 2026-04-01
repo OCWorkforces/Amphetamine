@@ -24,7 +24,7 @@ export function startPreventingSleep(): void {
     return;
   }
   const id = powerSaveBlocker.start("prevent-display-sleep");
-  if (id > 0) {
+  if (id >= 0) {
     blockerId = id;
     log.info("[power-saver] Started preventing sleep (id:", blockerId, ")");
   } else {
@@ -42,8 +42,8 @@ export function stopPreventingSleep(): void {
       powerSaveBlocker.stop(blockerId);
     }
     blockerId = null;
+    log.info("[power-saver] Stopped preventing sleep");
   }
-  log.info("[power-saver] Stopped preventing sleep");
 }
 
 /**
