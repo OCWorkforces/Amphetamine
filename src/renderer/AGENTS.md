@@ -20,8 +20,12 @@ Electron renderer (web context). Vanilla TypeScript UI with native macOS popover
 Interactive session status display. Shows prevent-sleep state, session timer countdown, Settings button, and Quit button.
 
 - Renders on `DOMContentLoaded`, loads settings + session status
-- Session polling: 1-second interval when session is active, stops when idle
-- Timer formatting: `formatTimerLabel()` handles hours/minutes/seconds display
+- Session updates are push-based via `window.api.onSessionStatusUpdate` (no polling)
+- `unsubscribeSessionStatus` variable holds the cleanup function for the push subscription
+- DOM refs cached after first render: `statusDotEl`, `statusTextEl`, `timerTextEl`
+- `updateStatusUI()` batches DOM writes inside `requestAnimationFrame`
+- Timer formatting: `formatTimerLabel()` uses `performance.now()` for precision
+- Init order: `refreshSessionStatus()` runs BEFORE `render(version)` to avoid flash of stale state
 - Resizes window via `window.api.window.setHeight()` after render
 - Popover visibility tracked via `isPopoverVisible` flag + `visible` CSS class
 
@@ -40,7 +44,10 @@ Separate renderer entry at `settings/`. Three controls: Launch at Login (toggle)
 
 ## RENDERING PATTERN
 
-- No virtual DOM — direct `innerHTML` assignment
+- No virtual DOM, direct `innerHTML` assignment
+- DOM element refs (`statusDotEl`, `statusTextEl`, `timerTextEl`) cached after first `render()`, not re-queried on each update
+- `updateStatusUI()` wraps DOM writes in `requestAnimationFrame` for batched updates
+- Session status arrives via push subscription, no polling
 - Individual `addEventListener` per button/toggle/dropdown
 - `render()` function rebuilds entire DOM on each call
 - `resizeToContent()` measures `#app` height and sets window height

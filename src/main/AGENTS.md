@@ -33,8 +33,9 @@ Electron main process (Node.js). App lifecycle, system tray, IPC, session timer,
 2. Wires battery: `setBatteryThresholdGetter()` + `setBatteryAutoStopCallback(cancelSession)`
 3. Registers shortcut via `ShortcutDeps` (injected, no direct settings import)
 4. Subscribes to `onSettingsChanged` → dispatches to all sync modules
-5. Tracks `prevPreventSleep` — cancels session on true→false transition
+5. Tracks `prevPreventSleep` — cancels session on true→false transition. Updated BEFORE `cancelSession()` call to prevent infinite recursion from re-triggering the subscriber
 6. Broadcasts settings to all windows via `broadcastToWindows()`
+7. `togglePreventSleep` uses `void updateSettings(...)` prefix for the async call
 
 `getTrayDeps()` returns `TrayDeps` wired to settings (dependency injection for tray).
 
@@ -78,11 +79,13 @@ Electron main process (Node.js). App lifecycle, system tray, IPC, session timer,
 
 ## SESSION TIMER
 
-- `startSession(durationMinutes)` — starts timer, syncs `preventSleep: true`
-- `cancelSession()` — clears timer, syncs `preventSleep: false`
-- `getStatus()` — returns `SessionState` (isRunning, startedAt, expiresAt, durationMinutes)
-- `cleanup()` — clears timer without syncing sleep (for app teardown)
-- Timer expiry auto-calls cancel logic — syncs sleep off and clears settings
+- `startSession(durationMinutes)` — starts timer with `performance.now()` (monotonic clock), syncs `preventSleep: true`, calls `broadcastSessionUpdate()` after starting, calls `startSessionBroadcast()` for timed sessions
+- `cancelSession()` — clears timer, syncs `preventSleep: false`, calls `stopSessionBroadcast()` + `broadcastSessionUpdate()`
+- `getStatus(settings?)` — returns `SessionState` (isRunning, startedAt, expiresAt, durationMinutes). Accepts optional `AppSettings` parameter
+- `cleanup()` — clears timer and calls `stopSessionBroadcast()` without syncing sleep (for app teardown)
+- `broadcastSessionUpdate()` — computes and broadcasts session status to all windows
+- `startSessionBroadcast()` / `stopSessionBroadcast()` — manages interval-based push of session status
+- Timer expiry calls `stopSessionBroadcast()` + `broadcastSessionUpdate()`, then syncs sleep off and clears settings
 - Expiry callback wrapped in try/catch with `log.error` for safety
 
 ## POWER-SAVER
@@ -100,7 +103,8 @@ Electron main process (Node.js). App lifecycle, system tray, IPC, session timer,
 - JSON file in `app.getPath('userData')/settings.json`
 - Loaded on module import (`loadSettings()` at bottom of settings.ts)
 - Validated: each field checked against `typeof`, falls back to `DEFAULT_SETTINGS`
-- `updateSettings(partial)`: Merges → saves atomically → updates cache → notifies listeners → returns copy
+- `saveSettings()`: Async — uses `writeFile`/`rename` from `node:fs/promises` + `randomUUID()` from `node:crypto` for unique temp files
+- `updateSettings(partial)`: Async — has no-change dedup (skips save if nothing changed), updates cache BEFORE disk write, persists asynchronously with error logging, notifies listeners, returns copy
 - `getSettings()`: Returns shallow copy of cache (never expose mutable ref)
 - `onSettingsChanged(callback)`: Subscribe to settings changes, returns unsubscribe function
 
@@ -120,6 +124,8 @@ Electron main process (Node.js). App lifecycle, system tray, IPC, session timer,
 - `typedHandle()` — use for invoke-style IPC; `ipcMain.on()` only for fire-and-forget (window:set-height)
 - Session start/cancel/expiry — MUST include `preventSleep` in all `updateSettings()` calls
 - Orchestration belongs in `coordinator.ts` — modules must NOT import each other directly
+- `Date.now()` — never use for session timing; use `performance.now()` for monotonic clock
+- `updateSettings()` is async — always use `void` prefix or `await`, never fire-and-forget silently
 
 ## STALE / CLEANUP
 
