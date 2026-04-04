@@ -10,12 +10,12 @@ tests/
 ├── main/
 │   ├── index.test.ts            # createWindow config, error handlers
 │   ├── ipc.test.ts              # validateSender, ALLOWED_ORIGINS
-│   ├── ipc-handlers.test.ts     # All 12 IPC channel handlers
+│   ├── ipc-handlers.test.ts     # All 13 IPC channel handlers
 │   ├── coordinator.test.ts      # Coordinator init/cleanup/settings sync
 │   ├── power-saver.test.ts      # powerSaveBlocker state machine
 │   ├── power-saver-edge.test.ts # Edge cases: idempotency, invalid IDs
-│   ├── settings.test.ts         # File I/O, validation, defaults, cache
-│   ├── session-timer.test.ts    # Session start/cancel/expiry with timers
+│   ├── settings.test.ts         # File I/O, async persistence, defaults, cache
+│   ├── session-timer.test.ts    # Session start/cancel/expiry/broadcast
 │   ├── settings-window.test.ts  # Settings window singleton
 │   ├── settings-window-edge.test.ts # Edge cases: ready-to-show, constraints, close
 │   ├── tray.test.ts             # Tray icon, context menu, theme
@@ -23,9 +23,9 @@ tests/
 │   ├── shortcut.test.ts         # Global shortcut registration + toggle
 │   ├── auto-updater.test.ts     # Auto-updater init, events, IPC
 │   ├── packageInfo.test.ts      # Cached package.json reader
-│   └── preload.test.ts          # Preload context bridge API
+│   └── preload.test.ts          # Preload context bridge API + onSessionStatusUpdate
 └── renderer/
-    ├── index.test.ts            # Popover UI rendering, session display
+    ├── index.test.ts            # Popover UI rendering, push subscription, session display
     ├── settings.test.ts         # Settings form rendering, toggle/select
     └── delegation.test.ts       # Event delegation on #app
 ```
@@ -145,6 +145,20 @@ mockUpdateSettings.mockImplementation((partial) => {
 });
 ```
 
+### Pattern 7: Async settings mock
+
+`updateSettings` now returns a `Promise`. Mock implementations must return promises:
+
+```typescript
+mockUpdateSettings.mockImplementation(async (partial) => {
+  settingsState = { ...settingsState, ...partial };
+  return { ...settingsState };
+});
+```
+
+> `updateSettings` is async. Mock implementations must return promises.
+> `saveSettings` is also async. Tests using real fs I/O need `await`.
+
 ## BEFORE EACH PATTERN
 
 All main process tests follow:
@@ -189,18 +203,20 @@ Renderer tests mock `window.api` globally via `vi.stubGlobal()`:
 const mockApi = {
   window: { setHeight: vi.fn() },
   app: { getVersion: vi.fn().mockResolvedValue("1.0.0"), quit: vi.fn() },
-  settings: { get: vi.fn(), set: vi.fn() },
+  settings: { get: vi.fn(), set: vi.fn(), open: vi.fn() },
   session: { start: vi.fn(), cancel: vi.fn(), getStatus: vi.fn() },
-  onSettingsChanged: vi.fn(),
+  onSettingsChanged: vi.fn(() => vi.fn()),
+  onSessionStatusUpdate: vi.fn(() => vi.fn()),
+  autoUpdater: { checkForUpdates: vi.fn(), onStatus: vi.fn(() => vi.fn()) },
 };
 
 beforeEach(() => {
   vi.stubGlobal("api", mockApi);
+  mockApi.session.getStatus.mockResolvedValue(null);
   document.body.innerHTML = '<div id="app"></div>';
 });
-```
 
-Triggers `DOMContentLoaded` via `document.dispatchEvent(new Event("DOMContentLoaded"))` after import.
+Polling-based session tests are removed. The renderer now uses a push subscription via `onSessionStatusUpdate`. Init trigger requires `await vi.advanceTimersByTimeAsync(0)` for async settling after `DOMContentLoaded`.
 
 ## SETUP FILE
 
@@ -220,6 +236,8 @@ Triggers `DOMContentLoaded` via `document.dispatchEvent(new Event("DOMContentLoa
 | `shell`            | openExternal                                                                              |
 | `dialog`           | showErrorBox, showMessageBox                                                              |
 | `Notification`     | show                                                                                      |
+
+> Renderer tests also need `onSessionStatusUpdate` mocked on `window.api`. The preload exposes this as a subscription callback that returns an unsubscribe function.
 
 ## COMMANDS
 

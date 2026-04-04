@@ -1,7 +1,7 @@
 # Amphetamine — Project Knowledge Base
 
-**Generated:** 2026-04-01
-**Commit:** ce861b5
+**Generated:** 2026-04-04
+**Commit:** e118c22
 **Branch:** develop
 
 ## OVERVIEW
@@ -25,7 +25,7 @@ src/
 │   ├── coordinator.ts    # Central orchestrator (settings→system sync)
 │   ├── tray.ts           # System tray icon + context menu
 │   ├── ipc.ts            # IPC handlers (13 channels, typed)
-│   ├── settings.ts       # Persistent app settings (JSON in userData, EventEmitter)
+│   ├── settings.ts       # Persistent app settings (async JSON, EventEmitter)
 │   ├── session-timer.ts  # Session timer state machine
 │   ├── power-saver.ts    # Electron powerSaveBlocker + battery monitoring
 │   ├── auto-launch.ts    # macOS login items (launch at login)
@@ -80,11 +80,11 @@ src/
 | Symbol                       | Type  | Location                        | Role                                                                           |
 | ---------------------------- | ----- | ------------------------------- | ------------------------------------------------------------------------------ |
 | `createWindow`               | fn    | src/main/index.ts:40            | BrowserWindow factory                                                          |
-| `setupTray`                  | fn    | src/main/tray.ts:38             | System tray init + Prevent Sleep checkbox                                      |
+| `setupTray`                  | fn    | src/main/tray.ts:38             | System tray init + cached menu + Prevent Sleep checkbox                        |
 | `showAbout`                  | fn    | src/main/tray.ts:20             | Native About panel (singleton)                                                 |
 | `initCoordinator`            | fn    | src/main/coordinator.ts:37      | Central orchestrator: settings→power/auto-launch/session/shortcut/broadcast    |
-| `cleanupCoordinator`         | fn    | src/main/coordinator.ts:83      | Unsubscribe + stop sleep prevention                                            |
-| `getTrayDeps`                | fn    | src/main/coordinator.ts:93      | Wires tray deps to settings                                                    |
+| `cleanupCoordinator`         | fn    | src/main/coordinator.ts:87      | Unsubscribe + stop sleep prevention                                            |
+| `getTrayDeps`                | fn    | src/main/coordinator.ts:97      | Wires tray deps to settings                                                    |
 | `registerIpcHandlers`        | fn    | src/main/ipc.ts:63              | IPC registration (13 channels)                                                 |
 | `typedHandle`                | fn    | src/main/ipc.ts:59              | Type-safe IPC wrapper                                                          |
 | `validateSender`             | fn    | src/main/ipc.ts:20              | Origin validation                                                              |
@@ -93,20 +93,27 @@ src/
 | `registerGlobalShortcut`     | fn    | src/main/shortcut.ts:12         | Global hotkey registration                                                     |
 | `unregisterGlobalShortcut`   | fn    | src/main/shortcut.ts:33         | Global hotkey unregistration                                                   |
 | `SessionState`               | iface | src/main/session-timer.ts:8     | Session state shape (isRunning, startedAt, expiresAt, durationMinutes)         |
-| `startSession`               | fn    | src/main/session-timer.ts:20    | Start timed/indefinite session                                                 |
+| `startSession`               | fn    | src/main/session-timer.ts:20    | Start timed/indefinite session (performance.now() timing)                      |
 | `cancelSession`              | fn    | src/main/session-timer.ts:77    | Cancel active session                                                          |
-| `getStatus`                  | fn    | src/main/session-timer.ts:96    | Get current session state                                                      |
+| `getStatus`                  | fn    | src/main/session-timer.ts:96    | Get current session state (optional settings param)                            |
 | `cleanup`                    | fn    | src/main/session-timer.ts:122   | Clear timer without syncing sleep                                              |
-| `broadcastSessionUpdate`     | fn    | src/main/session-timer.ts:133   | Broadcast session status to all windows                                        |
+| `broadcastSessionUpdate`     | fn    | src/main/session-timer.ts:133   | Compute + push session status to all windows                                   |
+| `startSessionBroadcast`      | fn    | src/main/session-timer.ts:151   | Start 1s periodic session status broadcast                                     |
+| `stopSessionBroadcast`       | fn    | src/main/session-timer.ts:159   | Stop periodic session status broadcast                                         |
+| `expiryTimer`                | let   | src/main/session-timer.ts:15    | Session expiry setTimeout ref                                                  |
+| `sessionBroadcastTimer`      | let   | src/main/session-timer.ts:16    | Session broadcast setInterval ref                                              |
+| `sessionStartedAt`           | let   | src/main/session-timer.ts:17    | Monotonic start timestamp (performance.now)                                    |
+| `sessionExpiresAt`           | let   | src/main/session-timer.ts:18    | Monotonic expiry timestamp (performance.now)                                   |
 | `syncPreventSleep`           | fn    | src/main/power-saver.ts:60      | Sync sleep blocker state                                                       |
 | `initBatteryMonitoring`      | fn    | src/main/power-saver.ts:88      | Battery drain auto-disable                                                     |
 | `startPreventingSleep`       | fn    | src/main/power-saver.ts:22      | Activate powerSaveBlocker                                                      |
 | `stopPreventingSleep`        | fn    | src/main/power-saver.ts:39      | Deactivate powerSaveBlocker                                                    |
 | `setBatteryAutoStopCallback` | fn    | src/main/power-saver.ts:80      | Wire battery auto-stop to session cancel                                       |
-| `loadSettings`               | fn    | src/main/settings.ts:35         | Load from userData/settings.json                                               |
-| `updateSettings`             | fn    | src/main/settings.ts:94         | Merge + persist + notify (EventEmitter) + return copy                          |
-| `getSettings`                | fn    | src/main/settings.ts:90         | Get cached settings copy                                                       |
-| `onSettingsChanged`          | fn    | src/main/settings.ts:16         | Subscribe to changes (returns unsubscribe)                                     |
+| `loadSettings`               | fn    | src/main/settings.ts:36         | Load from userData/settings.json                                               |
+| `saveSettings`               | fn    | src/main/settings.ts:81         | Async atomic write (randomUUID temp file + rename)                             |
+| `updateSettings`             | fn    | src/main/settings.ts:96         | Async merge + no-change dedup + notify + persist                               |
+| `getSettings`                | fn    | src/main/settings.ts:92         | Get cached settings copy                                                       |
+| `onSettingsChanged`          | fn    | src/main/settings.ts:18         | Subscribe to changes (returns unsubscribe)                                     |
 | `syncAutoLaunch`             | fn    | src/main/auto-launch.ts:41      | Sync login item with setting                                                   |
 | `createSettingsWindow`       | fn    | src/main/settings-window.ts:35  | Singleton settings window                                                      |
 | `closeSettingsWindow`        | fn    | src/main/settings-window.ts:95  | Close settings if open                                                         |
@@ -139,6 +146,7 @@ src/
 - **Formatting**: Prettier (printWidth: 100, trailingComma: all, semi: true)
 - **Linting**: ESLint flat config with `@typescript-eslint/no-explicit-any: error`
 - **Constants**: All magic numbers extracted to `src/main/constants.ts`
+- **Monotonic timing**: Use `performance.now()` for session timing, not `Date.now()` (immune to system clock changes)
 
 ## ANTI-PATTERNS (THIS PROJECT)
 
@@ -162,6 +170,7 @@ src/
 - Session start/cancel/expiry MUST sync `preventSleep` in `updateSettings` calls
 - Session handlers MUST have `validateSender()` — no exceptions
 - Orchestration logic belongs in `coordinator.ts` — modules should NOT import each other directly
+- Never use `Date.now()` for session timing — use `performance.now()` for monotonic clock
 
 ## COMMANDS
 
@@ -193,6 +202,8 @@ All builds use SWC minification with `drop_console: true`. Console logs stripped
 
 Rsbuild HMR workaround: `globalObject: 'globalThis'` patches electron-renderer target's incompatible webpack global.
 
+Runtime deps (`electron-log`, `electron-updater`) are externalized in rslib configs — not bundled into main/preload output.
+
 ## PACKAGING
 
 - `electron-builder` for macOS arm64 + x64 (DMG + ZIP)
@@ -220,10 +231,10 @@ Rsbuild HMR workaround: `globalObject: 'globalThis'` patches electron-renderer t
 ## NOTES
 
 - **Coordinator**: `coordinator.ts` centralizes all settings→system sync. Subscribes to `onSettingsChanged` and dispatches to power-saver, auto-launch, session cancel, broadcast, and shortcut modules.
-- **Session timer**: State machine in `session-timer.ts` — start/cancel/expiry all sync `preventSleep` via `updateSettings`
+- **Session timer**: State machine in `session-timer.ts` — uses `performance.now()` monotonic clock. Broadcasts status push via `broadcastSessionUpdate()` every 1s (replaces renderer polling).
 - **Battery monitoring**: `power-saver.ts` monitors battery level, auto-cancels session via callback when below threshold
 - **Global shortcut**: `Cmd+Shift+A` toggles preventSleep (configurable in settings)
-- **Popover UI**: Read-only status display with session timer, polling every second when session active
+- **Popover UI**: Read-only status display with session timer. Receives push updates via `SESSION_STATUS_UPDATE` (no polling).
 - **Settings UI**: Three controls — Launch at Login (toggle), Prevent Sleep (toggle), Activate For (dropdown with durations)
 - **Settings push**: Changes broadcast to all windows via `broadcastToWindows()` utility
 - **Auto-updater**: Checks for updates 3s after startup, every 4 hours. Opens GitHub release URL on semver-validated version.
@@ -232,6 +243,9 @@ Rsbuild HMR workaround: `globalObject: 'globalThis'` patches electron-renderer t
 - **Window hide on blur**: Popover behavior — hides when focus lost (dev mode exempt)
 - **CI**: GitHub Actions (ci.yml: lint+test+build, cd.yml: tag+release from CI artifacts)
 - **Dependencies**: Runtime deps are `electron-log` and `electron-updater`
+- **Settings persistence**: Async atomic writes with `randomUUID()` temp files. No-change dedup skips disk write + event cascade when nothing changed.
+- **Coordinator fix**: `prevPreventSleep` updated before `cancelSession()` call to prevent infinite recursion (cancelSession → updateSettings → subscriber → cancelSession).
+- **Tray menu**: Cached in `cachedMenu` variable, rebuilt only on settings change. `setupTray()` returns cleanup function (unsubscribe + clear cache).
 
 ## STALE / CLEANUP
 

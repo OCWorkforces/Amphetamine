@@ -73,6 +73,14 @@ export const DEFAULT_SETTINGS: AppSettings = {
   remainingSeconds: number | null; durationMinutes: number | null } | null
 ```
 
+### Session Status Update
+
+```typescript
+// session:status-update (push from main, no request)
+{ isRunning: boolean; startedAt: number | null; expiresAt: number | null;
+  remainingSeconds: number | null; durationMinutes: number | null } | null
+```
+
 ## TYPE UTILITIES
 
 ```typescript
