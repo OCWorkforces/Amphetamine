@@ -1,9 +1,28 @@
-import { getSettings, updateSettings } from "./settings.js";
 import type { AppSettings, IpcResponse } from "../shared/types.js";
 import { IPC_CHANNELS } from "../shared/types.js";
 import log from "electron-log";
 import { MS_PER_MINUTE } from "./constants.js";
 import { broadcastToWindows } from "./utils/broadcast.js";
+
+let onSessionStateChange: ((updates: Partial<AppSettings>) => void) | null = null;
+let getSettingsRef: () => AppSettings = () => ({ launchAtLogin: false, preventSleep: false, sessionDuration: null });
+
+/**
+ * Inject a callback that handles session state changes.
+ * Called by coordinator on init. Replaces direct updateSettings() calls.
+ */
+export function setOnSessionStateChange(cb: (updates: Partial<AppSettings>) => void): void {
+  onSessionStateChange = cb;
+}
+
+/**
+ * Inject a settings reader for getStatus() consistency checks.
+ * Called by coordinator on init. Replaces direct getSettings() import.
+ */
+export function setSettingsReader(getSettings: () => AppSettings): void {
+  getSettingsRef = getSettings;
+}
+
 
 export interface SessionState {
   isRunning: boolean;
@@ -28,7 +47,7 @@ export function startSession(durationMinutes: number | null): SessionState {
     // Indefinite session — no timer
     sessionStartedAt = performance.now();
     sessionExpiresAt = null;
-    void updateSettings({ sessionDuration: null, preventSleep: true });
+    onSessionStateChange?.({ sessionDuration: null, preventSleep: true });
     broadcastSessionUpdate();
     return {
       isRunning: true,
@@ -44,7 +63,7 @@ export function startSession(durationMinutes: number | null): SessionState {
   sessionStartedAt = startedAt;
   sessionExpiresAt = expiresAt;
 
-  void updateSettings({ sessionDuration: durationMinutes, preventSleep: true });
+  onSessionStateChange?.({ sessionDuration: durationMinutes, preventSleep: true });
 
   expiryTimer = setTimeout(
     () => {
@@ -54,7 +73,7 @@ export function startSession(durationMinutes: number | null): SessionState {
         sessionExpiresAt = null;
         stopSessionBroadcast();
         // Session expired — coordinator will sync power-saver via settings change
-        void updateSettings({ sessionDuration: null, preventSleep: false });
+        onSessionStateChange?.({ sessionDuration: null, preventSleep: false });
         broadcastSessionUpdate();
       } catch (err) {
         log.error("[session-timer] Error in session expiry callback:", err);
@@ -81,7 +100,7 @@ export function cancelSession(): SessionState {
   }
   stopSessionBroadcast();
   // Coordinator will sync power-saver via settings change
-  void updateSettings({ sessionDuration: null, preventSleep: false });
+  onSessionStateChange?.({ sessionDuration: null, preventSleep: false });
   sessionStartedAt = null;
   sessionExpiresAt = null;
   broadcastSessionUpdate();
@@ -96,10 +115,10 @@ export function cancelSession(): SessionState {
 export function getStatus(settings?: AppSettings): SessionState {
   if (!expiryTimer) {
     // If sessionDuration is set in settings but no timer, state is inconsistent
-    const s = settings ?? getSettings();
+    const s = settings ?? getSettingsRef();
     if (s.sessionDuration !== null) {
       // Settings say session is active but no timer running — cancel it
-      void updateSettings({ sessionDuration: null });
+      onSessionStateChange?.({ sessionDuration: null });
     }
     return {
       isRunning: false,
@@ -110,7 +129,7 @@ export function getStatus(settings?: AppSettings): SessionState {
   }
 
   // Timer is running — return full state
-  const s = settings ?? getSettings();
+  const s = settings ?? getSettingsRef();
   return {
     isRunning: true,
     startedAt: sessionStartedAt,
