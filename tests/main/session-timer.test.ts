@@ -2,10 +2,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 // Hoisted mock functions - evaluated before vi.mock calls
 const mockGetSettings = vi.hoisted(() => vi.fn());
-const mockUpdateSettings = vi.hoisted(() => vi.fn());
+const mockOnSessionStateChange = vi.hoisted(() => vi.fn());
 const mockBroadcastToWindows = vi.hoisted(() => vi.fn());
 
-// Mutable settings state - updated by mockUpdateSettings
+// Mutable settings state - updated by mockOnSessionStateChange
 let settingsState = {
   launchAtLogin: false,
   preventSleep: false,
@@ -14,15 +14,12 @@ let settingsState = {
 
 // Set up getSettings to return the current state
 mockGetSettings.mockImplementation(() => ({ ...settingsState }));
-mockUpdateSettings.mockImplementation((partial: Partial<typeof settingsState>) => {
+mockOnSessionStateChange.mockImplementation((partial: Partial<typeof settingsState>) => {
   settingsState = { ...settingsState, ...partial };
-  return { ...settingsState };
 });
-
 
 vi.mock("../../src/main/settings.js", () => ({
   getSettings: mockGetSettings,
-  updateSettings: mockUpdateSettings,
   onSettingsChanged: vi.fn(),
 }));
 
@@ -50,6 +47,8 @@ describe("session-timer", () => {
     durationMinutes: number | null;
   };
   let cleanup: () => void;
+  let setOnSessionStateChange: (cb: (updates: Partial<typeof settingsState>) => void) => void;
+  let setSettingsReader: (getSettings: () => typeof settingsState) => void;
 
   beforeEach(async () => {
     vi.useRealTimers();
@@ -69,6 +68,12 @@ describe("session-timer", () => {
     cancelSession = mod.cancelSession;
     getStatus = mod.getStatus;
     cleanup = mod.cleanup;
+    setOnSessionStateChange = mod.setOnSessionStateChange;
+    setSettingsReader = mod.setSettingsReader;
+
+    // Wire the callbacks (simulates what coordinator does)
+    setOnSessionStateChange(mockOnSessionStateChange);
+    setSettingsReader(mockGetSettings);
   });
 
   afterEach(() => {
@@ -83,7 +88,7 @@ describe("session-timer", () => {
       expect(state.startedAt).not.toBeNull();
       expect(state.expiresAt).toBeNull();
       expect(state.durationMinutes).toBeNull();
-      expect(mockUpdateSettings).toHaveBeenCalledWith({
+      expect(mockOnSessionStateChange).toHaveBeenCalledWith({
         sessionDuration: null,
         preventSleep: true,
       });
@@ -99,7 +104,7 @@ describe("session-timer", () => {
       expect(state.expiresAt).toBeGreaterThanOrEqual(before + 30 * 60 * 1000);
       expect(state.expiresAt).toBeLessThanOrEqual(after + 30 * 60 * 1000);
       expect(state.durationMinutes).toBe(30);
-      expect(mockUpdateSettings).toHaveBeenCalledWith({
+      expect(mockOnSessionStateChange).toHaveBeenCalledWith({
         sessionDuration: 30,
         preventSleep: true,
       });
@@ -127,7 +132,7 @@ describe("session-timer", () => {
       expect(state.startedAt).toBeNull();
       expect(state.expiresAt).toBeNull();
       expect(state.durationMinutes).toBeNull();
-      expect(mockUpdateSettings).toHaveBeenCalledWith({
+      expect(mockOnSessionStateChange).toHaveBeenCalledWith({
         sessionDuration: null,
         preventSleep: false,
       });
@@ -140,7 +145,7 @@ describe("session-timer", () => {
       expect(state.startedAt).toBeNull();
       expect(state.expiresAt).toBeNull();
       expect(state.durationMinutes).toBeNull();
-      expect(mockUpdateSettings).toHaveBeenCalledWith({
+      expect(mockOnSessionStateChange).toHaveBeenCalledWith({
         sessionDuration: null,
         preventSleep: false,
       });
@@ -181,7 +186,7 @@ describe("session-timer", () => {
       expect(state.startedAt).toBeNull();
       expect(state.expiresAt).toBeNull();
       expect(state.durationMinutes).toBeNull();
-      expect(mockUpdateSettings).toHaveBeenCalledWith({
+      expect(mockOnSessionStateChange).toHaveBeenCalledWith({
         sessionDuration: null,
       });
     });
@@ -210,15 +215,17 @@ describe("session-timer", () => {
         sessionDuration: null,
       };
 
-      const mod = await import("../../src/main/session-timer.js");
+const mod = await import("../../src/main/session-timer.js");
+      mod.setOnSessionStateChange(mockOnSessionStateChange);
+      mod.setSettingsReader(mockGetSettings);
       mod.startSession(1); // 1 minute = 60000ms
 
-      mockUpdateSettings.mockClear();
+      mockOnSessionStateChange.mockClear();
 
       // Advance timers by 1 minute to trigger expiry
       vi.advanceTimersByTime(1 * 60 * 1000);
 
-      expect(mockUpdateSettings).toHaveBeenCalledWith({
+      expect(mockOnSessionStateChange).toHaveBeenCalledWith({
         sessionDuration: null,
         preventSleep: false,
       });

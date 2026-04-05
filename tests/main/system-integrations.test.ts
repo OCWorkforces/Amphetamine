@@ -1,16 +1,20 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const { mockGetLoginItemSettings, mockSetLoginItemSettings } = vi.hoisted(
-  () => ({
-    mockGetLoginItemSettings: vi.fn().mockReturnValue({ openAtLogin: false }),
-    mockSetLoginItemSettings: vi.fn(),
-  }),
-);
+// === Auto-Launch Tests ===
+
+const { mockGetLoginItemSettings, mockSetLoginItemSettings } = vi.hoisted(() => ({
+  mockGetLoginItemSettings: vi.fn().mockReturnValue({ openAtLogin: false }),
+  mockSetLoginItemSettings: vi.fn(),
+}));
 
 vi.mock("electron", () => ({
   app: {
     getLoginItemSettings: mockGetLoginItemSettings,
     setLoginItemSettings: mockSetLoginItemSettings,
+  },
+  globalShortcut: {
+    register: vi.fn().mockReturnValue(true),
+    unregisterAll: vi.fn(),
   },
 }));
 
@@ -22,11 +26,10 @@ describe("auto-launch", () => {
   beforeEach(async () => {
     vi.resetModules();
     vi.clearAllMocks();
-    // Re-apply default mock behavior after clearAllMocks
     mockGetLoginItemSettings.mockReturnValue({ openAtLogin: false });
     mockSetLoginItemSettings.mockImplementation(() => {});
 
-    const mod = await import("../../src/main/auto-launch.js");
+    const mod = await import("../../src/main/system-integrations.js");
     getAutoLaunchStatus = mod.getAutoLaunchStatus;
     setAutoLaunch = mod.setAutoLaunch;
     syncAutoLaunch = mod.syncAutoLaunch;
