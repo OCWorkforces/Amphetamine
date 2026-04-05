@@ -12,9 +12,7 @@ Electron main process (Node.js). App lifecycle, system tray, IPC, session timer,
 | `ipc.ts`               | IPC handlers (13 channels), settings push, validation    |
 | `settings.ts`          | Persistent app settings (JSON in userData, EventEmitter) |
 | `session-timer.ts`     | Session timer state machine (start/cancel/expiry)        |
-| `power-saver.ts`       | powerSaveBlocker + battery monitoring (pmset)            |
-| `auto-launch.ts`       | macOS login items (launch at login)                      |
-| `shortcut.ts`          | Global shortcut (Cmd+Shift+A)                            |
+| `system-integrations.ts` | Auto-launch + global shortcut (consolidated)     |
 | `settings-window.ts`   | Settings BrowserWindow singleton (shows in Dock)         |
 | `auto-updater.ts`      | Auto-updater (electron-updater, semver URL validation)   |
 | `constants.ts`         | Window dims, timeouts, dev URL, DEV_ORIGINS, isDev       |
@@ -88,7 +86,18 @@ Electron main process (Node.js). App lifecycle, system tray, IPC, session timer,
 - Timer expiry calls `stopSessionBroadcast()` + `broadcastSessionUpdate()`, then syncs sleep off and clears settings
 - Expiry callback wrapped in try/catch with `log.error` for safety
 
-## POWER-SAVER
+## SYSTEM-INTEGRATIONS
+
+`system-integrations.ts` consolidates auto-launch + global shortcut (previously separate files).
+
+**Auto-launch**: `getAutoLaunchStatus()`, `setAutoLaunch(enabled)`, `syncAutoLaunch(enabled)`
+**Global shortcut**: `registerGlobalShortcut(deps: ShortcutDeps)`, `unregisterGlobalShortcut()`
+- Default shortcut: `Cmd+Shift+A`
+- `ShortcutDeps` interface: `{ getShortcut, getPreventSleep, togglePreventSleep }` — dependency injection, no direct settings import
+
+## POWER-SAVER (merged into coordinator.ts)
+
+Power-saver functions are now inline in `coordinator.ts` (~line 26+), not a separate file.
 
 - Uses `electron.powerSaveBlocker.start('prevent-display-sleep')`
 - `syncPreventSleep(enabled)`: Called on startup and settings change

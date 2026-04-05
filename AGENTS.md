@@ -1,7 +1,7 @@
 # Amphetamine — Project Knowledge Base
 
-**Generated:** 2026-04-04
-**Commit:** e118c22
+**Generated:** 2026-04-05
+**Commit:** bdaa935
 **Branch:** develop
 
 ## OVERVIEW
@@ -18,18 +18,15 @@ macOS tray-only Electron app that prevents the system from sleeping. Session tim
 
 ## STRUCTURE
 
-```
 src/
 ├── main/               # Electron main process (Node.js)
 │   ├── index.ts          # App bootstrap, window, lifecycle
-│   ├── coordinator.ts    # Central orchestrator (settings→system sync)
+│   ├── coordinator.ts    # Central orchestrator (settings→system sync + power-saver inline)
 │   ├── tray.ts           # System tray icon + context menu
 │   ├── ipc.ts            # IPC handlers (13 channels, typed)
 │   ├── settings.ts       # Persistent app settings (async JSON, EventEmitter)
 │   ├── session-timer.ts  # Session timer state machine
-│   ├── power-saver.ts    # Electron powerSaveBlocker + battery monitoring
-│   ├── auto-launch.ts    # macOS login items (launch at login)
-│   ├── shortcut.ts       # Global shortcut (Cmd+Shift+A)
+│   ├── system-integrations.ts # Auto-launch + global shortcut (consolidated)
 │   ├── settings-window.ts # Settings BrowserWindow singleton
 │   ├── auto-updater.ts   # Auto-updater (electron-updater, release URL)
 │   ├── constants.ts      # Window dims, timeouts, dev URL, DEV_ORIGINS
@@ -49,9 +46,9 @@ src/
 │       └── main.css      # Native macOS styling, dark mode
 ├── preload/            # Context bridge (sandbox)
 │   └── index.ts          # Exposes window.api to renderer
-└── shared/             # Types shared across processes
-    └── types.ts          # IPC_CHANNELS (13), AppSettings, IpcChannelMap
-```
+├── shared/             # Types shared across processes
+│   └── types.ts          # IPC_CHANNELS (13), AppSettings, IpcChannelMap
+└── assets.d.ts         # Module declarations for *.png, *.css
 
 ## WHERE TO LOOK
 
@@ -63,9 +60,9 @@ src/
 | Use in UI             | `src/renderer/`                        | Call via `window.api.*`                         |
 | Orchestration logic   | `src/main/coordinator.ts`              | Settings→system sync hub                        |
 | Session timer logic   | `src/main/session-timer.ts`            | start/cancel/getStatus/cleanup                  |
-| Power-saver logic     | `src/main/power-saver.ts`              | start/stop/sync + battery monitoring            |
-| Global shortcut       | `src/main/shortcut.ts`                 | registerGlobalShortcut/unregisterGlobalShortcut |
-| Launch at login       | `src/main/auto-launch.ts`              | macOS login item management                     |
+| Power-saver logic     | `src/main/coordinator.ts` (inline, ~line 26+) | Merged from power-saver.ts                  |
+| Global shortcut       | `src/main/system-integrations.ts`              | registerGlobalShortcut/unregisterGlobalShortcut |
+| Launch at login       | `src/main/system-integrations.ts`              | macOS login item management                 |
 | User settings         | `src/main/settings.ts`                 | JSON in userData, validated, EventEmitter       |
 | Settings window       | `src/main/settings-window.ts`          | Singleton, shows in Dock                        |
 | Auto-updater logic    | `src/main/auto-updater.ts`             | init/stop/registerIpc, semver URL validation    |
@@ -90,8 +87,8 @@ src/
 | `validateSender`             | fn    | src/main/ipc.ts:20              | Origin validation                                                              |
 | `validateOnSender`           | fn    | src/main/ipc.ts:46              | Origin validation for ipcMain.on                                               |
 | `validateSenderUrl`          | fn    | src/main/ipc.ts:24              | Shared URL validation logic                                                    |
-| `registerGlobalShortcut`     | fn    | src/main/shortcut.ts:12         | Global hotkey registration                                                     |
-| `unregisterGlobalShortcut`   | fn    | src/main/shortcut.ts:33         | Global hotkey unregistration                                                   |
+| `registerGlobalShortcut`     | fn    | src/main/system-integrations.ts:58 | Global hotkey registration             |
+| `unregisterGlobalShortcut`   | fn    | src/main/system-integrations.ts:81 | Global hotkey unregistration           |
 | `SessionState`               | iface | src/main/session-timer.ts:8     | Session state shape (isRunning, startedAt, expiresAt, durationMinutes)         |
 | `startSession`               | fn    | src/main/session-timer.ts:20    | Start timed/indefinite session (performance.now() timing)                      |
 | `cancelSession`              | fn    | src/main/session-timer.ts:77    | Cancel active session                                                          |
@@ -104,17 +101,20 @@ src/
 | `sessionBroadcastTimer`      | let   | src/main/session-timer.ts:16    | Session broadcast setInterval ref                                              |
 | `sessionStartedAt`           | let   | src/main/session-timer.ts:17    | Monotonic start timestamp (performance.now)                                    |
 | `sessionExpiresAt`           | let   | src/main/session-timer.ts:18    | Monotonic expiry timestamp (performance.now)                                   |
-| `syncPreventSleep`           | fn    | src/main/power-saver.ts:60      | Sync sleep blocker state                                                       |
-| `initBatteryMonitoring`      | fn    | src/main/power-saver.ts:88      | Battery drain auto-disable                                                     |
-| `startPreventingSleep`       | fn    | src/main/power-saver.ts:22      | Activate powerSaveBlocker                                                      |
-| `stopPreventingSleep`        | fn    | src/main/power-saver.ts:39      | Deactivate powerSaveBlocker                                                    |
-| `setBatteryAutoStopCallback` | fn    | src/main/power-saver.ts:80      | Wire battery auto-stop to session cancel                                       |
+| `syncPreventSleep`           | fn    | src/main/coordinator.ts:26+     | Sync sleep blocker state (merged from power-saver.ts)    |
+| `initBatteryMonitoring`      | fn    | src/main/coordinator.ts:26+     | Battery drain auto-disable (merged from power-saver.ts)  |
+| `startPreventingSleep`       | fn    | src/main/coordinator.ts:26+     | Activate powerSaveBlocker (merged from power-saver.ts)   |
+| `stopPreventingSleep`        | fn    | src/main/coordinator.ts:26+     | Deactivate powerSaveBlocker (merged from power-saver.ts) |
+| `setBatteryAutoStopCallback` | fn    | src/main/coordinator.ts:26+     | Wire battery auto-stop to session cancel                 |
+| `getBatteryPercent`          | fn    | src/main/coordinator.ts:26+     | Parse `pmset -g batt` output                             |
 | `loadSettings`               | fn    | src/main/settings.ts:36         | Load from userData/settings.json                                               |
 | `saveSettings`               | fn    | src/main/settings.ts:81         | Async atomic write (randomUUID temp file + rename)                             |
 | `updateSettings`             | fn    | src/main/settings.ts:96         | Async merge + no-change dedup + notify + persist                               |
 | `getSettings`                | fn    | src/main/settings.ts:92         | Get cached settings copy                                                       |
 | `onSettingsChanged`          | fn    | src/main/settings.ts:18         | Subscribe to changes (returns unsubscribe)                                     |
-| `syncAutoLaunch`             | fn    | src/main/auto-launch.ts:41      | Sync login item with setting                                                   |
+| `syncAutoLaunch`             | fn    | src/main/system-integrations.ts:41 | Sync login item with setting           |
+| `getAutoLaunchStatus`        | fn    | src/main/system-integrations.ts:10 | Get current auto-launch status         |
+| `setAutoLaunch`              | fn    | src/main/system-integrations.ts:24 | Enable/disable auto-launch             |
 | `createSettingsWindow`       | fn    | src/main/settings-window.ts:35  | Singleton settings window                                                      |
 | `closeSettingsWindow`        | fn    | src/main/settings-window.ts:95  | Close settings if open                                                         |
 | `initAutoUpdater`            | fn    | src/main/auto-updater.ts:15     | Register electron-updater event handlers                                       |
@@ -125,7 +125,7 @@ src/
 | `IpcChannelMap`              | type  | src/shared/types.ts:18          | Request/response type map                                                      |
 | `AppSettings`                | iface | src/shared/types.ts:97          | { launchAtLogin, preventSleep, sessionDuration, batteryThreshold?, shortcut? } |
 | `DEFAULT_SETTINGS`           | const | src/shared/types.ts:111         | Full defaults with batteryThreshold + shortcut                                 |
-| `api`                        | const | src/preload/index.ts:5          | Context bridge API                                                             |
+| `ShortcutDeps`               | iface | src/main/system-integrations.ts:52 | Deps for global shortcut (getShortcut, getPreventSleep, togglePreventSleep) |
 
 ## CONVENTIONS
 
@@ -134,7 +134,7 @@ src/
 - **IPC channels**: Define in `src/shared/types.ts` → `IpcChannelMap` for type safety
 - **Type-safe IPC**: Use `typedHandle()` in main, `IpcRequest<T>`/`IpcResponse<T>` in preload
 - **Coordinator pattern**: `coordinator.ts` centralizes settings→system sync (power, auto-launch, session cancel, broadcast, shortcut). Individual modules do NOT import each other.
-- **Dependency injection**: `shortcut.ts` and `tray.ts` receive deps via `ShortcutDeps`/`TrayDeps` interfaces — no direct settings imports
+- **Dependency injection**: `system-integrations.ts` and `tray.ts` receive deps via `ShortcutDeps`/`TrayDeps` interfaces — no direct settings imports
 - **No UI framework**: Vanilla TS with `innerHTML` string templates
 - **macOS only**: Dock hiding, entitlements — no cross-platform
 - **Settings persistence**: JSON file in Electron userData directory
@@ -232,7 +232,7 @@ Runtime deps (`electron-log`, `electron-updater`) are externalized in rslib conf
 
 - **Coordinator**: `coordinator.ts` centralizes all settings→system sync. Subscribes to `onSettingsChanged` and dispatches to power-saver, auto-launch, session cancel, broadcast, and shortcut modules.
 - **Session timer**: State machine in `session-timer.ts` — uses `performance.now()` monotonic clock. Broadcasts status push via `broadcastSessionUpdate()` every 1s (replaces renderer polling).
-- **Battery monitoring**: `power-saver.ts` monitors battery level, auto-cancels session via callback when below threshold
+- **Battery monitoring**: `coordinator.ts` (inline, ~line 26+) monitors battery level, auto-cancels session via callback when below threshold
 - **Global shortcut**: `Cmd+Shift+A` toggles preventSleep (configurable in settings)
 - **Popover UI**: Read-only status display with session timer. Receives push updates via `SESSION_STATUS_UPDATE` (no polling).
 - **Settings UI**: Three controls — Launch at Login (toggle), Prevent Sleep (toggle), Activate For (dropdown with durations)
