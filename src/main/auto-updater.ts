@@ -7,84 +7,85 @@ import { broadcastToWindows } from "./utils/broadcast.js";
 
 let checkIntervalId: ReturnType<typeof setInterval> | null = null;
 
-/**
- * Initialize the auto-updater.
- * Registers event handlers and starts periodic update checks.
- * Only runs in packaged (production) builds.
- */
-export function initAutoUpdater(): void {
-  if (!app.isPackaged) {
-    return;
-  }
+/** Handle "checking-for-update" event */
+function onCheckingForUpdate(): void {
+  log.info("[auto-updater] Checking for updates...");
+  broadcastToWindows(IPC_CHANNELS.AUTO_UPDATER_STATUS, { status: "checking" });
+}
 
-  autoUpdater.logger = log;
-  autoUpdater.autoDownload = false;
-  autoUpdater.autoInstallOnAppQuit = false;
-
-  autoUpdater.on("checking-for-update", () => {
-    log.info("[auto-updater] Checking for updates...");
-    broadcastToWindows(IPC_CHANNELS.AUTO_UPDATER_STATUS, { status: "checking" });
-  });
-
-  autoUpdater.on("update-available", (info: UpdateInfo) => {
-    log.info("[auto-updater] Update available:", info.version);
-    broadcastToWindows(IPC_CHANNELS.AUTO_UPDATER_STATUS, {
-      status: "available",
-      info: {
-        version: info.version,
-        releaseDate: info.releaseDate ?? "",
-        ...(typeof info.releaseNotes === "string" ? { releaseNotes: info.releaseNotes } : {}),
-      },
-    });
-    // Validate version is a semver-like string before constructing URL
-    if (/^\d+\.\d+\.\d+/.test(info.version)) {
-      void shell.openExternal(
-        `https://github.com/CCWorkforce/OpenAmphetamine/releases/tag/v${info.version}`,
-      );
-    } else {
-      log.warn("[auto-updater] Skipping release URL — invalid version format:", info.version);
-    }
-  });
-
-  autoUpdater.on("update-not-available", (info: UpdateInfo) => {
-    log.info("[auto-updater] No update available. Current version:", info.version);
-    broadcastToWindows(IPC_CHANNELS.AUTO_UPDATER_STATUS, {
-      status: "not-available",
-      info: { version: info.version, releaseDate: info.releaseDate ?? "" },
-    });
-  });
-
-  autoUpdater.on(
-    "download-progress",
-    (progress: { percent: number; transferred: number; total: number }) => {
-      log.info("[auto-updater] Download progress:", Math.round(progress.percent), "%");
-      broadcastToWindows(IPC_CHANNELS.AUTO_UPDATER_STATUS, {
-        status: "downloading",
-        progress: {
-          percent: progress.percent,
-          transferred: progress.transferred,
-          total: progress.total,
-        },
-      });
+/** Handle "update-available" event */
+function onUpdateAvailable(info: UpdateInfo): void {
+  log.info("[auto-updater] Update available:", info.version);
+  broadcastToWindows(IPC_CHANNELS.AUTO_UPDATER_STATUS, {
+    status: "available",
+    info: {
+      version: info.version,
+      releaseDate: info.releaseDate ?? "",
+      ...(typeof info.releaseNotes === "string" ? { releaseNotes: info.releaseNotes } : {}),
     },
-  );
-
-  autoUpdater.on("update-downloaded", (info: UpdateInfo) => {
-    log.info("[auto-updater] Update downloaded:", info.version);
-    broadcastToWindows(IPC_CHANNELS.AUTO_UPDATER_STATUS, {
-      status: "downloaded",
-      info: { version: info.version, releaseDate: info.releaseDate ?? "" },
-    });
   });
+  // Validate version is a semver-like string before constructing URL
+  if (/^\d+\.\d+\.\d+/.test(info.version)) {
+    void shell.openExternal(
+      `https://github.com/CCWorkforce/OpenAmphetamine/releases/tag/v${info.version}`,
+    );
+  } else {
+    log.warn("[auto-updater] Skipping release URL \u2014 invalid version format:", info.version);
+  }
+}
 
-  autoUpdater.on("error", (err: Error) => {
-    log.error("[auto-updater] Error:", err.message);
-    broadcastToWindows(IPC_CHANNELS.AUTO_UPDATER_STATUS, {
-      status: "error",
-      error: err.message,
-    });
+/** Handle "update-not-available" event */
+function onUpdateNotAvailable(info: UpdateInfo): void {
+  log.info("[auto-updater] No update available. Current version:", info.version);
+  broadcastToWindows(IPC_CHANNELS.AUTO_UPDATER_STATUS, {
+    status: "not-available",
+    info: { version: info.version, releaseDate: info.releaseDate ?? "" },
   });
+}
 
+/** Handle "download-progress" event */
+function onDownloadProgress(progress: { percent: number; transferred: number; total: number }): void {
+  log.info("[auto-updater] Download progress:", Math.round(progress.percent), "%");
+  broadcastToWindows(IPC_CHANNELS.AUTO_UPDATER_STATUS, {
+    status: "downloading",
+    progress: {
+      percent: progress.percent,
+      transferred: progress.transferred,
+      total: progress.total,
+    },
+  });
+}
+
+/** Handle "update-downloaded" event */
+function onUpdateDownloaded(info: UpdateInfo): void {
+  log.info("[auto-updater] Update downloaded:", info.version);
+  broadcastToWindows(IPC_CHANNELS.AUTO_UPDATER_STATUS, {
+    status: "downloaded",
+    info: { version: info.version, releaseDate: info.releaseDate ?? "" },
+  });
+}
+
+/** Handle "error" event */
+function onError(err: Error): void {
+  log.error("[auto-updater] Error:", err.message);
+  broadcastToWindows(IPC_CHANNELS.AUTO_UPDATER_STATUS, {
+    status: "error",
+    error: err.message,
+  });
+}
+
+/** Register all autoUpdater event handlers */
+function registerUpdateEventHandlers(): void {
+  autoUpdater.on("checking-for-update", onCheckingForUpdate);
+  autoUpdater.on("update-available", onUpdateAvailable);
+  autoUpdater.on("update-not-available", onUpdateNotAvailable);
+  autoUpdater.on("download-progress", onDownloadProgress);
+  autoUpdater.on("update-downloaded", onUpdateDownloaded);
+  autoUpdater.on("error", onError);
+}
+
+/** Start initial delayed check and periodic update check loop */
+function startUpdateCheckLoop(): void {
   // Initial check after 3-second delay (avoid startup slowdown)
   setTimeout(() => {
     log.info("[auto-updater] Running initial update check...");
@@ -100,6 +101,23 @@ export function initAutoUpdater(): void {
     PERIODIC_UPDATE_CHECK_INTERVAL_MS,
   );
   checkIntervalId?.unref();
+}
+/**
+ * Initialize the auto-updater.
+ * Registers event handlers and starts periodic update checks.
+ * Only runs in packaged (production) builds.
+ */
+export function initAutoUpdater(): void {
+  if (!app.isPackaged) {
+    return;
+  }
+
+  autoUpdater.logger = log;
+  autoUpdater.autoDownload = false;
+  autoUpdater.autoInstallOnAppQuit = false;
+
+  registerUpdateEventHandlers();
+  startUpdateCheckLoop();
 
   log.info("[auto-updater] Auto-updater initialized (packaged build)");
 }
