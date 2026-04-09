@@ -12,6 +12,7 @@ import { fileURLToPath } from "node:url";
 
 import { createSettingsWindow } from "./settings-window.js";
 
+import { TRAY_ICON_SIZE, TRAY_ICON_COLOR_ACTIVE, TRAY_ICON_COLOR_INACTIVE } from "./constants.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 let tray: Tray | null = null;
@@ -60,12 +61,12 @@ export function setupTray(deps: TrayDeps): () => void {
     // Fall back to a programmatic icon if image files are missing or corrupted
     if (icon1x.isEmpty() || icon2x.isEmpty()) {
       log.warn("[tray] Tray icon files missing or corrupted, using fallback");
-      const size = 16;
+      const size = TRAY_ICON_SIZE;
       const fallback = nativeImage.createFromBuffer(
         Buffer.from(
           `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">` +
             `<circle cx="${size / 2}" cy="${size / 2}" r="${size / 2 - 1}" fill="${
-              isDark ? "#007AFF" : "#FF9500"
+              isDark ? TRAY_ICON_COLOR_ACTIVE : TRAY_ICON_COLOR_INACTIVE
             }"/></svg>`,
         ),
       );

@@ -6,6 +6,8 @@ import { BrowserWindow } from "electron";
  */
 export function broadcastToWindows(channel: string, data: unknown): void {
   for (const win of BrowserWindow.getAllWindows()) {
-    win.webContents.send(channel, data);
+    if (!win.isDestroyed()) {
+      win.webContents.send(channel, data);
+    }
   }
 }
