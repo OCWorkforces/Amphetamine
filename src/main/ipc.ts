@@ -7,7 +7,7 @@ import {
   type IpcRequest,
   type IpcResponse,
 } from "../shared/types.js";
-import { MAIN_WINDOW_WIDTH, MIN_POPOVER_HEIGHT, MAX_POPOVER_HEIGHT, DEV_ORIGINS } from "./constants.js";
+import { MAIN_WINDOW_WIDTH, MIN_POPOVER_HEIGHT, MAX_POPOVER_HEIGHT, DEV_ORIGINS, MS_PER_SECOND } from "./constants.js";
 
 import { getSettings, updateSettings } from "./settings.js";
 import { createSettingsWindow } from "./settings-window.js";
@@ -51,7 +51,7 @@ function validateOnSender(event: IpcMainEvent): boolean {
  * Type-safe IPC handler wrapper.
  * Ensures handler return type matches IpcChannelMap response type at compile time.
  */
-type IpcHandler<K extends keyof IpcChannelMap> = (
+export type IpcHandler<K extends keyof IpcChannelMap> = (
   _event: IpcMainEvent,
   _request: IpcChannelMap[K]["request"],
 ) => Promise<IpcChannelMap[K]["response"]> | IpcChannelMap[K]["response"];
@@ -60,8 +60,8 @@ function typedHandle<K extends keyof IpcChannelMap>(channel: K, handler: IpcHand
   ipcMain.handle(channel, handler as Parameters<typeof ipcMain.handle>[1]);
 }
 
-export function registerIpcHandlers(win: BrowserWindow): void {
-  // Window (uses ipcMain.on for fire-and-forget)
+/** Window IPC handlers (fire-and-forget) */
+function registerWindowIpc(win: BrowserWindow): void {
   ipcMain.on(
     IPC_CHANNELS.WINDOW_SET_HEIGHT,
     (event, height: IpcRequest<typeof IPC_CHANNELS.WINDOW_SET_HEIGHT>) => {
@@ -80,7 +80,10 @@ export function registerIpcHandlers(win: BrowserWindow): void {
       }
     },
   );
-  // App utilities
+}
+
+/** App utility IPC handlers */
+function registerAppIpc(): void {
   typedHandle(
     IPC_CHANNELS.APP_GET_VERSION,
     (event): IpcResponse<typeof IPC_CHANNELS.APP_GET_VERSION> => {
@@ -88,7 +91,14 @@ export function registerIpcHandlers(win: BrowserWindow): void {
       return app.getVersion();
     },
   );
-  // Settings
+  typedHandle(IPC_CHANNELS.APP_QUIT, async (event) => {
+    if (!validateSender(event)) return;
+    app.quit();
+  });
+}
+
+/** Settings IPC handlers */
+function registerSettingsIpc(): void {
   typedHandle(
     IPC_CHANNELS.SETTINGS_GET,
     (event): IpcResponse<typeof IPC_CHANNELS.SETTINGS_GET> => {
@@ -107,7 +117,14 @@ export function registerIpcHandlers(win: BrowserWindow): void {
       return await updateSettings(partial);
     },
   );
-  // Session timer handlers
+  typedHandle(IPC_CHANNELS.SETTINGS_OPEN, async (event) => {
+    if (!validateSender(event)) return;
+    createSettingsWindow();
+  });
+}
+
+/** Session timer IPC handlers */
+function registerSessionIpc(): void {
   typedHandle(IPC_CHANNELS.SESSION_START, async (event, request) => {
     if (!validateSender(event)) {
       return { startedAt: 0, durationMinutes: null, expiresAt: null };
@@ -134,7 +151,7 @@ export function registerIpcHandlers(win: BrowserWindow): void {
     }
     const now = performance.now();
     const remainingSeconds = result.expiresAt
-      ? Math.max(0, Math.round((result.expiresAt - now) / 1000))
+      ? Math.max(0, Math.round((result.expiresAt - now) / MS_PER_SECOND))
       : null;
     return {
       isRunning: result.isRunning,
@@ -144,16 +161,13 @@ export function registerIpcHandlers(win: BrowserWindow): void {
       durationMinutes: result.durationMinutes,
     };
   });
-  // Open settings window from renderer
-  typedHandle(IPC_CHANNELS.SETTINGS_OPEN, async (event) => {
-    if (!validateSender(event)) return;
-    createSettingsWindow();
-  });
-  // Quit app from renderer
-  typedHandle(IPC_CHANNELS.APP_QUIT, async (event) => {
-    if (!validateSender(event)) return;
-    app.quit();
-  });
-  // Auto-updater IPC (separate module, registered here for consistency)
+}
+
+/** Register all IPC handlers (orchestrator) */
+export function registerIpcHandlers(win: BrowserWindow): void {
+  registerWindowIpc(win);
+  registerAppIpc();
+  registerSettingsIpc();
+  registerSessionIpc();
   registerAutoUpdaterIpc();
 }
