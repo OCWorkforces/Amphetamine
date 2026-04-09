@@ -42,6 +42,7 @@ app: {
       setAlwaysOnTop: vi.fn(),
       on: vi.fn(),
       removeListener: vi.fn(),
+      isDestroyed: vi.fn().mockReturnValue(false),
       webContents: { send: vi.fn() },
     })),
     {

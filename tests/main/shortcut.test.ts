@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { ShortcutDeps } from "../../src/main/system-integrations.js";
+import type { ShortcutDeps } from "../../src/main/global-shortcut.js";
 
 // --- Hoisted mocks ---
 const mockRegister = vi.hoisted(() => vi.fn().mockReturnValue(true));
@@ -59,7 +59,7 @@ describe("shortcut", () => {
       return true;
     });
 
-    const mod = await import("../../src/main/system-integrations.js");
+    const mod = await import("../../src/main/global-shortcut.js");
     registerGlobalShortcut = mod.registerGlobalShortcut;
     unregisterGlobalShortcut = mod.unregisterGlobalShortcut;
   });

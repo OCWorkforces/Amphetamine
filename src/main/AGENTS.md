@@ -8,16 +8,19 @@ Electron main process (Node.js). App lifecycle, system tray, IPC, session timer,
 | ---------------------- | -------------------------------------------------------- |
 | `index.ts`             | App bootstrap, BrowserWindow factory, lifecycle          |
 | `coordinator.ts`       | Central orchestrator (settings→system sync hub)          |
+| `sleep-prevention.ts`  | powerSaveBlocker management (start/stop/sync)            |
+| `battery-monitor.ts`   | Battery drain auto-disable via pmset                      |
+| `auto-launch.ts`       | macOS login item management                              |
+| `global-shortcut.ts`   | Global hotkey (Cmd+Shift+A) + ShortcutDeps interface     |
 | `tray.ts`              | System tray icon, context menu, window positioning       |
-| `ipc.ts`               | IPC handlers (13 channels), settings push, validation    |
+| `ipc.ts`               | IPC handlers (13 channels, decomposed by domain)         |
 | `settings.ts`          | Persistent app settings (JSON in userData, EventEmitter) |
 | `session-timer.ts`     | Session timer state machine (start/cancel/expiry)        |
-| `system-integrations.ts` | Auto-launch + global shortcut (consolidated)     |
 | `settings-window.ts`   | Settings BrowserWindow singleton (shows in Dock)         |
-| `auto-updater.ts`      | Auto-updater (electron-updater, semver URL validation)   |
-| `constants.ts`         | Window dims, timeouts, dev URL, DEV_ORIGINS, isDev       |
+| `auto-updater.ts`      | Auto-updater (decomposed event handlers + check loop)     |
+| `constants.ts`         | Window dims, timeouts, colors, dev URL, DEV_ORIGINS      |
 | `utils/packageInfo.ts` | Cached package.json reader (uses electron-log)           |
-| `utils/broadcast.ts`   | `broadcastToWindows()` utility for push IPC              |
+| `utils/broadcast.ts`   | `broadcastToWindows<T>()` (generic, isDestroyed guard)   |
 
 ## ENTRY POINT
 
@@ -27,8 +30,8 @@ Electron main process (Node.js). App lifecycle, system tray, IPC, session timer,
 
 `coordinator.ts` is the central orchestrator. On `initCoordinator()`:
 
-1. Syncs initial state: `syncAutoLaunch()`, `syncPreventSleep()`
-2. Wires battery: `setBatteryThresholdGetter()` + `setBatteryAutoStopCallback(cancelSession)`
+1. Syncs initial state: `syncAutoLaunch()` (auto-launch.ts), `syncPreventSleep()` (sleep-prevention.ts)
+2. Wires battery: `setBatteryThresholdGetter()` + `setBatteryAutoStopCallback(cancelSession)` (battery-monitor.ts)
 3. Registers shortcut via `ShortcutDeps` (injected, no direct settings import)
 4. Subscribes to `onSettingsChanged` → dispatches to all sync modules
 5. Tracks `prevPreventSleep` — cancels session on true→false transition. Updated BEFORE `cancelSession()` call to prevent infinite recursion from re-triggering the subscriber
@@ -73,7 +76,7 @@ Electron main process (Node.js). App lifecycle, system tray, IPC, session timer,
 
 ## CONSTANTS
 
-`constants.ts` extracts all magic numbers: window dimensions (360×480, 520×430), popover height bounds (220–480), timeouts (hide delay 160ms, battery check 5s, update check 3s/4h), `MS_PER_MINUTE`, `DEV_ORIGINS`, `getDevServerUrl()`, `isDev`.
+`constants.ts` extracts all magic numbers: window dimensions (360×480, 520×430), popover height bounds (220–480), timeouts (hide delay 160ms, battery check 5s, update check 3s/4h), `MS_PER_SECOND`, `MS_PER_MINUTE`, `SESSION_BROADCAST_INTERVAL_MS`, `TRAY_ICON_SIZE`, `TRAY_ICON_COLOR_ACTIVE/INACTIVE`, `DEV_ORIGINS`, `getDevServerUrl()`, `isDev`.
 
 ## SESSION TIMER
 
@@ -86,27 +89,31 @@ Electron main process (Node.js). App lifecycle, system tray, IPC, session timer,
 - Timer expiry calls `stopSessionBroadcast()` + `broadcastSessionUpdate()`, then syncs sleep off and clears settings
 - Expiry callback wrapped in try/catch with `log.error` for safety
 
-## SYSTEM-INTEGRATIONS
+## SLEEP PREVENTION (sleep-prevention.ts)
 
-`system-integrations.ts` consolidates auto-launch + global shortcut (previously separate files).
-
-**Auto-launch**: `getAutoLaunchStatus()`, `setAutoLaunch(enabled)`, `syncAutoLaunch(enabled)`
-**Global shortcut**: `registerGlobalShortcut(deps: ShortcutDeps)`, `unregisterGlobalShortcut()`
-- Default shortcut: `Cmd+Shift+A`
-- `ShortcutDeps` interface: `{ getShortcut, getPreventSleep, togglePreventSleep }` — dependency injection, no direct settings import
-
-## POWER-SAVER (merged into coordinator.ts)
-
-Power-saver functions are now inline in `coordinator.ts` (~line 26+), not a separate file.
-
-- Uses `electron.powerSaveBlocker.start('prevent-display-sleep')`
-- `syncPreventSleep(enabled)`: Called on startup and settings change
 - `startPreventingSleep()`: Idempotent — no-op if already active
 - `stopPreventingSleep()`: Called on `before-quit`
-- `setBatteryAutoStopCallback(cb)`: Wires battery auto-stop to session cancel
+- `syncPreventSleep(enabled)`: Called on startup and settings change
+- Uses `electron.powerSaveBlocker.start('prevent-display-sleep')`
+
+## BATTERY MONITORING (battery-monitor.ts)
+
 - `initBatteryMonitoring()`: Listens to powerMonitor AC/battery events
 - `getBatteryPercent()`: Parses `pmset -g batt` output (macOS-native)
+- `checkBatteryAndStop()`: Auto-cancels session when below threshold
+- `cleanupBatteryMonitoring()`: Removes powerMonitor listeners
 
+## AUTO-LAUNCH (auto-launch.ts)
+
+- `getAutoLaunchStatus()`: Get current macOS login item status
+- `setAutoLaunch(enabled)`: Enable/disable login item
+- `syncAutoLaunch(enabled)`: Sync login item with setting
+
+## GLOBAL SHORTCUT (global-shortcut.ts)
+
+- `registerGlobalShortcut(deps: ShortcutDeps)`: Register Cmd+Shift+A
+- `unregisterGlobalShortcut()`: Unregister hotkey
+- `ShortcutDeps` interface: `{ getShortcut, getPreventSleep, togglePreventSleep }` — dependency injection
 ## SETTINGS
 
 - JSON file in `app.getPath('userData')/settings.json`

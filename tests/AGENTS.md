@@ -6,24 +6,24 @@ Two-project Vitest workspace for Electron app testing. Main process uses Node en
 
 ```
 tests/
-├── setup.main.ts                # Global Electron API mocks
+├── setup.main.ts                # Global Electron API mocks (BrowserWindow, app, ipcMain, Tray, Menu)
 ├── main/
 │   ├── index.test.ts            # createWindow config, error handlers
 │   ├── ipc.test.ts              # validateSender, ALLOWED_ORIGINS
 │   ├── ipc-handlers.test.ts     # All 13 IPC channel handlers
-│   ├── coordinator.test.ts      # Coordinator init/cleanup/settings sync
-│   ├── power-saver.test.ts      # powerSaveBlocker state machine
-│   ├── power-saver-edge.test.ts # Edge cases: idempotency, invalid IDs
-│   ├── settings.test.ts         # File I/O, async persistence, defaults, cache
-│   ├── session-timer.test.ts    # Session start/cancel/expiry/broadcast
-│   ├── settings-window.test.ts  # Settings window singleton
-│   ├── settings-window-edge.test.ts # Edge cases: ready-to-show, constraints, close
-│   ├── tray.test.ts             # Tray icon, context menu, theme
-│   ├── auto-launch.test.ts      # macOS login item management
+│   ├── coordinator.test.ts      # Coordinator init/cleanup/settings sync (delegation to extracted modules)
+│   ├── sleep-prevention.test.ts # powerSaveBlocker start/stop/sync (12→18 tests)
+│   ├── battery-monitor.test.ts  # Battery parsing, auto-stop, pmset (8→18 tests)
+│   ├── auto-launch.test.ts      # macOS login item management (13 tests)
 │   ├── shortcut.test.ts         # Global shortcut registration + toggle
-│   ├── auto-updater.test.ts     # Auto-updater init, events, IPC
+│   ├── settings.test.ts         # File I/O, async persistence, defaults, cache
+│   ├── session-timer.test.ts    # Session start/cancel/expiry/broadcast (16→23 tests)
+│   ├── settings-window.test.ts  # Settings window singleton
+│   ├── settings-window-edge.test.ts # Edge cases
+│   ├── tray.test.ts             # Tray icon, context menu, theme (3→20 tests)
+│   ├── auto-updater.test.ts     # Auto-updater security, events, IPC (11→30 tests)
 │   ├── packageInfo.test.ts      # Cached package.json reader
-│   └── preload.test.ts          # Preload context bridge API + onSessionStatusUpdate
+│   └── preload.test.ts          # Preload context bridge API
 └── renderer/
     ├── index.test.ts            # Popover UI rendering, push subscription, session display
     ├── settings.test.ts         # Settings form rendering, toggle/select
@@ -52,35 +52,35 @@ projects: [
 // passWithNoTests: true
 ```
 
-## TEST COUNTS (189 total)
+## TEST COUNTS (280 total)
 
-### Main Process (177 tests, 16 files)
+### Main Process (242 tests, 18 files)
 
 | File                           | Tests | Focus                                          |
 | ------------------------------ | ----- | ---------------------------------------------- |
+| `auto-updater.test.ts`         | 30    | Security: semver/URL validation, events, IPC   |
+| `tray.test.ts`                 | 20    | Menu, icon, theme, settings sync, about panel  |
+| `session-timer.test.ts`        | 23    | Lifecycle, concurrent starts, edge cases       |
+| `sleep-prevention.test.ts`     | 18    | start/stop/sync, idempotency, restart cycle    |
+| `battery-monitor.test.ts`      | 18    | pmset parsing, auto-stop, threshold boundaries |
 | `ipc-handlers.test.ts`         | 19    | All 13 IPC channel handler registrations       |
-| `power-saver-edge.test.ts`     | 18    | Edge cases: idempotency, invalid blocker IDs   |
-| `session-timer.test.ts`        | 16    | Session lifecycle: start/cancel/expiry/timers  |
 | `auto-launch.test.ts`          | 13    | Login item: get/set/sync, error handling       |
-| `auto-updater.test.ts`         | 11    | Auto-updater: init, events, semver validation  |
-| `power-saver.test.ts`          | 12    | Core: start/stop/isPreventingSleep/sync        |
-| `settings.test.ts`             | 10    | File I/O, validation, defaults, cache          |
 | `settings-window.test.ts`      | 9     | Singleton: create/focus/close/destroy          |
-| `shortcut.test.ts`             | 8     | Shortcut: registration, toggle, error handling |
+| `settings.test.ts`             | 10    | File I/O, validation, defaults, cache          |
 | `coordinator.test.ts`          | 8     | Coordinator: init, cleanup, settings dispatch  |
+| `shortcut.test.ts`             | 8     | Shortcut: registration, toggle, error handling |
 | `index.test.ts`                | 7     | createWindow: config, sandbox, preload         |
 | `settings-window-edge.test.ts` | 6     | Ready-to-show, constraints, close behavior     |
-| `tray.test.ts`                 | 4     | setupTray: icon update, theme, settings        |
+| `ipc.test.ts`                  | ~5    | validateSender, allowed origins                |
 | `packageInfo.test.ts`          | ~5    | Cached package.json reader                     |
 | `preload.test.ts`              | ~5    | Context bridge API exposure                    |
-| `ipc.test.ts`                  | ~5    | validateSender, allowed origins                |
 
-### Renderer Process (12 tests, 3 files)
+### Renderer Process (38 tests, 3 files)
 
 | File                 | Tests | Focus                                  |
 | -------------------- | ----- | -------------------------------------- |
-| `index.test.ts`      | ~6    | Popover UI rendering, session display  |
-| `settings.test.ts`   | ~6    | Settings form rendering, toggle/select |
+| `index.test.ts`      | 20    | Session display, push, countdown, blur |
+| `settings.test.ts`   | 18    | Form, toggle/select, save indicator    |
 | `delegation.test.ts` | 3     | Event delegation on `#app`             |
 
 ## MOCK PATTERNS

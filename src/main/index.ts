@@ -7,7 +7,7 @@ import { setupTray } from "./tray.js";
 import { registerIpcHandlers } from "./ipc.js";
 import { getPackageInfo } from "./utils/packageInfo.js";
 import { initCoordinator, cleanupCoordinator, getTrayDeps } from "./coordinator.js";
-import { unregisterGlobalShortcut } from "./system-integrations.js";
+import { unregisterGlobalShortcut } from "./global-shortcut.js";
 import { closeSettingsWindow } from "./settings-window.js";
 import { initAutoUpdater, stopAutoUpdater } from "./auto-updater.js";
 import { MAIN_WINDOW_WIDTH, MAIN_WINDOW_HEIGHT, HIDE_DELAY_MS, getDevServerUrl, isDev } from "./constants.js";

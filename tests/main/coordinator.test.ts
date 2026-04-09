@@ -12,15 +12,15 @@ const mockGetAllWindows = vi.hoisted(() => vi.fn().mockReturnValue([]));
 const mockLogInfo = vi.hoisted(() => vi.fn());
 const mockRegisterGlobalShortcut = vi.hoisted(() => vi.fn());
 
-// Power-saver mocks (now inline in coordinator)
-const mockPowerSaveBlocker = vi.hoisted(() => ({
-  start: vi.fn().mockReturnValue(1),
-  stop: vi.fn(),
-  isStarted: vi.fn().mockReturnValue(true),
-}));
-const mockPowerMonitor = vi.hoisted(() => ({
-  on: vi.fn(),
-}));
+// Sleep-prevention mocks
+const mockSyncPreventSleep = vi.hoisted(() => vi.fn());
+const mockStopPreventingSleep = vi.hoisted(() => vi.fn());
+
+// Battery-monitor mocks
+const mockSetBatteryThresholdGetter = vi.hoisted(() => vi.fn());
+const mockSetBatteryAutoStopCallback = vi.hoisted(() => vi.fn());
+const mockInitBatteryMonitoring = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+const mockCleanupBatteryMonitoring = vi.hoisted(() => vi.fn());
 
 vi.mock("electron", async (importOriginal) => {
   const actual = await importOriginal();
@@ -28,8 +28,6 @@ vi.mock("electron", async (importOriginal) => {
     ...actual,
     app: { isPackaged: false },
     BrowserWindow: { getAllWindows: mockGetAllWindows },
-    powerSaveBlocker: mockPowerSaveBlocker,
-    powerMonitor: mockPowerMonitor,
   };
 });
 
@@ -43,9 +41,24 @@ vi.mock("../../src/main/settings.js", () => ({
   updateSettings: mockUpdateSettings,
 }));
 
-vi.mock("../../src/main/system-integrations.js", () => ({
+vi.mock("../../src/main/auto-launch.js", () => ({
   syncAutoLaunch: mockSyncAutoLaunch,
+}));
+
+vi.mock("../../src/main/global-shortcut.js", () => ({
   registerGlobalShortcut: mockRegisterGlobalShortcut,
+}));
+
+vi.mock("../../src/main/sleep-prevention.js", () => ({
+  syncPreventSleep: mockSyncPreventSleep,
+  stopPreventingSleep: mockStopPreventingSleep,
+}));
+
+vi.mock("../../src/main/battery-monitor.js", () => ({
+  setBatteryThresholdGetter: mockSetBatteryThresholdGetter,
+  setBatteryAutoStopCallback: mockSetBatteryAutoStopCallback,
+  initBatteryMonitoring: mockInitBatteryMonitoring,
+  cleanupBatteryMonitoring: mockCleanupBatteryMonitoring,
 }));
 
 vi.mock("../../src/main/session-timer.js", () => ({
@@ -77,7 +90,6 @@ describe("coordinator", () => {
 
     mockGetSettings.mockReturnValue({ ...defaultSettings });
     mockGetAllWindows.mockReturnValue([]);
-    mockPowerMonitor.on.mockImplementation(() => {});
 
     const mod = await import("../../src/main/coordinator.js");
     initCoordinator = mod.initCoordinator;
@@ -96,28 +108,25 @@ describe("coordinator", () => {
       mockGetSettings.mockReturnValue({ ...defaultSettings, preventSleep: true });
       initCoordinator();
 
-      expect(mockPowerSaveBlocker.start).toHaveBeenCalled();
+      expect(mockSyncPreventSleep).toHaveBeenCalledWith(true);
     });
 
-    it("wires battery auto-stop callback to cancelSession", async () => {
+    it("wires battery auto-stop callback to cancelSession", () => {
       initCoordinator();
-      const mod = await import("../../src/main/coordinator.js");
-      // Verify the exported function exists (callback is wired internally)
-      expect(typeof mod.setBatteryAutoStopCallback).toBe("function");
+
+      expect(mockSetBatteryAutoStopCallback).toHaveBeenCalledWith(mockCancelSession);
     });
 
-    it("wires battery threshold getter", async () => {
+    it("wires battery threshold getter", () => {
       initCoordinator();
-      const mod = await import("../../src/main/coordinator.js");
-      expect(typeof mod.setBatteryThresholdGetter).toBe("function");
+
+      expect(mockSetBatteryThresholdGetter).toHaveBeenCalledWith(expect.any(Function));
     });
 
     it("initializes battery monitoring", () => {
       initCoordinator();
 
-      // powerMonitor.on should be called for "on-battery" and "on-ac"
-      expect(mockPowerMonitor.on).toHaveBeenCalledWith("on-battery", expect.any(Function));
-      expect(mockPowerMonitor.on).toHaveBeenCalledWith("on-ac", expect.any(Function));
+      expect(mockInitBatteryMonitoring).toHaveBeenCalled();
     });
 
     it("subscribes to settings changes", () => {
@@ -143,7 +152,7 @@ describe("coordinator", () => {
 
       settingsCallback({ ...defaultSettings, preventSleep: true });
 
-      expect(mockPowerSaveBlocker.start).toHaveBeenCalled();
+      expect(mockSyncPreventSleep).toHaveBeenCalledWith(true);
     });
 
     it("syncs autoLaunch on settings change", () => {
@@ -183,7 +192,7 @@ describe("coordinator", () => {
 
     it("broadcasts settings to all renderer windows", () => {
       const mockSend = vi.fn();
-      mockGetAllWindows.mockReturnValue([{ webContents: { send: mockSend } }]);
+      mockGetAllWindows.mockReturnValue([{ isDestroyed: () => false, webContents: { send: mockSend } }]);
 
       initCoordinator();
 
@@ -197,8 +206,8 @@ describe("coordinator", () => {
       const mockSend1 = vi.fn();
       const mockSend2 = vi.fn();
       mockGetAllWindows.mockReturnValue([
-        { webContents: { send: mockSend1 } },
-        { webContents: { send: mockSend2 } },
+        { isDestroyed: () => false, webContents: { send: mockSend1 } },
+        { isDestroyed: () => false, webContents: { send: mockSend2 } },
       ]);
 
       initCoordinator();
@@ -233,7 +242,7 @@ describe("coordinator", () => {
       initCoordinator();
       cleanupCoordinator();
 
-      expect(mockPowerSaveBlocker.stop).toHaveBeenCalledTimes(1);
+      expect(mockStopPreventingSleep).toHaveBeenCalledTimes(1);
     });
 
     it("logs cleanup", () => {

@@ -93,7 +93,7 @@ async function refreshSessionStatus(): Promise<void> {
   try {
     sessionStatus = await window.api.session.getStatus();
   } catch {
-    // Silently set to null — UI falls back to default state
+    console.warn("[renderer] Failed to get session status");
     sessionStatus = null;
   }
 
@@ -178,62 +178,76 @@ function handleVisibilityChange(): void {
   }
 }
 
-async function init() {
-  try {
-    const [nextSettings, version] = await Promise.all([
-      window.api.settings.get(),
-      window.api.app.getVersion(),
-    ]);
+/** Load settings and version from main process */
+async function loadInitialData(): Promise<{ settings: AppSettings; version: string }> {
+  const [nextSettings, version] = await Promise.all([
+    window.api.settings.get(),
+    window.api.app.getVersion(),
+  ]);
+  return { settings: nextSettings, version };
+}
 
-    settings = nextSettings;
-    isPopoverVisible = true;
+/** Subscribe to push updates from main process */
+function setupPushSubscriptions(): void {
+  unsubscribeSettings = window.api.onSettingsChanged((next) => {
+    settings = next;
+    updateStatusUI();
 
-    await refreshSessionStatus();
-    render(version);
+    if (!settings.preventSleep) {
+      sessionStatus = null;
+    }
+  });
 
-    unsubscribeSettings = window.api.onSettingsChanged((next) => {
-      settings = next;
-      updateStatusUI();
+  unsubscribeSessionStatus = window.api.onSessionStatusUpdate((status) => {
+    sessionStatus = status;
+    updateStatusUI();
+  });
+}
 
-      if (!settings.preventSleep) {
-        sessionStatus = null;
-      }
-    });
+/** Attach window/document event listeners for popover lifecycle */
+function attachWindowEvents(): void {
+  document.addEventListener("visibilitychange", handleVisibilityChange);
+  document.addEventListener(
+    "popover:hide",
+    handlePopoverHide as EventListener,
+  );
+  window.addEventListener("popover:hide", handlePopoverHide as EventListener);
 
-    unsubscribeSessionStatus = window.api.onSessionStatusUpdate((status) => {
-      sessionStatus = status;
-      updateStatusUI();
-    });
-
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    document.addEventListener(
+  window.addEventListener("beforeunload", () => {
+    if (rafId !== null) {
+      cancelAnimationFrame(rafId);
+      rafId = null;
+    }
+    statusDotEl = null;
+    statusTextEl = null;
+    timerTextEl = null;
+    unsubscribeSessionStatus?.();
+    unsubscribeSessionStatus = null;
+    unsubscribeSettings?.();
+    unsubscribeSettings = null;
+    document.removeEventListener("visibilitychange", handleVisibilityChange);
+    document.removeEventListener(
       "popover:hide",
       handlePopoverHide as EventListener,
     );
-    window.addEventListener("popover:hide", handlePopoverHide as EventListener);
+    window.removeEventListener(
+      "popover:hide",
+      handlePopoverHide as EventListener,
+    );
+  });
+}
 
-    window.addEventListener("beforeunload", () => {
-      if (rafId !== null) {
-        cancelAnimationFrame(rafId);
-        rafId = null;
-      }
-      statusDotEl = null;
-      statusTextEl = null;
-      timerTextEl = null;
-      unsubscribeSessionStatus?.();
-      unsubscribeSessionStatus = null;
-      unsubscribeSettings?.();
-      unsubscribeSettings = null;
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-      document.removeEventListener(
-        "popover:hide",
-        handlePopoverHide as EventListener,
-      );
-      window.removeEventListener(
-        "popover:hide",
-        handlePopoverHide as EventListener,
-      );
-    });
+async function init() {
+  try {
+    const data = await loadInitialData();
+    settings = data.settings;
+    isPopoverVisible = true;
+
+    await refreshSessionStatus();
+    render(data.version);
+
+    setupPushSubscriptions();
+    attachWindowEvents();
   } catch {
     // Render fallback UI on init failure
     const version = "-";

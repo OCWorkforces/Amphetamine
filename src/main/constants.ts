@@ -18,6 +18,11 @@ export const PERIODIC_UPDATE_CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000; // 4 hours
 
 // === Time Conversion ===
 export const MS_PER_MINUTE = 60 * 1000;
+export const MS_PER_SECOND = 1000;
+export const SESSION_BROADCAST_INTERVAL_MS = 1000;
+export const TRAY_ICON_SIZE = 16;
+export const TRAY_ICON_COLOR_ACTIVE = "#007AFF";
+export const TRAY_ICON_COLOR_INACTIVE = "#FF9500";
 
 // === Dev Server ===
 const DEFAULT_DEV_PORT = 5173;

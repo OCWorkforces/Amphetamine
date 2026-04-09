@@ -1,7 +1,7 @@
 import type { AppSettings, IpcResponse } from "../shared/types.js";
 import { IPC_CHANNELS } from "../shared/types.js";
 import log from "electron-log";
-import { MS_PER_MINUTE } from "./constants.js";
+import { MS_PER_MINUTE, MS_PER_SECOND, SESSION_BROADCAST_INTERVAL_MS } from "./constants.js";
 import { broadcastToWindows } from "./utils/broadcast.js";
 
 let onSessionStateChange: ((updates: Partial<AppSettings>) => void) | null = null;
@@ -35,6 +35,12 @@ let expiryTimer: ReturnType<typeof setTimeout> | null = null;
 let sessionBroadcastTimer: ReturnType<typeof setInterval> | null = null;
 let sessionStartedAt: number | null = null;
 let sessionExpiresAt: number | null = null;
+
+/** Reset session state: notify coordinator and broadcast to renderers. */
+function resetSessionState(preventSleep: boolean): void {
+  onSessionStateChange?.({ sessionDuration: null, preventSleep });
+  broadcastSessionUpdate();
+}
 
 export function startSession(durationMinutes: number | null): SessionState {
   // Clear any existing session
@@ -73,8 +79,7 @@ export function startSession(durationMinutes: number | null): SessionState {
         sessionExpiresAt = null;
         stopSessionBroadcast();
         // Session expired — coordinator will sync power-saver via settings change
-        onSessionStateChange?.({ sessionDuration: null, preventSleep: false });
-        broadcastSessionUpdate();
+        resetSessionState(false);
       } catch (err) {
         log.error("[session-timer] Error in session expiry callback:", err);
       }
@@ -100,10 +105,9 @@ export function cancelSession(): SessionState {
   }
   stopSessionBroadcast();
   // Coordinator will sync power-saver via settings change
-  onSessionStateChange?.({ sessionDuration: null, preventSleep: false });
+  resetSessionState(false);
   sessionStartedAt = null;
   sessionExpiresAt = null;
-  broadcastSessionUpdate();
   return {
     isRunning: false,
     startedAt: null,
@@ -158,7 +162,7 @@ export function broadcastSessionUpdate(): void {
         startedAt: status.startedAt,
         expiresAt: status.expiresAt,
         remainingSeconds: status.expiresAt
-          ? Math.max(0, Math.round((status.expiresAt - now) / 1000))
+          ? Math.max(0, Math.round((status.expiresAt - now) / MS_PER_SECOND))
           : null,
         durationMinutes: status.durationMinutes,
       }
@@ -171,7 +175,7 @@ export function startSessionBroadcast(): void {
   stopSessionBroadcast();
   sessionBroadcastTimer = setInterval(() => {
     broadcastSessionUpdate();
-  }, 1000);
+  }, SESSION_BROADCAST_INTERVAL_MS);
 }
 
 /** Stop periodic session status broadcast. */

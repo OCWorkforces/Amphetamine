@@ -12,10 +12,6 @@ vi.mock("electron", () => ({
     getLoginItemSettings: mockGetLoginItemSettings,
     setLoginItemSettings: mockSetLoginItemSettings,
   },
-  globalShortcut: {
-    register: vi.fn().mockReturnValue(true),
-    unregisterAll: vi.fn(),
-  },
 }));
 
 describe("auto-launch", () => {
@@ -29,7 +25,7 @@ describe("auto-launch", () => {
     mockGetLoginItemSettings.mockReturnValue({ openAtLogin: false });
     mockSetLoginItemSettings.mockImplementation(() => {});
 
-    const mod = await import("../../src/main/system-integrations.js");
+    const mod = await import("../../src/main/auto-launch.js");
     getAutoLaunchStatus = mod.getAutoLaunchStatus;
     setAutoLaunch = mod.setAutoLaunch;
     syncAutoLaunch = mod.syncAutoLaunch;

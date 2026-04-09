@@ -71,8 +71,8 @@ export function loadSettings(): AppSettings {
           : DEFAULT_SETTINGS.shortcut,
     };
     return settingsCache;
-  } catch {
-    log.warn("[settings] Corrupted settings file, using defaults");
+  } catch (err) {
+    log.warn("[settings] Corrupted settings file, using defaults:", err);
     settingsCache = { ...DEFAULT_SETTINGS };
     return settingsCache;
   }
