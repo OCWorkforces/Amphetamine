@@ -13,11 +13,16 @@ let saveTimer: ReturnType<typeof setTimeout> | null = null;
 let isSaving = false;
 const saveIndicatorTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
-function render(errorMessage?: string): void {
-  const app = document.getElementById("app");
-  if (!app) return;
+window.addEventListener("beforeunload", () => {
+  for (const timer of saveIndicatorTimers.values()) {
+    clearTimeout(timer);
+  }
+  saveIndicatorTimers.clear();
+});
 
-  app.innerHTML = `
+/** Build the settings form HTML template */
+function buildSettingsForm(): string {
+  return `
     <div class="settings-titlebar">
       <span class="settings-title">Settings</span>
     </div>
@@ -88,6 +93,43 @@ function render(errorMessage?: string): void {
       <span class="settings-footer-text">Amphetamine &middot; &copy; ${new Date().getFullYear()}</span>
     </div>
   `;
+}
+
+/** Attach change listeners to toggles and dropdown */
+function attachFormListeners(): void {
+  const launchToggle = document.getElementById("launch-at-login-toggle") as HTMLInputElement | null;
+  if (launchToggle) {
+    launchToggle.addEventListener("change", () => {
+      void saveSettings({ launchAtLogin: launchToggle.checked }, "launch-save-indicator");
+    });
+  }
+
+  const sleepToggle = document.getElementById("prevent-sleep-toggle") as HTMLInputElement | null;
+  if (sleepToggle) {
+    sleepToggle.addEventListener("change", () => {
+      void saveSettings({ preventSleep: sleepToggle.checked }, "sleep-save-indicator");
+    });
+  }
+
+  const durationSelect = document.getElementById(
+    "session-duration-select",
+  ) as HTMLSelectElement | null;
+  if (durationSelect) {
+    durationSelect.addEventListener("change", () => {
+      const raw = durationSelect.value;
+      const duration: number | null = raw === "" ? null : parseInt(raw, 10);
+      settings.sessionDuration = duration;
+      void window.api.session.start(duration);
+      void saveSettings({ sessionDuration: duration, preventSleep: true }, "duration-save-indicator");
+    });
+  }
+}
+
+function render(errorMessage?: string): void {
+  const app = document.getElementById("app");
+  if (!app) return;
+
+  app.innerHTML = buildSettingsForm();
 
   // Set error message safely via textContent (prevents XSS)
   const errorEl = document.getElementById("settings-error-text");
@@ -95,7 +137,7 @@ function render(errorMessage?: string): void {
     errorEl.textContent = errorMessage ?? "";
   }
 
-  setupToggleListener();
+  attachFormListeners();
 }
 
 function updateSettingsUI(s: AppSettings): void {
@@ -140,34 +182,6 @@ function showSaveIndicator(id: string, text: string): void {
   saveIndicatorTimers.set(id, timer);
 }
 
-function setupToggleListener(): void {
-  const launchToggle = document.getElementById("launch-at-login-toggle") as HTMLInputElement | null;
-  if (launchToggle) {
-    launchToggle.addEventListener("change", () => {
-      void saveSettings({ launchAtLogin: launchToggle.checked }, "launch-save-indicator");
-    });
-  }
-
-  const sleepToggle = document.getElementById("prevent-sleep-toggle") as HTMLInputElement | null;
-  if (sleepToggle) {
-    sleepToggle.addEventListener("change", () => {
-      void saveSettings({ preventSleep: sleepToggle.checked }, "sleep-save-indicator");
-    });
-  }
-
-  const durationSelect = document.getElementById(
-    "session-duration-select",
-  ) as HTMLSelectElement | null;
-  if (durationSelect) {
-    durationSelect.addEventListener("change", () => {
-      const raw = durationSelect.value;
-      const duration: number | null = raw === "" ? null : parseInt(raw, 10);
-      settings.sessionDuration = duration;
-      void window.api.session.start(duration);
-      void saveSettings({ sessionDuration: duration, preventSleep: true }, "duration-save-indicator");
-    });
-  }
-}
 
 async function saveSettings(
   partial: Partial<AppSettings>,
