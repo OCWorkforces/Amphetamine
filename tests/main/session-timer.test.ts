@@ -200,6 +200,20 @@ describe("session-timer", () => {
 
       expect(getStatus().isRunning).toBe(false);
     });
+
+    it("cleanup does NOT call onSessionStateChange (vs cancelSession which does)", () => {
+      startSession(30);
+      mockOnSessionStateChange.mockClear();
+
+      cleanup();
+
+      expect(mockOnSessionStateChange).not.toHaveBeenCalled();
+    });
+
+    it("cleanup is safe when no session is active", () => {
+      expect(() => cleanup()).not.toThrow();
+      expect(getStatus().isRunning).toBe(false);
+    });
   });
 
   describe("timer expiry", () => {
@@ -208,21 +222,19 @@ describe("session-timer", () => {
 
       vi.resetModules();
 
-      // Reset state after resetModules
       settingsState = {
         launchAtLogin: false,
         preventSleep: false,
         sessionDuration: null,
       };
 
-const mod = await import("../../src/main/session-timer.js");
+      const mod = await import("../../src/main/session-timer.js");
       mod.setOnSessionStateChange(mockOnSessionStateChange);
       mod.setSettingsReader(mockGetSettings);
       mod.startSession(1); // 1 minute = 60000ms
 
       mockOnSessionStateChange.mockClear();
 
-      // Advance timers by 1 minute to trigger expiry
       vi.advanceTimersByTime(1 * 60 * 1000);
 
       expect(mockOnSessionStateChange).toHaveBeenCalledWith({
@@ -232,6 +244,257 @@ const mod = await import("../../src/main/session-timer.js");
       expect(mod.getStatus().isRunning).toBe(false);
 
       vi.useRealTimers();
+    });
+  });
+
+  describe("edge cases", () => {
+    it("second start cancels first timer (concurrent start)", async () => {
+      vi.useFakeTimers();
+
+      vi.resetModules();
+      settingsState = {
+        launchAtLogin: false,
+        preventSleep: false,
+        sessionDuration: null,
+      };
+
+      const mod = await import("../../src/main/session-timer.js");
+      mod.setOnSessionStateChange(mockOnSessionStateChange);
+      mod.setSettingsReader(mockGetSettings);
+
+      // Start first session of 2 minutes
+      mod.startSession(2);
+      // Start second session of 1 minute — should clear first
+      mod.startSession(1);
+
+      mockOnSessionStateChange.mockClear();
+
+      // Advance 1 minute — second session expires
+      vi.advanceTimersByTime(1 * 60 * 1000);
+
+      expect(mockOnSessionStateChange).toHaveBeenCalledWith({
+        sessionDuration: null,
+        preventSleep: false,
+      });
+      expect(mod.getStatus().isRunning).toBe(false);
+
+      // Advance to 2 minutes — first timer should NOT fire again
+      mockOnSessionStateChange.mockClear();
+      vi.advanceTimersByTime(1 * 60 * 1000);
+      expect(mockOnSessionStateChange).not.toHaveBeenCalled();
+
+      vi.useRealTimers();
+    });
+
+    it("zero duration starts and expires immediately", async () => {
+      vi.useFakeTimers();
+
+      vi.resetModules();
+      settingsState = {
+        launchAtLogin: false,
+        preventSleep: false,
+        sessionDuration: null,
+      };
+
+      const mod = await import("../../src/main/session-timer.js");
+      mod.setOnSessionStateChange(mockOnSessionStateChange);
+      mod.setSettingsReader(mockGetSettings);
+
+      const state = mod.startSession(0);
+      expect(state.isRunning).toBe(true);
+      expect(state.durationMinutes).toBe(0);
+
+      mockOnSessionStateChange.mockClear();
+
+      // Zero duration means 0ms timeout — fires on next tick
+      vi.advanceTimersByTime(0);
+
+      expect(mockOnSessionStateChange).toHaveBeenCalledWith({
+        sessionDuration: null,
+        preventSleep: false,
+      });
+
+      vi.useRealTimers();
+    });
+
+    it("negative duration creates timer that fires immediately", async () => {
+      vi.useFakeTimers();
+
+      vi.resetModules();
+      settingsState = {
+        launchAtLogin: false,
+        preventSleep: false,
+        sessionDuration: null,
+      };
+
+      const mod = await import("../../src/main/session-timer.js");
+      mod.setOnSessionStateChange(mockOnSessionStateChange);
+      mod.setSettingsReader(mockGetSettings);
+
+      const state = mod.startSession(-1);
+      expect(state.isRunning).toBe(true);
+
+      mockOnSessionStateChange.mockClear();
+
+      // Negative timeout → fires immediately
+      vi.advanceTimersByTime(0);
+
+      expect(mockOnSessionStateChange).toHaveBeenCalledWith({
+        sessionDuration: null,
+        preventSleep: false,
+      });
+
+      vi.useRealTimers();
+    });
+
+    it("getStatus with no session returns all-null fields", () => {
+      const state = getStatus();
+
+      expect(state).toEqual({
+        isRunning: false,
+        startedAt: null,
+        expiresAt: null,
+        durationMinutes: null,
+      });
+    });
+
+    it("cancelSession vs cleanup: cancelSession calls onSessionStateChange, cleanup does not", () => {
+      startSession(30);
+      mockOnSessionStateChange.mockClear();
+
+      cancelSession();
+
+      expect(mockOnSessionStateChange).toHaveBeenCalledWith({
+        sessionDuration: null,
+        preventSleep: false,
+      });
+    });
+  });
+
+  describe("broadcastSessionUpdate", () => {
+    let broadcastSessionUpdate: () => void;
+
+    beforeEach(async () => {
+      vi.resetModules();
+      vi.clearAllMocks();
+      settingsState = {
+        launchAtLogin: false,
+        preventSleep: false,
+        sessionDuration: null,
+      };
+
+      const mod = await import("../../src/main/session-timer.js");
+      startSession = mod.startSession;
+      cancelSession = mod.cancelSession;
+      getStatus = mod.getStatus;
+      cleanup = mod.cleanup;
+      setOnSessionStateChange = mod.setOnSessionStateChange;
+      setSettingsReader = mod.setSettingsReader;
+      broadcastSessionUpdate = mod.broadcastSessionUpdate;
+
+      setOnSessionStateChange(mockOnSessionStateChange);
+      setSettingsReader(mockGetSettings);
+    });
+
+    it("broadcasts null when no session is active", () => {
+      broadcastSessionUpdate();
+
+      expect(mockBroadcastToWindows).toHaveBeenCalledWith(
+        "session:status-update",
+        null,
+      );
+    });
+
+    it("broadcasts session data with remainingSeconds when session is active", () => {
+      startSession(30);
+      mockBroadcastToWindows.mockClear();
+
+      broadcastSessionUpdate();
+
+      expect(mockBroadcastToWindows).toHaveBeenCalledWith(
+        "session:status-update",
+        expect.objectContaining({
+          isRunning: true,
+          startedAt: expect.any(Number),
+          expiresAt: expect.any(Number),
+          remainingSeconds: expect.any(Number),
+          durationMinutes: 30,
+        }),
+      );
+    });
+
+    it("broadcasts null for indefinite session (no expiryTimer)", () => {
+      startSession(null);
+      mockBroadcastToWindows.mockClear();
+
+      broadcastSessionUpdate();
+
+      // Indefinite sessions have no expiryTimer, so getStatus() returns isRunning: false
+      // broadcastSessionUpdate sends null for non-running status
+      expect(mockBroadcastToWindows).toHaveBeenCalledWith(
+        "session:status-update",
+        null,
+      );
+    });
+  });
+
+  describe("startSessionBroadcast / stopSessionBroadcast", () => {
+    let startSessionBroadcast: () => void;
+    let stopSessionBroadcast: () => void;
+
+    beforeEach(async () => {
+      vi.useFakeTimers();
+      vi.resetModules();
+      vi.clearAllMocks();
+      settingsState = {
+        launchAtLogin: false,
+        preventSleep: false,
+        sessionDuration: null,
+      };
+
+      const mod = await import("../../src/main/session-timer.js");
+      startSession = mod.startSession;
+      getStatus = mod.getStatus;
+      setOnSessionStateChange = mod.setOnSessionStateChange;
+      setSettingsReader = mod.setSettingsReader;
+      startSessionBroadcast = mod.startSessionBroadcast;
+      stopSessionBroadcast = mod.stopSessionBroadcast;
+
+      setOnSessionStateChange(mockOnSessionStateChange);
+      setSettingsReader(mockGetSettings);
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("broadcasts session status every 1 second", () => {
+      startSession(30);
+      mockBroadcastToWindows.mockClear();
+
+      // startSession already calls startSessionBroadcast for timed sessions
+      vi.advanceTimersByTime(3000);
+
+      // Should have 3 broadcasts (at 1s, 2s, 3s)
+      expect(mockBroadcastToWindows.mock.calls.length).toBeGreaterThanOrEqual(3);
+    });
+
+    it("stopSessionBroadcast stops the periodic broadcasts", () => {
+      startSessionBroadcast();
+      mockBroadcastToWindows.mockClear();
+
+      vi.advanceTimersByTime(2000);
+      const callsBeforeStop = mockBroadcastToWindows.mock.calls.length;
+
+      stopSessionBroadcast();
+      mockBroadcastToWindows.mockClear();
+
+      vi.advanceTimersByTime(3000);
+      expect(mockBroadcastToWindows).not.toHaveBeenCalled();
+    });
+
+    it("stopSessionBroadcast is safe to call when not broadcasting", () => {
+      expect(() => stopSessionBroadcast()).not.toThrow();
     });
   });
 });

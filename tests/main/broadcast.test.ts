@@ -27,7 +27,7 @@ describe("broadcastToWindows", () => {
 
   it("sends to a single window", () => {
     const mockSend = vi.fn();
-    mockGetAllWindows.mockReturnValue([{ webContents: { send: mockSend } }]);
+    mockGetAllWindows.mockReturnValue([{ isDestroyed: () => false, webContents: { send: mockSend } }]);
 
     broadcastToWindows("test-channel", { data: 123 });
 
@@ -39,9 +39,9 @@ describe("broadcastToWindows", () => {
     const mockSend2 = vi.fn();
     const mockSend3 = vi.fn();
     mockGetAllWindows.mockReturnValue([
-      { webContents: { send: mockSend1 } },
-      { webContents: { send: mockSend2 } },
-      { webContents: { send: mockSend3 } },
+      { isDestroyed: () => false, webContents: { send: mockSend1 } },
+      { isDestroyed: () => false, webContents: { send: mockSend2 } },
+      { isDestroyed: () => false, webContents: { send: mockSend3 } },
     ]);
 
     broadcastToWindows("broadcast-channel", { key: "value" });
@@ -53,7 +53,7 @@ describe("broadcastToWindows", () => {
 
   it("passes through primitive data types", () => {
     const mockSend = vi.fn();
-    mockGetAllWindows.mockReturnValue([{ webContents: { send: mockSend } }]);
+    mockGetAllWindows.mockReturnValue([{ isDestroyed: () => false, webContents: { send: mockSend } }]);
 
     broadcastToWindows("string-channel", "hello");
     expect(mockSend).toHaveBeenCalledWith("string-channel", "hello");

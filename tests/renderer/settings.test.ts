@@ -345,5 +345,110 @@ describe("renderer settings", () => {
         }),
       );
     });
+
+  });
+  describe("onSettingsChanged push updates", () => {
+    it("updates UI when settings are pushed from main process", async () => {
+      vi.resetModules();
+      await import("../../src/renderer/settings/index.js");
+      document.dispatchEvent(new Event("DOMContentLoaded"));
+      await vi.advanceTimersByTimeAsync(0);
+
+      // Verify initial state
+      const launchToggle = document.getElementById("launch-at-login-toggle") as HTMLInputElement;
+      expect(launchToggle.checked).toBe(false);
+
+      // Get the onSettingsChanged callback and simulate push
+      const callback = mockApi.onSettingsChanged.mock.calls[0]![0];
+      callback({
+        ...defaultSettings,
+        launchAtLogin: true,
+        preventSleep: true,
+      });
+
+      // Verify UI updated
+      expect(launchToggle.checked).toBe(true);
+      const sleepToggle = document.getElementById("prevent-sleep-toggle") as HTMLInputElement;
+      expect(sleepToggle.checked).toBe(true);
+    });
+
+    it("updates duration dropdown when pushed", async () => {
+      vi.resetModules();
+      await import("../../src/renderer/settings/index.js");
+      document.dispatchEvent(new Event("DOMContentLoaded"));
+      await vi.advanceTimersByTimeAsync(0);
+
+      const select = document.getElementById("session-duration-select") as HTMLSelectElement;
+      expect(select.value).toBe("");
+
+      const callback = mockApi.onSettingsChanged.mock.calls[0]![0];
+      callback({
+        ...defaultSettings,
+        sessionDuration: 120,
+        preventSleep: true,
+      });
+
+      expect(select.value).toBe("120");
+    });
+  });
+
+  describe("isSaving guard", () => {
+    it("does not double-save when already saving", async () => {
+      // Make save take a while
+      let resolveSet: ((v: AppSettings) => void) | null = null;
+      mockApi.settings.set.mockImplementation(
+        () =>
+          new Promise<AppSettings>((resolve) => {
+            resolveSet = resolve;
+          }),
+      );
+
+      vi.resetModules();
+      await import("../../src/renderer/settings/index.js");
+      document.dispatchEvent(new Event("DOMContentLoaded"));
+      await vi.advanceTimersByTimeAsync(0);
+
+      // First toggle change
+      const toggle = document.getElementById("launch-at-login-toggle") as HTMLInputElement;
+      toggle.checked = true;
+      toggle.dispatchEvent(new Event("change"));
+
+      // Wait for debounce to trigger save
+      await vi.advanceTimersByTimeAsync(350);
+
+      // Second toggle change while first save is pending
+      toggle.checked = false;
+      toggle.dispatchEvent(new Event("change"));
+
+      // Wait for second debounce
+      await vi.advanceTimersByTimeAsync(350);
+
+      // Only the first save should have been called (isSaving guard)
+      expect(mockApi.settings.set).toHaveBeenCalledTimes(1);
+
+      // Resolve the pending save
+      resolveSet?.({ ...defaultSettings, launchAtLogin: true });
+      await vi.advanceTimersByTimeAsync(0);
+    });
+  });
+
+  describe("session status on init", () => {
+    it("sets sessionDuration from running session status", async () => {
+      mockApi.session.getStatus.mockResolvedValue({
+        isRunning: true,
+        startedAt: Date.now(),
+        expiresAt: Date.now() + 60 * 60 * 1000,
+        remainingSeconds: 3600,
+        durationMinutes: 60,
+      });
+
+      vi.resetModules();
+      await import("../../src/renderer/settings/index.js");
+      document.dispatchEvent(new Event("DOMContentLoaded"));
+      await vi.advanceTimersByTimeAsync(0);
+
+      const select = document.getElementById("session-duration-select") as HTMLSelectElement;
+      expect(select.value).toBe("60");
+    });
   });
 });
