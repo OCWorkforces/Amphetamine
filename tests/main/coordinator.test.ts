@@ -15,12 +15,16 @@ const mockRegisterGlobalShortcut = vi.hoisted(() => vi.fn());
 // Sleep-prevention mocks
 const mockSyncPreventSleep = vi.hoisted(() => vi.fn());
 const mockStopPreventingSleep = vi.hoisted(() => vi.fn());
+const mockIsPreventingSleep = vi.hoisted(() => vi.fn());
 
 // Battery-monitor mocks
 const mockSetBatteryThresholdGetter = vi.hoisted(() => vi.fn());
 const mockSetBatteryAutoStopCallback = vi.hoisted(() => vi.fn());
+const mockSetSleepPreventionChecker = vi.hoisted(() => vi.fn());
+const mockSetStopSleepPrevention = vi.hoisted(() => vi.fn());
 const mockInitBatteryMonitoring = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 const mockCleanupBatteryMonitoring = vi.hoisted(() => vi.fn());
+const mockCreateSettingsWindow = vi.hoisted(() => vi.fn());
 
 vi.mock("electron", async (importOriginal) => {
   const actual = await importOriginal();
@@ -52,11 +56,14 @@ vi.mock("../../src/main/global-shortcut.js", () => ({
 vi.mock("../../src/main/sleep-prevention.js", () => ({
   syncPreventSleep: mockSyncPreventSleep,
   stopPreventingSleep: mockStopPreventingSleep,
+  isPreventingSleep: mockIsPreventingSleep,
 }));
 
 vi.mock("../../src/main/battery-monitor.js", () => ({
   setBatteryThresholdGetter: mockSetBatteryThresholdGetter,
   setBatteryAutoStopCallback: mockSetBatteryAutoStopCallback,
+  setSleepPreventionChecker: mockSetSleepPreventionChecker,
+  setStopSleepPrevention: mockSetStopSleepPrevention,
   initBatteryMonitoring: mockInitBatteryMonitoring,
   cleanupBatteryMonitoring: mockCleanupBatteryMonitoring,
 }));
@@ -65,6 +72,10 @@ vi.mock("../../src/main/session-timer.js", () => ({
   cancelSession: mockCancelSession,
   setOnSessionStateChange: mockSetOnSessionStateChange,
   setSettingsReader: mockSetSettingsReader,
+}));
+
+vi.mock("../../src/main/settings-window.js", () => ({
+  createSettingsWindow: mockCreateSettingsWindow,
 }));
 
 describe("coordinator", () => {

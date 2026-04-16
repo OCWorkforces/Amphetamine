@@ -71,6 +71,7 @@ describe("tray", () => {
           if (idx >= 0) settingsChangeCallbacks.splice(idx, 1);
         };
       },
+      openSettings: vi.fn(),
     };
   }
 

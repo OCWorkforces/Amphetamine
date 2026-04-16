@@ -17,19 +17,25 @@ import type { AppSettings } from "../shared/types.js";
 import { getSettings, onSettingsChanged, updateSettings } from "./settings.js";
 import { syncAutoLaunch } from "./auto-launch.js";
 import { registerGlobalShortcut, type ShortcutDeps } from "./global-shortcut.js";
-import { syncPreventSleep, stopPreventingSleep } from "./sleep-prevention.js";
+import { isPreventingSleep, syncPreventSleep, stopPreventingSleep } from "./sleep-prevention.js";
 import {
   setBatteryThresholdGetter,
   setBatteryAutoStopCallback,
+  setSleepPreventionChecker,
+  setStopSleepPrevention,
   initBatteryMonitoring,
   cleanupBatteryMonitoring,
 } from "./battery-monitor.js";
 import { cancelSession, setOnSessionStateChange, setSettingsReader } from "./session-timer.js";
 import type { TrayDeps } from "./tray.js";
+import { createSettingsWindow } from "./settings-window.js";
 
 let prevPreventSleep: boolean;
 let unsubscribeSettings: (() => void) | null = null;
 
+function togglePreventSleep(): void {
+  void updateSettings({ preventSleep: !getSettings().preventSleep });
+}
 /**
  * Initialize the coordinator.
  * Syncs system state on startup and subscribes to settings changes.
@@ -38,6 +44,7 @@ export function initCoordinator(): void {
   const settings = getSettings();
   prevPreventSleep = settings.preventSleep;
 
+
   // Sync system state with current settings
   syncAutoLaunch(settings.launchAtLogin);
   syncPreventSleep(settings.preventSleep);
@@ -45,6 +52,8 @@ export function initCoordinator(): void {
   // Wire battery threshold getter and auto-stop callback
   setBatteryThresholdGetter(() => getSettings().batteryThreshold ?? 0);
   setBatteryAutoStopCallback(cancelSession);
+  setSleepPreventionChecker(isPreventingSleep);
+  setStopSleepPrevention(stopPreventingSleep);
   void initBatteryMonitoring();
 
   // Wire session state change callback (replaces direct updateSettings in session-timer)
@@ -59,7 +68,7 @@ export function initCoordinator(): void {
   const shortcutDeps: ShortcutDeps = {
     getShortcut: () => getSettings().shortcut ?? "",
     getPreventSleep: () => getSettings().preventSleep,
-    togglePreventSleep: () => void updateSettings({ preventSleep: !getSettings().preventSleep }),
+    togglePreventSleep,
   };
   registerGlobalShortcut(shortcutDeps);
 
@@ -106,7 +115,8 @@ export function cleanupCoordinator(): void {
 export function getTrayDeps(): TrayDeps {
   return {
     getPreventSleep: () => getSettings().preventSleep,
-    togglePreventSleep: () => void updateSettings({ preventSleep: !getSettings().preventSleep }),
+    togglePreventSleep,
     onSettingsChanged: (cb: () => void) => onSettingsChanged(cb),
+    openSettings: () => createSettingsWindow(),
   };
 }
