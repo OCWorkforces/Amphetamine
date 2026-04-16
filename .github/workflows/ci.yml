@@ -51,15 +51,22 @@ jobs:
       - uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
         with:
           path: ${{ runner.temp }}/.cache/electron
-          key: ${{ runner.os }}-electron-${{ hashFiles('bun.lockb') }}
+          key: ${{ runner.os }}-${{ matrix.arch }}-electron-${{ hashFiles('bun.lockb') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.arch }}-electron-
       - uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
         with:
           path: ${{ runner.temp }}/.cache/electron-builder
-          key: ${{ runner.os }}-electron-builder-${{ hashFiles('bun.lockb') }}
+          key: ${{ runner.os }}-${{ matrix.arch }}-electron-builder-${{ hashFiles('bun.lockb') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.arch }}-electron-builder-
       - run: bun install --frozen-lockfile
+        env:
+          ELECTRON_CACHE: ${{ runner.temp }}/.cache/electron
       - run: bun run build
       - run: bunx electron-builder --mac --${{ matrix.arch }}
         env:
+          ELECTRON_CACHE: ${{ runner.temp }}/.cache/electron
           ELECTRON_BUILDER_CACHE: ${{ runner.temp }}/.cache/electron-builder
           CSC_IDENTITY_AUTO_DISCOVERY: false
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
