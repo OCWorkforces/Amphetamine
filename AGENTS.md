@@ -1,7 +1,7 @@
 # Amphetamine — Project Knowledge Base
 
-**Generated:** 2026-04-09
-**Commit:** 5addbc7
+**Generated:** 2026-04-16
+**Commit:** 8fbfd32
 **Branch:** develop
 
 ## OVERVIEW
@@ -61,8 +61,7 @@ src/
 | Implement IPC handler | `src/main/ipc.ts`                      | Register with `typedHandle()` or `ipcMain.on()` |
 | Expose to renderer    | `src/preload/index.ts`                 | Add to `api` object                             |
 | Use in UI             | `src/renderer/`                        | Call via `window.api.*`                         |
-| Orchestration logic   | `src/main/coordinator.ts`              | Settings→system sync hub                        |
-| Orchestration logic   | `src/main/coordinator.ts`              | Settings→system sync hub, imports extracted modules |
+| `Orchestration logic` | `src/main/coordinator.ts` | Settings→system sync hub, imports extracted modules |
 | Session timer logic   | `src/main/session-timer.ts`            | start/cancel/getStatus/cleanup, resetSessionState helper |
 | Sleep prevention      | `src/main/sleep-prevention.ts`         | start/stop/syncPreventSleep |
 | Battery monitoring    | `src/main/battery-monitor.ts`          | initBatteryMonitoring, getBatteryPercent, checkBatteryAndStop |
@@ -122,7 +121,6 @@ src/
 - **Import paths**: Always `.js` extension (`from './types.js'`) even for `.ts` source
 - **IPC channels**: Define in `src/shared/types.ts` → `IpcChannelMap` for type safety
 - **Type-safe IPC**: Use `typedHandle()` in main, `IpcRequest<T>`/`IpcResponse<T>` in preload
-- **Coordinator pattern**: `coordinator.ts` centralizes settings→system sync (power, auto-launch, session cancel, broadcast, shortcut). Individual modules do NOT import each other.
 - **Dependency injection**: `system-integrations.ts` and `tray.ts` receive deps via `ShortcutDeps`/`TrayDeps` interfaces — no direct settings imports
 - **No UI framework**: Vanilla TS with `innerHTML` string templates
 - **macOS only**: Dock hiding, entitlements — no cross-platform
@@ -154,7 +152,6 @@ src/
 - Never call raw `powerSaveBlocker.start/stop` directly — use `startPreventingSleep()`/`stopPreventingSleep()` from `sleep-prevention.ts`
 - Never bypass `validateSender()` in IPC handlers
 - Never expose mutable settings ref — always return `{ ...settingsCache }` copy
-- Never call raw `powerSaveBlocker.start/stop` directly — use `startPreventingSleep()`/`stopPreventingSleep()`
 - Never mutate hoisted mock properties across tests — always restore after `vi.resetModules()`
 - Session start/cancel/expiry MUST sync `preventSleep` in `updateSettings` calls
 - Session handlers MUST have `validateSender()` — no exceptions
@@ -169,7 +166,6 @@ bun run build          # Build all (main + preload + renderer)
 bun run package        # Build + DMG/ZIP + flip fuses (macOS arm64)
 bun run package:x64    # Build + DMG/ZIP + flip fuses (macOS x64)
 bun run typecheck      # TypeScript check (tsc -b)
-bun run test           # Run Vitest tests (189 tests, 19 files)
 bun run test:watch     # Watch mode
 bun run test:coverage  # Run with v8 coverage
 bun run clean          # Remove lib/ dist/
@@ -208,9 +204,6 @@ Runtime deps (`electron-log`, `electron-updater`) are externalized in rslib conf
 | -------- | ----- | ----- | ----------------------------------------------------------------------------------------------- |
 | main     | node  | 242   | Coordinator, session timer, IPC, power-saver, battery-monitor, settings, tray, shortcut, auto-launch, auto-updater |
 | renderer | jsdom | 38    | Popover UI, settings UI, event delegation, push subscriptions                                  |
-| -------- | ----- | ----- | ----------------------------------------------------------------------------------- |
-| main     | node  | 177   | Coordinator, session timer, IPC, power-saver, settings, tray, shortcut, auto-launch |
-| renderer | jsdom | 12    | Popover UI, settings UI, event delegation                                           |
 
 **Setup**: `tests/setup.main.ts` mocks full Electron API (app, BrowserWindow, ipcMain, Tray, Menu, etc.)
 

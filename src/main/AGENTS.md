@@ -114,6 +114,7 @@ Electron main process (Node.js). App lifecycle, system tray, IPC, session timer,
 - `registerGlobalShortcut(deps: ShortcutDeps)`: Register Cmd+Shift+A
 - `unregisterGlobalShortcut()`: Unregister hotkey
 - `ShortcutDeps` interface: `{ getShortcut, getPreventSleep, togglePreventSleep }` — dependency injection
+
 ## SETTINGS
 
 - JSON file in `app.getPath('userData')/settings.json`
