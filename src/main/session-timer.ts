@@ -36,6 +36,12 @@ let sessionBroadcastTimer: ReturnType<typeof setInterval> | null = null;
 let sessionStartedAt: number | null = null;
 let sessionExpiresAt: number | null = null;
 
+function clearExpiryTimer(): void {
+  if (expiryTimer) {
+    clearTimeout(expiryTimer);
+    expiryTimer = null;
+  }
+}
 /** Reset session state: notify coordinator and broadcast to renderers. */
 function resetSessionState(preventSleep: boolean): void {
   onSessionStateChange?.({ sessionDuration: null, preventSleep });
@@ -44,10 +50,7 @@ function resetSessionState(preventSleep: boolean): void {
 
 export function startSession(durationMinutes: number | null): SessionState {
   // Clear any existing session
-  if (expiryTimer) {
-    clearTimeout(expiryTimer);
-    expiryTimer = null;
-  }
+  clearExpiryTimer();
 
   if (durationMinutes === null) {
     // Indefinite session — no timer
@@ -99,10 +102,7 @@ export function startSession(durationMinutes: number | null): SessionState {
 }
 
 export function cancelSession(): SessionState {
-  if (expiryTimer) {
-    clearTimeout(expiryTimer);
-    expiryTimer = null;
-  }
+  clearExpiryTimer();
   stopSessionBroadcast();
   // Coordinator will sync power-saver via settings change
   resetSessionState(false);
@@ -144,10 +144,7 @@ export function getStatus(settings?: AppSettings): SessionState {
 
 export function cleanup(): void {
   stopSessionBroadcast();
-  if (expiryTimer) {
-    clearTimeout(expiryTimer);
-    expiryTimer = null;
-  }
+  clearExpiryTimer();
   sessionStartedAt = null;
   sessionExpiresAt = null;
 }
