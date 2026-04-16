@@ -10,8 +10,6 @@ import log from "electron-log";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { createSettingsWindow } from "./settings-window.js";
-
 import { TRAY_ICON_SIZE, TRAY_ICON_COLOR_ACTIVE, TRAY_ICON_COLOR_INACTIVE } from "./constants.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -34,6 +32,7 @@ export interface TrayDeps {
   getPreventSleep: () => boolean;
   togglePreventSleep: () => void;
   onSettingsChanged: (callback: () => void) => () => void;
+  openSettings: () => void;
 }
 
 export function setupTray(deps: TrayDeps): () => void {
@@ -116,7 +115,7 @@ export function setupTray(deps: TrayDeps): () => void {
         },
       },
       { type: "separator" },
-      { label: "Settings...", click: () => createSettingsWindow() },
+      { label: "Settings...", click: () => deps.openSettings() },
       { label: "About Amphetamine", click: () => showAbout() },
       { label: "Quit", accelerator: "Cmd+Q", click: () => app.quit() },
     ];

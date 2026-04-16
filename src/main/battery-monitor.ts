@@ -3,7 +3,6 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import log from "electron-log";
 import { BATTERY_CHECK_TIMEOUT_MS } from "./constants.js";
-import { isPreventingSleep, stopPreventingSleep } from "./sleep-prevention.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -19,6 +18,20 @@ let onBatteryAutoStop: BatteryAutoStopCallback | null = null;
 
 export function setBatteryAutoStopCallback(callback: BatteryAutoStopCallback): void {
   onBatteryAutoStop = callback;
+}
+
+type SleepPreventionChecker = () => boolean;
+let checkSleepPrevention: SleepPreventionChecker | null = null;
+
+export function setSleepPreventionChecker(fn: SleepPreventionChecker): void {
+  checkSleepPrevention = fn;
+}
+
+type StopSleepPreventionFn = () => void;
+let stopSleepPrevention: StopSleepPreventionFn | null = null;
+
+export function setStopSleepPrevention(fn: StopSleepPreventionFn): void {
+  stopSleepPrevention = fn;
 }
 
 /** @internal Power monitor listeners persist for app lifetime by design. */
@@ -41,12 +54,12 @@ export function cleanupBatteryMonitoring(): void {
 async function checkBatteryAndStop(): Promise<void> {
   const threshold = getBatteryThreshold();
   if (threshold <= 0) return;
-  if (!isPreventingSleep()) return;
+  if (!(checkSleepPrevention?.() ?? false)) return;
 
   try {
     const percent = await getBatteryPercent();
     if (percent !== null && percent <= threshold) {
-      stopPreventingSleep();
+      stopSleepPrevention?.();
       log.info(`[battery-monitor] Auto-stopped: battery at ${percent}% (threshold: ${threshold}%)`);
       onBatteryAutoStop?.();
     }

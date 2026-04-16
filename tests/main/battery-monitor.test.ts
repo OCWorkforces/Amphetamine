@@ -7,9 +7,6 @@ const mockPowerMonitor = vi.hoisted(() => ({
 const mockLogInfo = vi.hoisted(() => vi.fn());
 const mockLogWarn = vi.hoisted(() => vi.fn());
 
-// Sleep-prevention mocks
-const mockIsPreventingSleep = vi.hoisted(() => vi.fn().mockReturnValue(false));
-const mockStopPreventingSleep = vi.hoisted(() => vi.fn());
 
 // Child process mock for getBatteryPercent
 const mockExecFile = vi.hoisted(() => vi.fn());
@@ -23,10 +20,6 @@ vi.mock("electron-log", () => ({
   default: { info: mockLogInfo, warn: mockLogWarn, error: vi.fn() },
 }));
 
-vi.mock("../../src/main/sleep-prevention.js", () => ({
-  isPreventingSleep: mockIsPreventingSleep,
-  stopPreventingSleep: mockStopPreventingSleep,
-}));
 
 vi.mock("node:child_process", () => ({
   execFile: mockExecFile,
@@ -36,14 +29,19 @@ describe("battery-monitor", () => {
   let initBatteryMonitoring: () => Promise<void>;
   let setBatteryThresholdGetter: (_fn: () => number) => void;
   let setBatteryAutoStopCallback: (_cb: () => void) => void;
+  let setSleepPreventionChecker: (_fn: () => boolean) => void;
+  let setStopSleepPrevention: (_fn: () => void) => void;
   let getBatteryPercent: () => Promise<number | null>;
+  let mockIsActive: ReturnType<typeof vi.fn<() => boolean>>;
+  let mockStopSleep: ReturnType<typeof vi.fn<() => void>>;
 
   beforeEach(async () => {
     vi.clearAllMocks();
     vi.resetModules();
 
     mockPowerMonitor.on.mockImplementation(() => {});
-    mockIsPreventingSleep.mockReturnValue(false);
+    mockIsActive = vi.fn<() => boolean>().mockReturnValue(false);
+    mockStopSleep = vi.fn<() => void>();
 
     // Mock execFile to simulate pmset output
     mockExecFile.mockImplementation(
@@ -64,7 +62,11 @@ describe("battery-monitor", () => {
     initBatteryMonitoring = mod.initBatteryMonitoring;
     setBatteryThresholdGetter = mod.setBatteryThresholdGetter;
     setBatteryAutoStopCallback = mod.setBatteryAutoStopCallback;
+    setSleepPreventionChecker = mod.setSleepPreventionChecker;
+    setStopSleepPrevention = mod.setStopSleepPrevention;
     getBatteryPercent = mod.getBatteryPercent;
+    setSleepPreventionChecker(() => mockIsActive());
+    setStopSleepPrevention(() => mockStopSleep());
   });
 
   describe("initBatteryMonitoring", () => {
@@ -142,7 +144,7 @@ describe("battery-monitor", () => {
 
   describe("on-battery event", () => {
     it("checks battery when on-battery fires and threshold is set", async () => {
-      mockIsPreventingSleep.mockReturnValue(true);
+      mockIsActive.mockReturnValue(true);
       setBatteryThresholdGetter(() => 80);
       setBatteryAutoStopCallback(vi.fn());
 
@@ -161,7 +163,7 @@ describe("battery-monitor", () => {
 
     it("calls auto-stop callback when battery below threshold", async () => {
       const mockAutoStopCb = vi.fn();
-      mockIsPreventingSleep.mockReturnValue(true);
+      mockIsActive.mockReturnValue(true);
       setBatteryThresholdGetter(() => 80);
       setBatteryAutoStopCallback(mockAutoStopCb);
 
@@ -190,13 +192,13 @@ describe("battery-monitor", () => {
 
       await new Promise((r) => setTimeout(r, 50));
 
-      expect(mockStopPreventingSleep).toHaveBeenCalled();
+      expect(mockStopSleep).toHaveBeenCalled();
       expect(mockAutoStopCb).toHaveBeenCalled();
     });
 
     it("does NOT call auto-stop when threshold is 0 (disabled)", async () => {
       const mockAutoStopCb = vi.fn();
-      mockIsPreventingSleep.mockReturnValue(true);
+      mockIsActive.mockReturnValue(true);
       setBatteryThresholdGetter(() => 0);
       setBatteryAutoStopCallback(mockAutoStopCb);
 
@@ -210,13 +212,13 @@ describe("battery-monitor", () => {
 
       await new Promise((r) => setTimeout(r, 50));
 
-      expect(mockStopPreventingSleep).not.toHaveBeenCalled();
+      expect(mockStopSleep).not.toHaveBeenCalled();
       expect(mockAutoStopCb).not.toHaveBeenCalled();
     });
 
     it("does NOT auto-stop when not preventing sleep", async () => {
       const mockAutoStopCb = vi.fn();
-      mockIsPreventingSleep.mockReturnValue(false);
+      mockIsActive.mockReturnValue(false);
       setBatteryThresholdGetter(() => 80);
       setBatteryAutoStopCallback(mockAutoStopCb);
 
@@ -230,13 +232,13 @@ describe("battery-monitor", () => {
 
       await new Promise((r) => setTimeout(r, 50));
 
-      expect(mockStopPreventingSleep).not.toHaveBeenCalled();
+      expect(mockStopSleep).not.toHaveBeenCalled();
       expect(mockAutoStopCb).not.toHaveBeenCalled();
     });
 
     it("does NOT auto-stop when battery above threshold", async () => {
       const mockAutoStopCb = vi.fn();
-      mockIsPreventingSleep.mockReturnValue(true);
+      mockIsActive.mockReturnValue(true);
       setBatteryThresholdGetter(() => 20);
       setBatteryAutoStopCallback(mockAutoStopCb);
 
@@ -251,7 +253,7 @@ describe("battery-monitor", () => {
 
       await new Promise((r) => setTimeout(r, 50));
 
-      expect(mockStopPreventingSleep).not.toHaveBeenCalled();
+      expect(mockStopSleep).not.toHaveBeenCalled();
       expect(mockAutoStopCb).not.toHaveBeenCalled();
     });
   });
