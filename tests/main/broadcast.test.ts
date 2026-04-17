@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { IPC_CHANNELS } from "../../src/shared/types.js";
 
 const { mockGetAllWindows } = vi.hoisted(() => ({
   mockGetAllWindows: vi.fn().mockReturnValue([]),
@@ -9,7 +10,10 @@ vi.mock("electron", () => ({
 }));
 
 describe("broadcastToWindows", () => {
-  let broadcastToWindows: (channel: string, data: unknown) => void;
+  let broadcastToWindows: <K extends import("../../src/shared/types.js").PushChannel>(
+    channel: K,
+    data: import("../../src/shared/types.js").IpcResponse<K>,
+  ) => void;
 
   beforeEach(async () => {
     vi.resetModules();
@@ -21,17 +25,27 @@ describe("broadcastToWindows", () => {
 
   it("does nothing when there are no windows", () => {
     mockGetAllWindows.mockReturnValue([]);
-    broadcastToWindows("test-channel", { data: 123 });
+    broadcastToWindows(IPC_CHANNELS.SESSION_STATUS_UPDATE, null);
     expect(mockGetAllWindows).toHaveBeenCalledTimes(1);
   });
 
   it("sends to a single window", () => {
     const mockSend = vi.fn();
-    mockGetAllWindows.mockReturnValue([{ isDestroyed: () => false, webContents: { send: mockSend } }]);
+    mockGetAllWindows.mockReturnValue([
+      { isDestroyed: () => false, webContents: { send: mockSend } },
+    ]);
 
-    broadcastToWindows("test-channel", { data: 123 });
+    broadcastToWindows(IPC_CHANNELS.SETTINGS_CHANGED, {
+      launchAtLogin: false,
+      preventSleep: true,
+      sessionDuration: null,
+    });
 
-    expect(mockSend).toHaveBeenCalledWith("test-channel", { data: 123 });
+    expect(mockSend).toHaveBeenCalledWith("settings:changed", {
+      launchAtLogin: false,
+      preventSleep: true,
+      sessionDuration: null,
+    });
   });
 
   it("sends to multiple windows", () => {
@@ -44,24 +58,21 @@ describe("broadcastToWindows", () => {
       { isDestroyed: () => false, webContents: { send: mockSend3 } },
     ]);
 
-    broadcastToWindows("broadcast-channel", { key: "value" });
+    broadcastToWindows(IPC_CHANNELS.AUTO_UPDATER_STATUS, { status: "checking" });
 
-    expect(mockSend1).toHaveBeenCalledWith("broadcast-channel", { key: "value" });
-    expect(mockSend2).toHaveBeenCalledWith("broadcast-channel", { key: "value" });
-    expect(mockSend3).toHaveBeenCalledWith("broadcast-channel", { key: "value" });
+    expect(mockSend1).toHaveBeenCalledWith("auto-updater:status", { status: "checking" });
+    expect(mockSend2).toHaveBeenCalledWith("auto-updater:status", { status: "checking" });
+    expect(mockSend3).toHaveBeenCalledWith("auto-updater:status", { status: "checking" });
   });
 
-  it("passes through primitive data types", () => {
+  it("skips destroyed windows", () => {
     const mockSend = vi.fn();
-    mockGetAllWindows.mockReturnValue([{ isDestroyed: () => false, webContents: { send: mockSend } }]);
+    mockGetAllWindows.mockReturnValue([
+      { isDestroyed: () => true, webContents: { send: mockSend } },
+    ]);
 
-    broadcastToWindows("string-channel", "hello");
-    expect(mockSend).toHaveBeenCalledWith("string-channel", "hello");
+    broadcastToWindows(IPC_CHANNELS.AUTO_UPDATER_STATUS, { status: "error", error: "fail" });
 
-    broadcastToWindows("number-channel", 42);
-    expect(mockSend).toHaveBeenCalledWith("number-channel", 42);
-
-    broadcastToWindows("null-channel", null);
-    expect(mockSend).toHaveBeenCalledWith("null-channel", null);
+    expect(mockSend).not.toHaveBeenCalled();
   });
 });
