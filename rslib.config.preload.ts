@@ -1,75 +1,16 @@
-import * as rspack from "@rspack/core";
 import { defineConfig } from "@rslib/core";
-
-const isDev = process.env.NODE_ENV !== "production";
+import { createElectronLibConfig } from "./rslib.config.base.js";
 
 export default defineConfig({
   lib: [
-    {
-      format: "cjs",
-      bundle: true,
-      dts: false,
-      source: {
-        entry: { index: "./src/preload/index.ts" },
-      },
-      output: {
-        distPath: { root: "./lib/preload" },
-        filename: { js: "index.cjs" },
-        target: "node",
-        // === PRODUCTION OPTIMIZATIONS ===
-        minify: !isDev,
-        sourceMap: false,
-      },
-      tools: {
-        bundlerChain(chain) {
-          chain.target("electron-preload");
-        },
-        rspack(config) {
-          // === OPTIMIZATION FLAGS ===
-          config.optimization = {
-            minimize: !isDev,
-            usedExports: !isDev,
-            sideEffects: !isDev,
-            concatenateModules: !isDev,
-            innerGraph: !isDev,
-            minimizer: isDev
-              ? []
-              : [
-                  new rspack.SwcJsMinimizerRspackPlugin({
-                    minimizerOptions: {
-                      compress: {
-                        drop_console: true,
-                      },
-                    },
-                  }),
-                ],
-          };
-
-          // CRITICAL: electron and runtime dependencies must never be bundled in preload
-          const existing = config.externals ?? [];
-          const arr = Array.isArray(existing) ? existing : [existing];
-          arr.push(function (ctx, callback) {
-            const req = ctx.request ?? "";
-            if (
-              req === "electron" ||
-              req.startsWith("electron/") ||
-              req === "electron-log" ||
-              req.startsWith("electron-log/") ||
-              req === "electron-updater" ||
-              req.startsWith("electron-updater/")
-            ) {
-              return callback(undefined, `commonjs ${req}`);
-            }
-            callback();
-          });
-          config.externals = arr;
-          // Configure extension alias for TypeScript imports
-          config.resolve = config.resolve ?? {};
-          config.resolve.extensionAlias = { ".js": [".ts", ".js"] };
-          return config;
-        },
-      },
-    },
+    // CRITICAL: electron and runtime dependencies must never be bundled in preload
+    createElectronLibConfig({
+      entry: { index: "./src/preload/index.ts" },
+      distRoot: "./lib/preload",
+      filename: "index.cjs",
+      electronTarget: "electron-preload",
+      tsconfigPath: "./src/preload/tsconfig.json",
+    }),
   ],
   source: {
     tsconfigPath: "./src/preload/tsconfig.json",
