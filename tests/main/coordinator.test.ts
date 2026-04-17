@@ -72,6 +72,7 @@ vi.mock("../../src/main/session-timer.js", () => ({
   cancelSession: mockCancelSession,
   setOnSessionStateChange: mockSetOnSessionStateChange,
   setSettingsReader: mockSetSettingsReader,
+  setBroadcastFn: vi.fn(),
 }));
 
 vi.mock("../../src/main/settings-window.js", () => ({

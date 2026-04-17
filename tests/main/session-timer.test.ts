@@ -23,9 +23,6 @@ vi.mock("../../src/main/settings.js", () => ({
   onSettingsChanged: vi.fn(),
 }));
 
-vi.mock("../../src/main/utils/broadcast.js", () => ({
-  broadcastToWindows: mockBroadcastToWindows,
-}));
 
 describe("session-timer", () => {
   let startSession: (_durationMinutes: number | null) => {
@@ -49,6 +46,7 @@ describe("session-timer", () => {
   let cleanup: () => void;
   let setOnSessionStateChange: (cb: (updates: Partial<typeof settingsState>) => void) => void;
   let setSettingsReader: (getSettings: () => typeof settingsState) => void;
+  let setBroadcastFn: (fn: (channel: string, data: unknown) => void) => void;
 
   beforeEach(async () => {
     vi.useRealTimers();
@@ -70,10 +68,12 @@ describe("session-timer", () => {
     cleanup = mod.cleanup;
     setOnSessionStateChange = mod.setOnSessionStateChange;
     setSettingsReader = mod.setSettingsReader;
+    setBroadcastFn = mod.setBroadcastFn;
 
     // Wire the callbacks (simulates what coordinator does)
     setOnSessionStateChange(mockOnSessionStateChange);
     setSettingsReader(mockGetSettings);
+    setBroadcastFn(mockBroadcastToWindows);
   });
 
   afterEach(() => {
@@ -390,10 +390,12 @@ describe("session-timer", () => {
       cleanup = mod.cleanup;
       setOnSessionStateChange = mod.setOnSessionStateChange;
       setSettingsReader = mod.setSettingsReader;
+      setBroadcastFn = mod.setBroadcastFn;
       broadcastSessionUpdate = mod.broadcastSessionUpdate;
 
       setOnSessionStateChange(mockOnSessionStateChange);
       setSettingsReader(mockGetSettings);
+      setBroadcastFn(mockBroadcastToWindows);
     });
 
     it("broadcasts null when no session is active", () => {
@@ -457,11 +459,13 @@ describe("session-timer", () => {
       getStatus = mod.getStatus;
       setOnSessionStateChange = mod.setOnSessionStateChange;
       setSettingsReader = mod.setSettingsReader;
+      setBroadcastFn = mod.setBroadcastFn;
       startSessionBroadcast = mod.startSessionBroadcast;
       stopSessionBroadcast = mod.stopSessionBroadcast;
 
       setOnSessionStateChange(mockOnSessionStateChange);
       setSettingsReader(mockGetSettings);
+      setBroadcastFn(mockBroadcastToWindows);
     });
 
     afterEach(() => {

@@ -1,22 +1,28 @@
 import { autoUpdater, type UpdateInfo } from "electron-updater";
 import { app, shell, ipcMain } from "electron";
 import log from "electron-log";
-import { IPC_CHANNELS } from "../shared/types.js";
+import { IPC_CHANNELS, type PushChannel, type IpcResponse } from "../shared/types.js";
 import { INITIAL_UPDATE_CHECK_DELAY_MS, PERIODIC_UPDATE_CHECK_INTERVAL_MS } from "./constants.js";
-import { broadcastToWindows } from "./utils/broadcast.js";
 
 let checkIntervalId: ReturnType<typeof setInterval> | null = null;
+
+let broadcastFn: (<K extends PushChannel>(channel: K, data: IpcResponse<K>) => void) | null = null;
+
+/** Inject broadcast function (called from coordinator) */
+export function setBroadcastFn(fn: <K extends PushChannel>(channel: K, data: IpcResponse<K>) => void): void {
+  broadcastFn = fn;
+}
 
 /** Handle "checking-for-update" event */
 function onCheckingForUpdate(): void {
   log.info("[auto-updater] Checking for updates...");
-  broadcastToWindows(IPC_CHANNELS.AUTO_UPDATER_STATUS, { status: "checking" });
+  broadcastFn?.(IPC_CHANNELS.AUTO_UPDATER_STATUS, { status: "checking" });
 }
 
 /** Handle "update-available" event */
 function onUpdateAvailable(info: UpdateInfo): void {
   log.info("[auto-updater] Update available:", info.version);
-  broadcastToWindows(IPC_CHANNELS.AUTO_UPDATER_STATUS, {
+  broadcastFn?.(IPC_CHANNELS.AUTO_UPDATER_STATUS, {
     status: "available",
     info: {
       version: info.version,
@@ -37,7 +43,7 @@ function onUpdateAvailable(info: UpdateInfo): void {
 /** Handle "update-not-available" event */
 function onUpdateNotAvailable(info: UpdateInfo): void {
   log.info("[auto-updater] No update available. Current version:", info.version);
-  broadcastToWindows(IPC_CHANNELS.AUTO_UPDATER_STATUS, {
+  broadcastFn?.(IPC_CHANNELS.AUTO_UPDATER_STATUS, {
     status: "not-available",
     info: { version: info.version, releaseDate: info.releaseDate ?? "" },
   });
@@ -46,7 +52,7 @@ function onUpdateNotAvailable(info: UpdateInfo): void {
 /** Handle "download-progress" event */
 function onDownloadProgress(progress: { percent: number; transferred: number; total: number }): void {
   log.info("[auto-updater] Download progress:", Math.round(progress.percent), "%");
-  broadcastToWindows(IPC_CHANNELS.AUTO_UPDATER_STATUS, {
+  broadcastFn?.(IPC_CHANNELS.AUTO_UPDATER_STATUS, {
     status: "downloading",
     progress: {
       percent: progress.percent,
@@ -59,7 +65,7 @@ function onDownloadProgress(progress: { percent: number; transferred: number; to
 /** Handle "update-downloaded" event */
 function onUpdateDownloaded(info: UpdateInfo): void {
   log.info("[auto-updater] Update downloaded:", info.version);
-  broadcastToWindows(IPC_CHANNELS.AUTO_UPDATER_STATUS, {
+  broadcastFn?.(IPC_CHANNELS.AUTO_UPDATER_STATUS, {
     status: "downloaded",
     info: { version: info.version, releaseDate: info.releaseDate ?? "" },
   });
@@ -68,7 +74,7 @@ function onUpdateDownloaded(info: UpdateInfo): void {
 /** Handle "error" event */
 function onError(err: Error): void {
   log.error("[auto-updater] Error:", err.message);
-  broadcastToWindows(IPC_CHANNELS.AUTO_UPDATER_STATUS, {
+  broadcastFn?.(IPC_CHANNELS.AUTO_UPDATER_STATUS, {
     status: "error",
     error: err.message,
   });

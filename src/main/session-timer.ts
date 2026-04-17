@@ -1,8 +1,7 @@
-import type { AppSettings, IpcResponse } from "../shared/types.js";
+import type { AppSettings, IpcResponse, PushChannel } from "../shared/types.js";
 import { IPC_CHANNELS } from "../shared/types.js";
 import log from "electron-log";
 import { MS_PER_MINUTE, MS_PER_SECOND, SESSION_BROADCAST_INTERVAL_MS } from "./constants.js";
-import { broadcastToWindows } from "./utils/broadcast.js";
 
 let onSessionStateChange: ((updates: Partial<AppSettings>) => void) | null = null;
 let getSettingsRef: () => AppSettings = () => ({ launchAtLogin: false, preventSleep: false, sessionDuration: null });
@@ -21,6 +20,16 @@ export function setOnSessionStateChange(cb: (updates: Partial<AppSettings>) => v
  */
 export function setSettingsReader(getSettings: () => AppSettings): void {
   getSettingsRef = getSettings;
+}
+
+let broadcastFn: (<K extends PushChannel>(channel: K, data: IpcResponse<K>) => void) | null = null;
+
+/**
+ * Inject a broadcast function for session status updates.
+ * Called by coordinator on init. Replaces direct broadcastToWindows() import.
+ */
+export function setBroadcastFn(fn: <K extends PushChannel>(channel: K, data: IpcResponse<K>) => void): void {
+  broadcastFn = fn;
 }
 
 
@@ -164,7 +173,7 @@ export function broadcastSessionUpdate(): void {
         durationMinutes: status.durationMinutes,
       }
     : null;
-  broadcastToWindows(IPC_CHANNELS.SESSION_STATUS_UPDATE, response);
+  broadcastFn?.(IPC_CHANNELS.SESSION_STATUS_UPDATE, response);
 }
 
 /** Start periodic session status broadcast (every 1 second). */

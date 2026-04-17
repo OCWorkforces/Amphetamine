@@ -59,6 +59,10 @@ describe("auto-updater", () => {
     initAutoUpdater = mod.initAutoUpdater;
     stopAutoUpdater = mod.stopAutoUpdater;
     registerAutoUpdaterIpc = mod.registerAutoUpdaterIpc;
+
+    // Wire broadcast function (uses real broadcastToWindows with mocked BrowserWindow.getAllWindows)
+    const { broadcastToWindows } = await import("../../src/main/utils/broadcast.js");
+    mod.setBroadcastFn(broadcastToWindows);
   });
 
   afterEach(() => {
