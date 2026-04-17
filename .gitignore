@@ -142,5 +142,6 @@ vite.config.ts.timestamp-*
 lib/
 dist/
 .sisyphus/
-opencode.json
 .opencode/
+# CocoIndex Code (ccc)
+/.cocoindex_code/
