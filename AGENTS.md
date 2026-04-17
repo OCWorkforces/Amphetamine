@@ -1,7 +1,7 @@
 # Amphetamine — Project Knowledge Base
 
-**Generated:** 2026-04-16
-**Commit:** 8fbfd32
+**Generated:** 2026-04-17
+**Commit:** f72a93e
 **Branch:** develop
 
 ## OVERVIEW
@@ -15,6 +15,7 @@ macOS tray-only Electron app that prevents the system from sleeping. Session tim
 | Build     | Rslib (main/preload) + Rsbuild (renderer) |
 | Package   | Bun                                       |
 | Test      | Vitest 4 (workspace, 280 tests)           |
+| Linter   | ESLint 9 flat config, @typescript-eslint/no-explicit-any: error |
 
 ## STRUCTURE
 
@@ -189,6 +190,7 @@ Rsbuild HMR workaround: `globalObject: 'globalThis'` patches electron-renderer t
 
 Runtime deps (`electron-log`, `electron-updater`) are externalized in rslib configs — not bundled into main/preload output.
 
+
 ## PACKAGING
 
 - `electron-builder` for macOS arm64 + x64 (DMG + ZIP)
@@ -235,6 +237,14 @@ Runtime deps (`electron-log`, `electron-updater`) are externalized in rslib conf
 ## STALE / CLEANUP
 
 - `build/notarize.cjs`: Wired via `afterSign` but `@electron/notarize` not installed — non-functional
-- `build/flip-fuses.cjs`: Flips Electron fuses (EnableCookieEncryption, EnableFuses) post-build
+- `build/flip-fuses.cjs`: Flips Electron fuses (RunAsNode disabled, EnableCookieEncryption, EnableFuses, OnlyLoadAppFromAsar)
 - `DEV_SERVER_URL`: Used in 3 files — correct name (previously VITE_DEV_SERVER_URL from Vite era)
 - `utils/packageInfo.ts:52`: Fallback description mentions "Google Meet meetings" — pre-v1.0 artifact
+
+## SCRIPTS
+
+| Script | Purpose |
+| ------ | ------- |
+| `scripts/dev.ts` | Dev orchestration: spawns rslib watch + rsbuild dev + Electron |
+| `scripts/generate-app-icon.mjs` | App icon generator |
+| `scripts/generate-coffee-tray-icons.mjs` | Tray icon variants generator |
