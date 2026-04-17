@@ -23,6 +23,60 @@ export function onSettingsChanged(callback: SettingsChangeCallback): () => void 
 }
 let settingsCache: AppSettings = { ...DEFAULT_SETTINGS };
 
+/** Validate a boolean field, returning the default if invalid */
+function validateBoolean(value: unknown, defaultValue: boolean): boolean {
+  return typeof value === "boolean" ? value : defaultValue;
+}
+
+/** Validate a positive number field, returning the default if invalid */
+function validatePositiveNumber(value: unknown, defaultValue: number | null): number | null {
+  return typeof value === "number" && value > 0 ? value : defaultValue;
+}
+
+/** Validate a clamped number field (0-100), returning the default if invalid */
+function validateClampedNumber(value: unknown, defaultValue: number): number {
+  return typeof value === "number" && value >= 0 && value <= 100 ? value : defaultValue;
+}
+
+/** Validate a non-empty string field, returning the default if invalid */
+function validateNonEmptyString(value: unknown, defaultValue: string): string {
+  return typeof value === "string" && value.length > 0 ? value : defaultValue;
+}
+
+/** Validate all fields of a raw parsed object into a complete AppSettings */
+function validateRawSettings(raw: Record<string, unknown>): AppSettings {
+  return {
+    launchAtLogin: validateBoolean(raw.launchAtLogin, DEFAULT_SETTINGS.launchAtLogin),
+    preventSleep: validateBoolean(raw.preventSleep, DEFAULT_SETTINGS.preventSleep),
+    sessionDuration: validatePositiveNumber(raw.sessionDuration, DEFAULT_SETTINGS.sessionDuration),
+    batteryThreshold: validateClampedNumber(raw.batteryThreshold, DEFAULT_SETTINGS.batteryThreshold ?? 0),
+    shortcut: validateNonEmptyString(raw.shortcut, DEFAULT_SETTINGS.shortcut ?? ""),
+  };
+}
+
+/** Merge validated partial settings into a base settings object */
+function mergeValidatedPartial(base: AppSettings, partial: Partial<AppSettings>): AppSettings {
+  const merged = { ...base };
+  if (typeof partial.launchAtLogin === "boolean") {
+    merged.launchAtLogin = partial.launchAtLogin;
+  }
+  if (typeof partial.preventSleep === "boolean") {
+    merged.preventSleep = partial.preventSleep;
+  }
+  if (typeof partial.sessionDuration === "number" && partial.sessionDuration > 0) {
+    merged.sessionDuration = partial.sessionDuration;
+  } else if (partial.sessionDuration === null) {
+    merged.sessionDuration = null;
+  }
+  if (typeof partial.batteryThreshold === "number" && partial.batteryThreshold >= 0 && partial.batteryThreshold <= 100) {
+    merged.batteryThreshold = partial.batteryThreshold;
+  }
+  if (typeof partial.shortcut === "string" && partial.shortcut.length > 0) {
+    merged.shortcut = partial.shortcut;
+  }
+  return merged;
+}
+
 function getSettingsPath(): string {
   const userDataPath = app.getPath("userData");
   return join(userDataPath, "settings.json");
@@ -32,7 +86,6 @@ function ensureUserDataDir(): void {
   const userDataPath = app.getPath("userData");
   mkdirSync(userDataPath, { recursive: true });
 }
-
 export function loadSettings(): AppSettings {
   const settingsPath = getSettingsPath();
 
@@ -46,30 +99,7 @@ export function loadSettings(): AppSettings {
     const parsed = JSON.parse(raw);
 
     // Validate and construct settings object
-    settingsCache = {
-      launchAtLogin:
-        typeof parsed.launchAtLogin === "boolean"
-          ? parsed.launchAtLogin
-          : DEFAULT_SETTINGS.launchAtLogin,
-      preventSleep:
-        typeof parsed.preventSleep === "boolean"
-          ? parsed.preventSleep
-          : DEFAULT_SETTINGS.preventSleep,
-      sessionDuration:
-        typeof parsed.sessionDuration === "number" && parsed.sessionDuration > 0
-          ? parsed.sessionDuration
-          : DEFAULT_SETTINGS.sessionDuration,
-      batteryThreshold:
-        typeof parsed.batteryThreshold === "number" &&
-        parsed.batteryThreshold >= 0 &&
-        parsed.batteryThreshold <= 100
-          ? parsed.batteryThreshold
-          : DEFAULT_SETTINGS.batteryThreshold,
-      shortcut:
-        typeof parsed.shortcut === "string" && parsed.shortcut.length > 0
-          ? parsed.shortcut
-          : DEFAULT_SETTINGS.shortcut,
-    };
+    settingsCache = validateRawSettings(parsed);
     return settingsCache;
   } catch (err) {
     log.warn("[settings] Corrupted settings file, using defaults:", err);
@@ -94,29 +124,7 @@ export function getSettings(): AppSettings {
 }
 
 export async function updateSettings(partial: Partial<AppSettings>): Promise<AppSettings> {
-  // Merge with current cache
-  const merged: AppSettings = {
-    ...settingsCache,
-  };
-
-  if (typeof partial.launchAtLogin === "boolean") {
-    merged.launchAtLogin = partial.launchAtLogin;
-  }
-
-  if (typeof partial.preventSleep === "boolean") {
-    merged.preventSleep = partial.preventSleep;
-  }
-
-  if (typeof partial.batteryThreshold === "number") {
-    const val = partial.batteryThreshold;
-    if (val >= 0 && val <= 100) {
-      merged.batteryThreshold = val;
-    }
-  }
-
-  if (typeof partial.shortcut === "string" && partial.shortcut.length > 0) {
-    merged.shortcut = partial.shortcut;
-  }
+  const merged = mergeValidatedPartial(settingsCache, partial);
 
   // Skip if nothing actually changed — prevents unnecessary cascade of events
   const changed = (Object.keys(merged) as (keyof AppSettings)[]).some(

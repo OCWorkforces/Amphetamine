@@ -26,7 +26,8 @@ import {
   initBatteryMonitoring,
   cleanupBatteryMonitoring,
 } from "./battery-monitor.js";
-import { cancelSession, setOnSessionStateChange, setSettingsReader } from "./session-timer.js";
+import { cancelSession, setOnSessionStateChange, setSettingsReader, setBroadcastFn as setSessionBroadcastFn } from "./session-timer.js";
+import { setBroadcastFn as setUpdaterBroadcastFn } from "./auto-updater.js";
 import type { TrayDeps } from "./tray.js";
 import { createSettingsWindow } from "./settings-window.js";
 
@@ -63,6 +64,12 @@ export function initCoordinator(): void {
 
   // Wire settings reader (replaces direct getSettings import in session-timer)
   setSettingsReader(getSettings);
+
+  // Wire broadcast function (replaces direct broadcastToWindows import in session-timer)
+  setSessionBroadcastFn(broadcastToWindows);
+
+  // Wire broadcast function (replaces direct broadcastToWindows import in auto-updater)
+  setUpdaterBroadcastFn(broadcastToWindows);
 
   // Register global shortcut with injected deps
   const shortcutDeps: ShortcutDeps = {

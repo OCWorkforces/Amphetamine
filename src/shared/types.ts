@@ -93,6 +93,12 @@ export type IpcChannel = keyof IpcChannelMap;
 export type IpcRequest<K extends IpcChannel> = IpcChannelMap[K]["request"];
 export type IpcResponse<K extends IpcChannel> = IpcChannelMap[K]["response"];
 
+/** Channels that main process pushes to renderer (no request, only response) */
+export type PushChannel =
+  | typeof IPC_CHANNELS.SESSION_STATUS_UPDATE
+  | typeof IPC_CHANNELS.AUTO_UPDATER_STATUS
+  | typeof IPC_CHANNELS.SETTINGS_CHANGED;
+
 /** Application settings */
 export interface AppSettings {
   /** Whether to launch the app at login (auto-start on system restart) */

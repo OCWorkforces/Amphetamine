@@ -43,10 +43,6 @@ function validateSenderUrl(senderUrl: string): boolean {
     return false;
   }
 }
-function validateOnSender(event: IpcMainEvent): boolean {
-  const senderUrl = event.senderFrame?.url ?? "";
-  return validateSenderUrl(senderUrl);
- }
 /**
  * Type-safe IPC handler wrapper.
  * Ensures handler return type matches IpcChannelMap response type at compile time.
@@ -65,7 +61,7 @@ function registerWindowIpc(win: BrowserWindow): void {
   ipcMain.on(
     IPC_CHANNELS.WINDOW_SET_HEIGHT,
     (event, height: IpcRequest<typeof IPC_CHANNELS.WINDOW_SET_HEIGHT>) => {
-      if (!validateOnSender(event)) return;
+      if (!validateSender(event)) return;
       try {
         if (typeof height === "number" && height > 0) {
           // Clamp height to acceptable bounds

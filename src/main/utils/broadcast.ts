@@ -1,10 +1,14 @@
 import { BrowserWindow } from "electron";
+import type { PushChannel, IpcResponse } from "../../shared/types.js";
 
 /**
  * Broadcast a message to all renderer windows.
- * Shared utility used by coordinator and auto-updater.
+ * Type-safe: channel must be a PushChannel, data is inferred from IpcChannelMap.
  */
-export function broadcastToWindows(channel: string, data: unknown): void {
+export function broadcastToWindows<K extends PushChannel>(
+  channel: K,
+  data: IpcResponse<K>,
+): void {
   for (const win of BrowserWindow.getAllWindows()) {
     if (!win.isDestroyed()) {
       win.webContents.send(channel, data);
