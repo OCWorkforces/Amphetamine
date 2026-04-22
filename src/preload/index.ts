@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron";
+import type { IpcRendererEvent } from "electron";
 import { IPC_CHANNELS } from "../shared/types.js";
 import type { AppSettings, IpcRequest, IpcResponse } from "../shared/types.js";
 
@@ -55,7 +56,7 @@ const api = {
   },
 
   onSettingsChanged: (callback: (_settings: AppSettings) => void) => {
-    const listener = (_event: unknown, settings: AppSettings) => {
+    const listener = (_event: IpcRendererEvent, settings: AppSettings) => {
       callback(settings);
     };
     ipcRenderer.on(IPC_CHANNELS.SETTINGS_CHANGED, listener);
@@ -68,7 +69,7 @@ const api = {
     callback: (_data: IpcResponse<typeof IPC_CHANNELS.SESSION_STATUS_UPDATE>) => void,
   ) => {
     const listener = (
-      _event: unknown,
+      _event: IpcRendererEvent,
       data: IpcResponse<typeof IPC_CHANNELS.SESSION_STATUS_UPDATE>,
     ) => {
       callback(data);
@@ -86,7 +87,7 @@ const api = {
         undefined as IpcRequest<typeof IPC_CHANNELS.AUTO_UPDATER_CHECK>,
       ),
     onStatus: (callback: (_data: IpcResponse<typeof IPC_CHANNELS.AUTO_UPDATER_STATUS>) => void) => {
-      const listener = (_event: unknown, data: IpcResponse<typeof IPC_CHANNELS.AUTO_UPDATER_STATUS>) => {
+      const listener = (_event: IpcRendererEvent, data: IpcResponse<typeof IPC_CHANNELS.AUTO_UPDATER_STATUS>) => {
         callback(data);
       };
       ipcRenderer.on(IPC_CHANNELS.AUTO_UPDATER_STATUS, listener);
