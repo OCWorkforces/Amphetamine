@@ -1,14 +1,11 @@
 import "./styles.css";
 import log from "electron-log";
 import type { AppSettings } from "../../shared/types.js";
+import { DEFAULT_SETTINGS } from "../../shared/types.js";
 
 const heroIcon = new URL("../../assets/settings-hero-icon.png", import.meta.url).toString();
 
-let settings: AppSettings = {
-  launchAtLogin: false,
-  preventSleep: false,
-  sessionDuration: null,
-};
+let settings: AppSettings = { ...DEFAULT_SETTINGS };
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
 let isSaving = false;
 const saveIndicatorTimers = new Map<string, ReturnType<typeof setTimeout>>();
