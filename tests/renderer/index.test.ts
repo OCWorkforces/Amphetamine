@@ -1,17 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import type { AppSettings } from "../../src/shared/types.js";
-
-type SessionStatus = {
-  isRunning: boolean;
-  startedAt: number | null;
-  expiresAt: number | null;
-  remainingSeconds: number | null;
-  durationMinutes: number | null;
-};
+import type { AppSettings, SessionStatusResponse } from "../../src/shared/types.js";
 
 const mockApi = {
   window: { setHeight: vi.fn() },
-  app: { getVersion: vi.fn().mockResolvedValue("1.0.0"), quit: vi.fn() },
+  app: { getVersion: vi.fn().mockResolvedValue("1.0.0") },
+  quit: vi.fn(),
   settings: {
     get: vi.fn<() => Promise<AppSettings>>(),
     set: vi.fn(),
@@ -20,7 +13,7 @@ const mockApi = {
   session: {
     start: vi.fn(),
     cancel: vi.fn(),
-    getStatus: vi.fn<() => Promise<SessionStatus | null>>(),
+    getStatus: vi.fn<() => Promise<SessionStatusResponse | null>>(),
   },
   onSettingsChanged: vi.fn(() => vi.fn()),
   onSessionStatusUpdate: vi.fn(() => vi.fn()),
@@ -295,7 +288,7 @@ describe("renderer popover (index.ts)", () => {
       await vi.advanceTimersByTimeAsync(0);
 
       document.getElementById("quit-action")?.click();
-      expect(mockApi.app.quit).toHaveBeenCalledOnce();
+      expect(mockApi.quit).toHaveBeenCalledOnce();
     });
 
     it("renders fallback when init throws", async () => {

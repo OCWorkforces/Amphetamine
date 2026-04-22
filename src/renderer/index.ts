@@ -1,16 +1,13 @@
 import "./styles/main.css";
 import type { AppSettings } from "../shared/types.js";
+import { DEFAULT_SETTINGS } from "../shared/types.js";
 
 type SessionStatus = Awaited<ReturnType<typeof window.api.session.getStatus>>;
 
 const MIN_H = 180;
 const MAX_H = 420;
 
-let settings: AppSettings = {
-  launchAtLogin: false,
-  preventSleep: false,
-  sessionDuration: null,
-};
+let settings: AppSettings = { ...DEFAULT_SETTINGS };
 let sessionStatus: SessionStatus = null;
 let unsubscribeSettings: (() => void) | null = null;
 let unsubscribeSessionStatus: (() => void) | null = null;
@@ -113,7 +110,7 @@ function bindEvents(): void {
   });
 
   quitButton?.addEventListener("click", () => {
-    void window.api.app.quit();
+    void window.api.quit();
   });
 }
 

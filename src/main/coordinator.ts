@@ -51,7 +51,7 @@ export function initCoordinator(): void {
   syncPreventSleep(settings.preventSleep);
 
   // Wire battery threshold getter and auto-stop callback
-  setBatteryThresholdGetter(() => getSettings().batteryThreshold ?? 0);
+  setBatteryThresholdGetter(() => getSettings().batteryThreshold);
   setBatteryAutoStopCallback(cancelSession);
   setSleepPreventionChecker(isPreventingSleep);
   setStopSleepPrevention(stopPreventingSleep);
@@ -73,7 +73,7 @@ export function initCoordinator(): void {
 
   // Register global shortcut with injected deps
   const shortcutDeps: ShortcutDeps = {
-    getShortcut: () => getSettings().shortcut ?? "",
+    getShortcut: () => getSettings().shortcut,
     getPreventSleep: () => getSettings().preventSleep,
     togglePreventSleep,
   };
@@ -123,7 +123,7 @@ export function getTrayDeps(): TrayDeps {
   return {
     getPreventSleep: () => getSettings().preventSleep,
     togglePreventSleep,
-    onSettingsChanged: (cb: () => void) => onSettingsChanged(cb),
+    onSettingsChanged: (cb: () => void) => onSettingsChanged((_settings) => { cb(); }),
     openSettings: () => createSettingsWindow(),
   };
 }

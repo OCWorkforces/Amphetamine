@@ -38,7 +38,7 @@ Electron main process (Node.js). App lifecycle, system tray, IPC, session timer,
 6. Broadcasts settings to all windows via `broadcastToWindows()`
 7. `togglePreventSleep` uses `void updateSettings(...)` prefix for the async call
 
-`getTrayDeps()` returns `TrayDeps` wired to settings (dependency injection for tray).
+`getTrayDeps()` returns `TrayDeps` wired to settings (dependency injection for tray). The `onSettingsChanged` callback is bridged: `(cb: () => void) => onSettingsChanged((_settings) => { cb(); })` — tray uses `() => void` signature, coordinator wraps to accept and discard the `AppSettings` param.
 
 **Key rule**: Modules do NOT import each other. All orchestration goes through coordinator.
 
@@ -119,7 +119,7 @@ Electron main process (Node.js). App lifecycle, system tray, IPC, session timer,
 
 - JSON file in `app.getPath('userData')/settings.json`
 - Loaded on module import (`loadSettings()` at bottom of settings.ts)
-- Validated: each field checked against `typeof`, falls back to `DEFAULT_SETTINGS`
+- Validated: each field checked against `typeof`, falls back to `DEFAULT_SETTINGS`. All fields required (loader always merges defaults).
 - `saveSettings()`: Async — uses `writeFile`/`rename` from `node:fs/promises` + `randomUUID()` from `node:crypto` for unique temp files
 - `updateSettings(partial)`: Async — has no-change dedup (skips save if nothing changed), updates cache BEFORE disk write, persists asynchronously with error logging, notifies listeners, returns copy
 - `getSettings()`: Returns shallow copy of cache (never expose mutable ref)

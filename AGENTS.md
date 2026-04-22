@@ -40,7 +40,7 @@ src/
 ├── renderer/           # UI (web context, vanilla TS)
 │   ├── index.ts          # Main popover UI (session status + timer)
 │   ├── index.html        # CSP-protected template
-│   ├── env.d.ts          # Global window.api type declarations
+│   ├── env.d.ts          # Window.api type (derived from preload Api export)
 │   ├── css.d.ts          # CSS module declarations
 │   ├── settings/         # Settings window (separate entry)
 │   │   ├── index.ts      # Settings form logic, save indicator
@@ -51,7 +51,7 @@ src/
 ├── preload/            # Context bridge (sandbox)
 │   └── index.ts          # Exposes window.api to renderer
 ├── shared/             # Types shared across processes
-│   └── types.ts          # IPC_CHANNELS (13), AppSettings, IpcChannelMap
+│   └── types.ts          # IPC_CHANNELS (13), IpcChannelMap, SessionStatusResponse, SessionStartResponse, AppSettings, PUSH_CHANNELS
 └── assets.d.ts         # Module declarations for *.png, *.css
 
 ## WHERE TO LOOK
@@ -113,8 +113,12 @@ src/
 | `broadcastToWindows`         | fn    | src/main/utils/broadcast.ts     | Generic send to all non-destroyed BrowserWindows                                |
 | `IPC_CHANNELS`               | const | src/shared/types.ts:2           | 13 channel names                                                               |
 | `IpcChannelMap`              | type  | src/shared/types.ts:18          | Request/response type map                                                      |
-| `AppSettings`                | iface | src/shared/types.ts:97          | Settings interface with optional batteryThreshold + shortcut                    |
-| `DEFAULT_SETTINGS`           | const | src/shared/types.ts:111         | Full defaults                                                                  |
+| `AppSettings`                | iface | src/shared/types.ts:110         | Settings interface (all fields required, no optionals)                    |
+| `DEFAULT_SETTINGS`           | const | src/shared/types.ts:124         | Full defaults                                                                  |
+| `SessionStatusResponse`      | iface | src/shared/types.ts:19          | Session status shape (used by SESSION_STATUS + SESSION_STATUS_UPDATE)          |
+| `SessionStartResponse`       | iface | src/shared/types.ts:28          | Session start response shape                                                    |
+| `PUSH_CHANNELS`              | const | src/shared/types.ts:101         | Push channel names tuple (single source of truth)                              |
+| `PushChannel`                | type  | src/shared/types.ts:107         | Derived from PUSH_CHANNELS tuple                                                |
 
 ## CONVENTIONS
 - **Coordinator pattern**: `coordinator.ts` centralizes settings→system sync (sleep-prevention, battery-monitor, auto-launch, session cancel, broadcast, shortcut). Individual modules do NOT import each other.
@@ -128,7 +132,7 @@ src/
 - **Settings persistence**: JSON file in Electron userData directory
 - **Settings change notification**: Internal `EventEmitter` in settings.ts, `onSettingsChanged()` returns unsubscribe
 - **Settings window**: Shows in Dock when open, hides when closed (tray-only otherwise)
-- **Strict TS**: `exactOptionalPropertyTypes`, `verbatimModuleSyntax`, `noUncheckedIndexedAccess`
+- **Strict TS**: `exactOptionalPropertyTypes`, `verbatimModuleSyntax`, `noUncheckedIndexedAccess`, `noImplicitOverride`, `noImplicitReturns`
 - **`__dirname` polyfill**: ESM main process uses `path.dirname(fileURLToPath(import.meta.url))`
 - **Double quotes, semicolons, 2-space indent**: Enforced by Prettier + ESLint
 - **Formatting**: Prettier (printWidth: 100, trailingComma: all, semi: true)
@@ -167,6 +171,7 @@ bun run build          # Build all (main + preload + renderer)
 bun run package        # Build + DMG/ZIP + flip fuses (macOS arm64)
 bun run package:x64    # Build + DMG/ZIP + flip fuses (macOS x64)
 bun run typecheck      # TypeScript check (tsc -b)
+bun run typecheck:tests # TypeScript check for tests (tsconfig.tests.json)
 bun run test:watch     # Watch mode
 bun run test:coverage  # Run with v8 coverage
 bun run clean          # Remove lib/ dist/
