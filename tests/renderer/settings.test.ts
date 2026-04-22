@@ -1,13 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import type { AppSettings } from "../../src/shared/types.js";
-
-type SessionStatus = {
-  isRunning: boolean;
-  startedAt: number | null;
-  expiresAt: number | null;
-  remainingSeconds: number | null;
-  durationMinutes: number | null;
-};
+import type { AppSettings, SessionStatusResponse } from "../../src/shared/types.js";
 
 const mockApi = {
   window: { setHeight: vi.fn() },
@@ -20,7 +12,7 @@ const mockApi = {
   session: {
     start: vi.fn(),
     cancel: vi.fn(),
-    getStatus: vi.fn<() => Promise<SessionStatus | null>>(),
+    getStatus: vi.fn<() => Promise<SessionStatusResponse | null>>(),
   },
   onSettingsChanged: vi.fn(() => vi.fn()),
   autoUpdater: {

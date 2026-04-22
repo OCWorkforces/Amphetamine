@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import type { SessionState } from "../../src/main/session-timer.js";
 
 // Hoisted mock functions - evaluated before vi.mock calls
 const mockGetSettings = vi.hoisted(() => vi.fn());
@@ -25,24 +26,9 @@ vi.mock("../../src/main/settings.js", () => ({
 
 
 describe("session-timer", () => {
-  let startSession: (_durationMinutes: number | null) => {
-    isRunning: boolean;
-    startedAt: number | null;
-    expiresAt: number | null;
-    durationMinutes: number | null;
-  };
-  let cancelSession: () => {
-    isRunning: boolean;
-    startedAt: number | null;
-    expiresAt: number | null;
-    durationMinutes: number | null;
-  };
-  let getStatus: () => {
-    isRunning: boolean;
-    startedAt: number | null;
-    expiresAt: number | null;
-    durationMinutes: number | null;
-  };
+  let startSession: (_durationMinutes: number | null) => SessionState;
+  let cancelSession: () => SessionState;
+  let getStatus: () => SessionState;
   let cleanup: () => void;
   let setOnSessionStateChange: (cb: (updates: Partial<typeof settingsState>) => void) => void;
   let setSettingsReader: (getSettings: () => typeof settingsState) => void;

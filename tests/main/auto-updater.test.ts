@@ -1,4 +1,13 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from "vitest";
+
+interface MockWindow {
+  isDestroyed: () => boolean;
+  webContents: { send: Mock };
+}
+
+function createMockWindow(): MockWindow {
+  return { isDestroyed: () => false, webContents: { send: vi.fn() } };
+}
 
 // --- Hoisted mocks ---
 const mockOn = vi.hoisted(() => vi.fn());
@@ -123,14 +132,8 @@ describe("auto-updater", () => {
     });
 
     it("broadcasts to windows on update-available event", () => {
-      const mockWindow = { isDestroyed: () => false, webContents: { send: vi.fn() } };
-      mockGetAllWindows.mockReturnValue([
-        mockWindow as unknown as ReturnType<typeof mockGetAllWindows> extends () => infer R
-          ? R extends Array<infer T>
-            ? T
-            : never
-          : never,
-      ]);
+      const mockWindow = createMockWindow();
+      mockGetAllWindows.mockReturnValue([mockWindow]);
 
       initAutoUpdater();
 
@@ -179,14 +182,8 @@ describe("auto-updater", () => {
     });
 
     it("broadcasts error status on error event", () => {
-      const mockWindow = { isDestroyed: () => false, webContents: { send: vi.fn() } };
-      mockGetAllWindows.mockReturnValue([
-        mockWindow as unknown as ReturnType<typeof mockGetAllWindows> extends () => infer R
-          ? R extends Array<infer T>
-            ? T
-            : never
-          : never,
-      ]);
+      const mockWindow = createMockWindow();
+      mockGetAllWindows.mockReturnValue([mockWindow]);
 
       initAutoUpdater();
 
@@ -275,8 +272,8 @@ describe("auto-updater", () => {
 
   describe("event handler details", () => {
     it("broadcasts checking-for-update status", () => {
-      const mockWindow = { isDestroyed: () => false, webContents: { send: vi.fn() } };
-      mockGetAllWindows.mockReturnValue([mockWindow as never]);
+      const mockWindow = createMockWindow();
+      mockGetAllWindows.mockReturnValue([mockWindow]);
 
       initAutoUpdater();
 
@@ -291,8 +288,8 @@ describe("auto-updater", () => {
     });
 
     it("broadcasts update-not-available status", () => {
-      const mockWindow = { isDestroyed: () => false, webContents: { send: vi.fn() } };
-      mockGetAllWindows.mockReturnValue([mockWindow as never]);
+      const mockWindow = createMockWindow();
+      mockGetAllWindows.mockReturnValue([mockWindow]);
 
       initAutoUpdater();
 
@@ -310,8 +307,8 @@ describe("auto-updater", () => {
     });
 
     it("broadcasts download-progress with transfer info", () => {
-      const mockWindow = { isDestroyed: () => false, webContents: { send: vi.fn() } };
-      mockGetAllWindows.mockReturnValue([mockWindow as never]);
+      const mockWindow = createMockWindow();
+      mockGetAllWindows.mockReturnValue([mockWindow]);
 
       initAutoUpdater();
 
@@ -329,8 +326,8 @@ describe("auto-updater", () => {
     });
 
     it("broadcasts update-downloaded status", () => {
-      const mockWindow = { isDestroyed: () => false, webContents: { send: vi.fn() } };
-      mockGetAllWindows.mockReturnValue([mockWindow as never]);
+      const mockWindow = createMockWindow();
+      mockGetAllWindows.mockReturnValue([mockWindow]);
 
       initAutoUpdater();
 
@@ -348,8 +345,8 @@ describe("auto-updater", () => {
     });
 
     it("includes releaseNotes when present as string", () => {
-      const mockWindow = { isDestroyed: () => false, webContents: { send: vi.fn() } };
-      mockGetAllWindows.mockReturnValue([mockWindow as never]);
+      const mockWindow = createMockWindow();
+      mockGetAllWindows.mockReturnValue([mockWindow]);
 
       initAutoUpdater();
 
@@ -367,8 +364,8 @@ describe("auto-updater", () => {
     });
 
     it("omits releaseNotes when not a string", () => {
-      const mockWindow = { isDestroyed: () => false, webContents: { send: vi.fn() } };
-      mockGetAllWindows.mockReturnValue([mockWindow as never]);
+      const mockWindow = createMockWindow();
+      mockGetAllWindows.mockReturnValue([mockWindow]);
 
       initAutoUpdater();
 
@@ -381,8 +378,8 @@ describe("auto-updater", () => {
     });
 
     it("handles missing releaseDate gracefully", () => {
-      const mockWindow = { isDestroyed: () => false, webContents: { send: vi.fn() } };
-      mockGetAllWindows.mockReturnValue([mockWindow as never]);
+      const mockWindow = createMockWindow();
+      mockGetAllWindows.mockReturnValue([mockWindow]);
 
       initAutoUpdater();
 
