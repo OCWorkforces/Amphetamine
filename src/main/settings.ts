@@ -49,8 +49,8 @@ function validateRawSettings(raw: Record<string, unknown>): AppSettings {
     launchAtLogin: validateBoolean(raw.launchAtLogin, DEFAULT_SETTINGS.launchAtLogin),
     preventSleep: validateBoolean(raw.preventSleep, DEFAULT_SETTINGS.preventSleep),
     sessionDuration: validatePositiveNumber(raw.sessionDuration, DEFAULT_SETTINGS.sessionDuration),
-    batteryThreshold: validateClampedNumber(raw.batteryThreshold, DEFAULT_SETTINGS.batteryThreshold ?? 0),
-    shortcut: validateNonEmptyString(raw.shortcut, DEFAULT_SETTINGS.shortcut ?? ""),
+    batteryThreshold: validateClampedNumber(raw.batteryThreshold, DEFAULT_SETTINGS.batteryThreshold),
+    shortcut: validateNonEmptyString(raw.shortcut, DEFAULT_SETTINGS.shortcut),
   };
 }
 

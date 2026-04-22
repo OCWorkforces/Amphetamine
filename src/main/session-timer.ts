@@ -1,10 +1,10 @@
 import type { AppSettings, IpcResponse, PushChannel } from "../shared/types.js";
-import { IPC_CHANNELS } from "../shared/types.js";
+import { DEFAULT_SETTINGS, IPC_CHANNELS } from "../shared/types.js";
 import log from "electron-log";
 import { MS_PER_MINUTE, MS_PER_SECOND, SESSION_BROADCAST_INTERVAL_MS } from "./constants.js";
 
 let onSessionStateChange: ((updates: Partial<AppSettings>) => void) | null = null;
-let getSettingsRef: () => AppSettings = () => ({ launchAtLogin: false, preventSleep: false, sessionDuration: null });
+let getSettingsRef: () => AppSettings = () => ({ ...DEFAULT_SETTINGS });
 
 /**
  * Inject a callback that handles session state changes.
