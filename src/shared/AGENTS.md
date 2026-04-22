@@ -29,23 +29,23 @@ export const IPC_CHANNELS = {
 } as const;
 ```
 
-`IpcChannelMap` (types.ts:19) maps each channel to its `request` / `response` types.
+`IpcChannelMap` (types.ts:35) maps each channel to its `request` / `response` types.
 
 ## DATA MODELS
 
 ### AppSettings
 
 ```typescript
-// types.ts:97-107
+// types.ts:110-121
 export interface AppSettings {
   launchAtLogin: boolean; // macOS login item toggle
   preventSleep: boolean; // powerSaveBlocker toggle
   sessionDuration: number | null; // null = indefinite, number = minutes
-  batteryThreshold?: number; // auto-disable on battery below this %
-  shortcut?: string; // global shortcut accelerator string
+  batteryThreshold: number; // auto-disable on battery below this %. 0 = disabled
+  shortcut: string; // global shortcut accelerator string. Empty = use default
 }
 
-// types.ts:111-117
+// types.ts:124-130
 export const DEFAULT_SETTINGS: AppSettings = {
   launchAtLogin: false,
   preventSleep: false,
@@ -55,40 +55,60 @@ export const DEFAULT_SETTINGS: AppSettings = {
 };
 ```
 
-### Session Types
+### SessionStatusResponse
 
 ```typescript
-// Inline in IpcChannelMap
-// session:start request
-{ durationMinutes: number | null }
-
-// session:start response
-{ startedAt: number; durationMinutes: number | null; expiresAt: number | null }
-
-// session:cancel response
-{ cancelled: boolean }
-
-// session:status response
-{ isRunning: boolean; startedAt: number | null; expiresAt: number | null;
-  remainingSeconds: number | null; durationMinutes: number | null } | null
+// types.ts:19-25 — used by SESSION_STATUS and SESSION_STATUS_UPDATE
+export interface SessionStatusResponse {
+  isRunning: boolean;
+  startedAt: number | null;
+  expiresAt: number | null;
+  remainingSeconds: number | null;
+  durationMinutes: number | null;
+}
 ```
 
-### Session Status Update
+### SessionStartResponse
 
 ```typescript
-// session:status-update (push from main, no request)
-{ isRunning: boolean; startedAt: number | null; expiresAt: number | null;
-  remainingSeconds: number | null; durationMinutes: number | null } | null
+// types.ts:28-32 — used by SESSION_START
+export interface SessionStartResponse {
+  startedAt: number;
+  durationMinutes: number | null;
+  expiresAt: number | null;
+}
+```
+
+### Session Cancel
+
+```typescript
+// Inline in IpcChannelMap — SESSION_CANCEL response
+{ cancelled: boolean }
 ```
 
 ## TYPE UTILITIES
 
 ```typescript
-// types.ts:92-94
+// types.ts:96-98
 export type IpcChannel = keyof IpcChannelMap;
 export type IpcRequest<K extends IpcChannel> = IpcChannelMap[K]["request"];
 export type IpcResponse<K extends IpcChannel> = IpcChannelMap[K]["response"];
 ```
+
+## PUSH CHANNELS
+
+```typescript
+// types.ts:101-107
+export const PUSH_CHANNELS = [
+  IPC_CHANNELS.SETTINGS_CHANGED,
+  IPC_CHANNELS.SESSION_STATUS_UPDATE,
+  IPC_CHANNELS.AUTO_UPDATER_STATUS,
+] as const;
+
+export type PushChannel = (typeof PUSH_CHANNELS)[number];
+```
+
+`PUSH_CHANNELS` is the single source of truth for push-style channels. `PushChannel` is derived from it — no manual union maintenance.
 
 ## USAGE PATTERN
 

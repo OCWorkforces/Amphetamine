@@ -6,7 +6,7 @@ Electron preload script running in sandboxed renderer context. Exposes typed IPC
 
 | File            | Role                                           |
 | --------------- | ---------------------------------------------- |
-| `index.ts`      | Context bridge API definition (103 lines)      |
+| `index.ts`      | Context bridge API definition (104 lines)      |
 | `tsconfig.json` | Node + DOM types, `nodenext` module resolution |
 
 ## CONTEXT BRIDGE API
@@ -34,8 +34,10 @@ Electron preload script running in sandboxed renderer context. Exposes typed IPC
 Three push channels use the same pattern:
 
 ```typescript
+import type { IpcRendererEvent } from "electron";
+
 onXxx: (callback: (data: T) => void) => {
-  const listener = (_event: unknown, data: T) => callback(data);
+  const listener = (_event: IpcRendererEvent, data: T) => callback(data);
   ipcRenderer.on(CHANNEL, listener);
   return () => ipcRenderer.removeListener(CHANNEL, listener); // cleanup
 };
@@ -45,7 +47,7 @@ Always return unsubscribe function. Renderer is responsible for calling cleanup.
 
 ## TYPE SAFETY
 
-All methods use `IpcRequest<K>` and `IpcResponse<K>` from `src/shared/types.ts`. Channel names from `IPC_CHANNELS` const. The `Api` type is exported for renderer type checking.
+All methods use `IpcRequest<K>` and `IpcResponse<K>` from `src/shared/types.ts`. Channel names from `IPC_CHANNELS` const. The `Api` type is exported (`export type Api = typeof api`) for renderer type checking. Renderer's `env.d.ts` derives `Window.api` from this export — single source of truth.
 
 ## BUILD CONFIG
 

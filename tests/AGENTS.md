@@ -52,6 +52,11 @@ projects: [
 // passWithNoTests: true
 ```
 
+### TypeScript Checking
+
+`tsconfig.tests.json` extends base tsconfig with `rootDir: "."`, includes `tests/**/*`, relaxes `noUnusedLocals` and `noUnusedParameters`. Run via `bun run typecheck:tests`.
+```
+
 ## TEST COUNTS (280 total)
 
 ### Main Process (242 tests, 18 files)
@@ -202,7 +207,14 @@ Renderer tests mock `window.api` globally via `vi.stubGlobal()`:
 ```typescript
 const mockApi = {
   window: { setHeight: vi.fn() },
-  app: { getVersion: vi.fn().mockResolvedValue("1.0.0"), quit: vi.fn() },
+  app: { getVersion: vi.fn().mockResolvedValue("1.0.0") },
+  quit: vi.fn(),  // top-level, NOT under app namespace
+  settings: { get: vi.fn(), set: vi.fn(), open: vi.fn() },
+  session: { start: vi.fn(), cancel: vi.fn(), getStatus: vi.fn() },
+  onSettingsChanged: vi.fn(() => vi.fn()),
+  onSessionStatusUpdate: vi.fn(() => vi.fn()),
+  autoUpdater: { checkForUpdates: vi.fn(), onStatus: vi.fn(() => vi.fn()) },
+};
   settings: { get: vi.fn(), set: vi.fn(), open: vi.fn() },
   session: { start: vi.fn(), cancel: vi.fn(), getStatus: vi.fn() },
   onSettingsChanged: vi.fn(() => vi.fn()),
@@ -220,7 +232,7 @@ Polling-based session tests are removed. The renderer now uses a push subscripti
 
 ## SETUP FILE
 
-`tests/setup.main.ts` mocks full Electron API:
+`tests/setup.main.ts` defines a typed `MockElectronAPI` interface covering all Electron API surfaces used in tests. All `vi.fn()` calls use explicit generic parameters (e.g. `vi.fn<() => number>()`). The setup file exports typed mock instances for use across test files.
 
 | Module             | Key Methods                                                                               |
 | ------------------ | ----------------------------------------------------------------------------------------- |
@@ -242,7 +254,8 @@ Polling-based session tests are removed. The renderer now uses a push subscripti
 ## COMMANDS
 
 ```bash
-bun run test          # Run all tests once
-bun run test:watch    # Watch mode
-bun run test:coverage # With v8 coverage
+bun run test             # Run all tests once
+bun run test:watch      # Watch mode
+bun run test:coverage   # With v8 coverage
+bun run typecheck:tests # TypeScript check for tests (tsconfig.tests.json)
 ```

@@ -8,7 +8,7 @@ Electron renderer (web context). Vanilla TypeScript UI with native macOS popover
 | --------------------- | --------------------------------------------- |
 | `index.ts`            | Main popover UI (session status + timer)      |
 | `index.html`          | CSP-protected HTML template                   |
-| `env.d.ts`            | TypeScript declarations for `window.api`      |
+| `env.d.ts`            | Window.api type (derived from preload Api export — 9 lines) |
 | `css.d.ts`            | CSS module declarations                       |
 | `styles/main.css`     | Native macOS styling, dark mode support       |
 | `settings/index.ts`   | Settings form logic, toggle + dropdown        |
@@ -54,11 +54,12 @@ Separate renderer entry at `settings/`. Three controls: Launch at Login (toggle)
 
 ## API ACCESS
 
-```typescript
 // Shared across both renderer entries
+// env.d.ts derives Window.api type from preload's exported Api type
+// Single source of truth — if preload changes, renderer type-check catches drift
 window.api.window.setHeight(height); // → void (fire-and-forget)
 window.api.app.getVersion(); // → Promise<string>
-window.api.app.quit(); // → Promise<void>
+window.api.quit(); // → Promise<void>  (top-level, NOT under app namespace)
 window.api.settings.get(); // → Promise<AppSettings>
 window.api.settings.set(partial); // → Promise<AppSettings>
 window.api.settings.open(); // → Promise<void>
