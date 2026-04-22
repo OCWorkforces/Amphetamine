@@ -1,6 +1,6 @@
 {
   "name": "amphetamine",
-  "version": "1.3.7",
+  "version": "1.3.8",
   "author": "OCWorkforces Engineers",
   "authorEmail": "kennydizi@ocworkforces.com",
   "repository": "https://github.com/OCWorkforces/Amphetamine",
@@ -12,14 +12,14 @@
     "@rslib/core": "^0.21.2",
     "@rspack/core": "^1.7.11",
     "@tsconfig/node24": "^24.0.4",
-    "@typescript-eslint/eslint-plugin": "^8.58.2",
-    "@typescript-eslint/parser": "^8.58.2",
-    "@vitest/browser": "^4.1.4",
-    "@vitest/coverage-v8": "^4.1.4",
-    "@vitest/ui": "^4.1.4",
-    "electron": "^41.2.1",
+    "@typescript-eslint/eslint-plugin": "^8.59.0",
+    "@typescript-eslint/parser": "^8.59.0",
+    "@vitest/browser": "^4.1.5",
+    "@vitest/coverage-v8": "^4.1.5",
+    "@vitest/ui": "^4.1.5",
+    "electron": "^41.2.2",
     "electron-builder": "^26.8.1",
-    "eslint": "^10.2.0",
+    "eslint": "^10.2.1",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-prettier": "^5.5.5",
     "jsdom": "^29.0.2",
@@ -27,16 +27,16 @@
     "rimraf": "^6.1.3",
     "sharp": "^0.34.5",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.4"
+    "vitest": "^4.1.5"
   },
   "description": "Amphetamine is a desktop application that helps macOS always stay awake.",
   "engineStrict": true,
   "engines": {
     "node": ">=22.0.0",
-    "bun": ">=1.3.12"
+    "bun": ">=1.3.13"
   },
   "homepage": "https://github.com/OCWorkforces/Amphetamine",
-  "packageManager": "bun@1.3.12",
+  "packageManager": "bun@1.3.13",
   "private": true,
   "productName": "Amphetamine",
   "scripts": {
