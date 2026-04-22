@@ -127,7 +127,9 @@ export function setupTray(deps: TrayDeps): () => void {
 
   // Left-click → cached context menu
   tray.on("click", () => {
-    tray!.popUpContextMenu(cachedMenu!);
+    if (tray && cachedMenu) {
+      tray.popUpContextMenu(cachedMenu);
+    }
   });
   return () => {
     unsubscribe();
