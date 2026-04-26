@@ -23,24 +23,36 @@ export function onSettingsChanged(callback: SettingsChangeCallback): () => void 
 }
 let settingsCache: AppSettings = { ...DEFAULT_SETTINGS };
 
-/** Validate a boolean field, returning the default if invalid */
-export function validateBoolean(value: unknown, defaultValue: boolean): boolean {
-  return typeof value === "boolean" ? value : defaultValue;
-}
+/** Type-guard predicates — single source of truth for validity semantics */
 
-/** Validate a positive number field, returning the default if invalid */
-export function validatePositiveNumber(value: unknown, defaultValue: number | null): number | null {
-  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : defaultValue;
-}
+export const isBoolean = (v: unknown): v is boolean => typeof v === "boolean";
+
+export const isPositiveNumber = (v: unknown): v is number =>
+  typeof v === "number" && Number.isFinite(v) && v > 0;
+
+export const isClamped0to100 = (v: unknown): v is number =>
+  typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= 100;
+
+export const isNonEmptyString = (v: unknown): v is string =>
+  typeof v === "string" && v.length > 0;
+
+/** Validate a boolean field, returning the default if invalid */
+export const validateBoolean = (value: unknown, defaultValue: boolean): boolean =>
+  isBoolean(value) ? value : defaultValue;
+
+/** Validate a positive number field (null is preserved as a valid sentinel value) */
+export const validatePositiveNumber = (
+  value: unknown,
+  defaultValue: number | null,
+): number | null => (isPositiveNumber(value) ? value : defaultValue);
 
 /** Validate a clamped number field (0-100), returning the default if invalid */
-export function validateClampedNumber(value: unknown, defaultValue: number): number {
-  return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 100 ? value : defaultValue;
-}
+export const validateClampedNumber = (value: unknown, defaultValue: number): number =>
+  isClamped0to100(value) ? value : defaultValue;
 
 /** Validate a non-empty string field, returning the default if invalid */
 function validateNonEmptyString(value: unknown, defaultValue: string): string {
-  return typeof value === "string" && value.length > 0 ? value : defaultValue;
+  return isNonEmptyString(value) ? value : defaultValue;
 }
 
 /** Validate all fields of a raw parsed object into a complete AppSettings */
@@ -54,27 +66,56 @@ function validateRawSettings(raw: Record<string, unknown>): AppSettings {
   };
 }
 
-/** Merge validated partial settings into a base settings object */
-function mergeValidatedPartial(base: AppSettings, partial: Partial<AppSettings>): AppSettings {
-  const merged = { ...base };
-  if (typeof partial.launchAtLogin === "boolean") {
-    merged.launchAtLogin = partial.launchAtLogin;
-  }
-  if (typeof partial.preventSleep === "boolean") {
-    merged.preventSleep = partial.preventSleep;
-  }
-  if (typeof partial.sessionDuration === "number" && Number.isFinite(partial.sessionDuration) && partial.sessionDuration > 0) {
-    merged.sessionDuration = partial.sessionDuration;
-  } else if (partial.sessionDuration === null) {
-    merged.sessionDuration = null;
-  }
-  if (typeof partial.batteryThreshold === "number" && Number.isFinite(partial.batteryThreshold) && partial.batteryThreshold >= 0 && partial.batteryThreshold <= 100) {
-    merged.batteryThreshold = partial.batteryThreshold;
-  }
-  if (typeof partial.shortcut === "string" && partial.shortcut.length > 0) {
-    merged.shortcut = partial.shortcut;
+/**
+ * Per-field validator dispatch. Mapped type ensures every AppSettings
+ * field has an entry — adding a field without updating VALIDATORS is a compile error.
+ */
+type SettingsValidator<K extends keyof AppSettings> = (
+  value: unknown,
+  fallback: AppSettings[K],
+) => AppSettings[K];
+
+const VALIDATORS: { [K in keyof AppSettings]: SettingsValidator<K> } = {
+  launchAtLogin: (v, f) => (isBoolean(v) ? v : f),
+  preventSleep: (v, f) => (isBoolean(v) ? v : f),
+  sessionDuration: (v, f) => {
+    // SPECIAL CASE: null is a valid value (indefinite session marker)
+    if (v === null) return null;
+    return isPositiveNumber(v) ? v : f;
+  },
+  batteryThreshold: (v, f) => (isClamped0to100(v) ? v : f),
+  shortcut: (v, f) => (isNonEmptyString(v) ? v : f),
+};
+
+/** Apply a single validator with full type-safety (encapsulates the unavoidable cast). */
+function applyValidator<K extends keyof AppSettings>(
+  key: K,
+  value: unknown,
+  fallback: AppSettings[K],
+): AppSettings[K] {
+  return VALIDATORS[key](value, fallback);
+}
+
+/** Merge validated partial settings into a base settings object — dispatches via VALIDATORS */
+export function mergeValidatedPartial(
+  base: AppSettings,
+  partial: Partial<Record<keyof AppSettings, unknown>>,
+): AppSettings {
+  const merged: AppSettings = { ...base };
+  for (const key of Object.keys(partial) as (keyof AppSettings)[]) {
+    if (!(key in VALIDATORS)) continue;
+    // Per-key generic dispatch — `K` is inferred per iteration via helper.
+    assignValidated(merged, key, partial[key]);
   }
   return merged;
+}
+
+function assignValidated<K extends keyof AppSettings>(
+  target: AppSettings,
+  key: K,
+  incoming: unknown,
+): void {
+  target[key] = applyValidator(key, incoming, target[key]);
 }
 
 function getSettingsPath(): string {
