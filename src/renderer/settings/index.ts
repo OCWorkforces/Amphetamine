@@ -2,10 +2,13 @@ import "./styles.css";
 import log from "electron-log";
 import type { AppSettings } from "../../shared/types.js";
 import { DEFAULT_SETTINGS } from "../../shared/types.js";
+import { SAVED_INDICATOR, SHORTCUT_PLACEHOLDER, SHORTCUT_RECORDING } from "./constants.js";
 
 const heroIcon = new URL("../../assets/settings-hero-icon.png", import.meta.url).toString();
 
 let settings: AppSettings = { ...DEFAULT_SETTINGS };
+/** Duration from an actively-running session; overrides stored sessionDuration in the UI. Cleared when the user explicitly picks a new duration. */
+let runningSessionDuration: number | null = null;
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
 let errorMessage: string | null = null;
 let isSaving = false;
@@ -159,7 +162,7 @@ function buildSettingsForm(): string {
         </div>
         <div class="setting-control">
           <span class="save-indicator" id="shortcut-save-indicator"></span>
-          <button type="button" id="shortcut-input" class="setting-shortcut" aria-label="Toggle shortcut recorder">${formatAcceleratorForDisplay(settings.shortcut) || "Click to record"}</button>
+          <button type="button" id="shortcut-input" class="setting-shortcut" aria-label="Toggle shortcut recorder">${formatAcceleratorForDisplay(settings.shortcut) || SHORTCUT_PLACEHOLDER}</button>
         </div>
       </div>
     </div>
@@ -178,7 +181,7 @@ function startRecordingShortcut(): void {
   const btn = document.getElementById("shortcut-input") as HTMLButtonElement | null;
   if (!btn) return;
   isRecordingShortcut = true;
-  btn.textContent = "Press keys…";
+  btn.textContent = SHORTCUT_RECORDING;
   btn.classList.add("recording");
 
   shortcutKeydownHandler = (e: KeyboardEvent): void => {
@@ -207,7 +210,7 @@ function stopRecordingShortcut(): void {
   const btn = document.getElementById("shortcut-input") as HTMLButtonElement | null;
   if (btn) {
     btn.classList.remove("recording");
-    btn.textContent = formatAcceleratorForDisplay(settings.shortcut) || "Click to record";
+    btn.textContent = formatAcceleratorForDisplay(settings.shortcut) || SHORTCUT_PLACEHOLDER;
   }
 }
 
@@ -234,6 +237,8 @@ function attachFormListeners(): void {
     durationSelect.addEventListener("change", () => {
       const raw = durationSelect.value;
       const duration: number | null = raw === "" ? null : parseInt(raw, 10);
+      // User explicitly chose a new duration — stop overriding from running session
+      runningSessionDuration = null;
       settings.sessionDuration = duration;
       void window.api.session.start(duration);
       void saveSettings({ sessionDuration: duration, preventSleep: true }, "duration-save-indicator");
@@ -319,7 +324,7 @@ function updateSettingsUI(s: AppSettings): void {
 
   const shortcutBtn = document.getElementById("shortcut-input") as HTMLButtonElement | null;
   if (shortcutBtn && !isRecordingShortcut) {
-    shortcutBtn.textContent = formatAcceleratorForDisplay(s.shortcut) || "Click to record";
+    shortcutBtn.textContent = formatAcceleratorForDisplay(s.shortcut) || SHORTCUT_PLACEHOLDER;
   }
 }
 
@@ -361,7 +366,7 @@ async function saveSettings(
     try {
       await window.api.settings.set(settings);
       setErrorMessage(null);
-      showSaveIndicator(indicatorId, "✓ Saved");
+      showSaveIndicator(indicatorId, SAVED_INDICATOR);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to save settings";
       setErrorMessage(message);
@@ -381,7 +386,8 @@ async function init(): Promise<void> {
   try {
     const status = await window.api.session.getStatus();
     if (!isSaving && status?.isRunning) {
-      settings.sessionDuration = status.durationMinutes;
+      runningSessionDuration = status.durationMinutes;
+      settings.sessionDuration = runningSessionDuration;
     }
   } catch (e2) {
     log.info("[settings] Failed to get session status", e2);
@@ -391,6 +397,12 @@ async function init(): Promise<void> {
 
   window.api.onSettingsChanged((newSettings: AppSettings) => {
     settings = newSettings;
+    // If a session is actively running, keep the running duration visible
+    // in the dropdown — the push carries the stored (disk) sessionDuration,
+    // not the live session duration, so we must not overwrite it.
+    if (runningSessionDuration !== null) {
+      settings = { ...settings, sessionDuration: runningSessionDuration };
+    }
     updateSettingsUI(settings);
   });
 }

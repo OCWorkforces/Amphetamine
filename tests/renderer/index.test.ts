@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { AppSettings, SessionStatusResponse } from "../../src/shared/types.js";
+import {
+  STATUS_PREVENTING_SLEEP,
+  STATUS_SLEEP_PREVENTION_OFF,
+} from "../../src/renderer/constants.js";
 
 const mockApi = {
   window: { setHeight: vi.fn() },
@@ -203,7 +207,7 @@ describe("renderer popover (index.ts)", () => {
       await vi.advanceTimersByTimeAsync(0);
 
       expect(getStatusDot()?.classList.contains("active")).toBe(true);
-      expect(getStatusText()).toBe("Preventing Sleep");
+      expect(getStatusText()).toBe(STATUS_PREVENTING_SLEEP);
     });
 
     it("shows inactive status when preventSleep is false", async () => {
@@ -220,7 +224,7 @@ describe("renderer popover (index.ts)", () => {
       await vi.advanceTimersByTimeAsync(0);
 
       expect(getStatusDot()?.classList.contains("active")).toBe(false);
-      expect(getStatusText()).toBe("Sleep Prevention Off");
+      expect(getStatusText()).toBe(STATUS_SLEEP_PREVENTION_OFF);
     });
   });
 
@@ -356,7 +360,7 @@ describe("renderer popover (index.ts)", () => {
       await vi.advanceTimersByTimeAsync(0);
 
       // Initially off
-      expect(getStatusText()).toBe("Sleep Prevention Off");
+      expect(getStatusText()).toBe(STATUS_SLEEP_PREVENTION_OFF);
 
       // Simulate push: preventSleep turned on
       const settingsCallback = mockApi.onSettingsChanged.mock.calls[0]![0];
@@ -369,7 +373,7 @@ describe("renderer popover (index.ts)", () => {
       // Wait for rAF
       await vi.advanceTimersByTimeAsync(16);
 
-      expect(getStatusText()).toBe("Preventing Sleep");
+      expect(getStatusText()).toBe(STATUS_PREVENTING_SLEEP);
       expect(getStatusDot()?.classList.contains("active")).toBe(true);
     });
 
@@ -439,7 +443,7 @@ describe("renderer popover (index.ts)", () => {
       await vi.advanceTimersByTimeAsync(16);
 
       expect(getTimerText()).toBe("Timer Indefinitely");
-      expect(getStatusText()).toBe("Sleep Prevention Off");
+      expect(getStatusText()).toBe(STATUS_SLEEP_PREVENTION_OFF);
     });
   });
 

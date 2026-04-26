@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { AppSettings, SessionStatusResponse } from "../../src/shared/types.js";
+import { SAVED_INDICATOR } from "../../src/renderer/settings/constants.js";
 
 const mockApi = {
   window: { setHeight: vi.fn() },
@@ -156,7 +157,7 @@ describe("renderer settings", () => {
       await vi.advanceTimersByTimeAsync(350);
 
       const indicator = document.getElementById("launch-save-indicator");
-      expect(indicator?.textContent).toBe("✓ Saved");
+      expect(indicator?.textContent).toBe(SAVED_INDICATOR);
       expect(indicator?.classList.contains("visible")).toBe(true);
     });
 
@@ -365,6 +366,8 @@ describe("renderer settings", () => {
     });
 
     it("updates duration dropdown when pushed", async () => {
+      mockApi.session.getStatus.mockResolvedValue(null);
+
       vi.resetModules();
       await import("../../src/renderer/settings/index.js");
       document.dispatchEvent(new Event("DOMContentLoaded"));
@@ -373,7 +376,7 @@ describe("renderer settings", () => {
       const select = document.getElementById("session-duration-select") as HTMLSelectElement;
       expect(select.value).toBe("");
 
-      const callback = mockApi.onSettingsChanged.mock.calls[0]![0];
+      const callback = mockApi.onSettingsChanged.mock.calls.at(-1)![0];
       callback({
         ...defaultSettings,
         sessionDuration: 120,
@@ -382,6 +385,36 @@ describe("renderer settings", () => {
 
       expect(select.value).toBe("120");
     });
+    it("preserves running session duration when settings push arrives", async () => {
+      mockApi.session.getStatus.mockResolvedValue({
+        isRunning: true,
+        startedAt: Date.now(),
+        expiresAt: Date.now() + 60 * 60 * 1000,
+        remainingSeconds: 3600,
+        durationMinutes: 60,
+      });
+
+      vi.resetModules();
+      await import("../../src/renderer/settings/index.js");
+      document.dispatchEvent(new Event("DOMContentLoaded"));
+      await vi.advanceTimersByTimeAsync(0);
+
+      const select = document.getElementById("session-duration-select") as HTMLSelectElement;
+      expect(select.value).toBe("60"); // init from running session
+
+      // Simulate a SETTINGS_CHANGED push (e.g., tray toggled preventSleep)
+      // The push carries the stored sessionDuration (null, not the running 60)
+      const callback = mockApi.onSettingsChanged.mock.calls[0]![0];
+      callback({
+        ...defaultSettings,
+        preventSleep: true,
+        sessionDuration: null, // stored value on disk
+      });
+
+      // Dropdown must NOT revert to stored null — running session duration wins
+      expect(select.value).toBe("60");
+    });
+
   });
 
   describe("isSaving guard", () => {

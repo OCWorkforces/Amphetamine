@@ -10,7 +10,16 @@ import log from "electron-log";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { TRAY_ICON_SIZE, TRAY_ICON_COLOR_ACTIVE, TRAY_ICON_COLOR_INACTIVE } from "./constants.js";
+import {
+  ACCELERATOR_QUIT,
+  MENU_ABOUT,
+  MENU_PREVENT_SLEEP,
+  MENU_QUIT,
+  MENU_SETTINGS,
+  TRAY_ICON_COLOR_ACTIVE,
+  TRAY_ICON_COLOR_INACTIVE,
+  TRAY_ICON_SIZE,
+} from "./constants.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 let tray: Tray | null = null;
@@ -121,7 +130,7 @@ nativeTheme.on("updated", onThemeUpdated);
 
     const template: MenuItemConstructorOptions[] = [
       {
-        label: "Prevent Sleep",
+        label: MENU_PREVENT_SLEEP,
         type: "checkbox",
         checked: preventSleep,
         click: () => {
@@ -129,9 +138,9 @@ nativeTheme.on("updated", onThemeUpdated);
         },
       },
       { type: "separator" },
-      { label: "Settings...", click: () => deps.openSettings() },
-      { label: "About Amphetamine", click: () => showAbout() },
-      { label: "Quit", accelerator: "Cmd+Q", click: () => app.quit() },
+      { label: MENU_SETTINGS, click: () => deps.openSettings() },
+      { label: MENU_ABOUT, click: () => showAbout() },
+      { label: MENU_QUIT, accelerator: ACCELERATOR_QUIT, click: () => app.quit() },
     ];
     return Menu.buildFromTemplate(template);
   }

@@ -31,31 +31,42 @@ export interface PackageInfo {
 let packageInfo: PackageInfo | null = null;
 
 /**
+ * Runtime type guard for PackageInfo.
+ * Verifies all required fields are present and have correct types.
+ * Optional fields are validated only when present.
+ */
+function isPackageInfo(value: unknown): value is PackageInfo {
+  if (typeof value !== "object" || value === null) return false;
+  const v = value as Record<string, unknown>;
+  if (typeof v.name !== "string" || v.name.length === 0) return false;
+  if (typeof v.productName !== "string" || v.productName.length === 0) return false;
+  if (typeof v.version !== "string" || v.version.length === 0) return false;
+  if (typeof v.description !== "string") return false;
+  if (typeof v.repository !== "string") return false;
+  if (typeof v.homepage !== "string") return false;
+  if (typeof v.author !== "string") return false;
+  if (v.license !== undefined && typeof v.license !== "string") return false;
+  if (v.main !== undefined && typeof v.main !== "string") return false;
+  return true;
+}
+
+/**
  * Get package.json metadata
  * Loads once on first call, then returns cached value
+ * Throws if package.json is missing or has an invalid shape — this is a build
+ * error, not a runtime-recoverable condition (called once at startup).
  * @returns Readonly package info object
  */
 export function getPackageInfo(): Readonly<PackageInfo> {
   if (!packageInfo) {
-    try {
-      const pkgPath = path.join(app.getAppPath(), "package.json");
-      const pkgContent = readFileSync(pkgPath, "utf-8");
-      packageInfo = JSON.parse(pkgContent) as PackageInfo;
-      log.debug("[PackageInfo] Loaded package.json");
-    } catch (error) {
-      log.error("[PackageInfo] Failed to load package.json:", error);
-      // Return minimal fallback to prevent crashes
-      packageInfo = {
-        name: "amphetamine",
-        productName: "Amphetamine",
-        version: "1.0.0",
-        description:
-          "Amphetamine is a desktop application that helps macOS always stay awake.",
-        repository: "https://github.com/OCWorkforces/Amphetamine",
-        homepage: "https://github.com/OCWorkforces/Amphetamine",
-        author: "OCWorkforces Engineers",
-      };
+    const pkgPath = path.join(app.getAppPath(), "package.json");
+    const pkgContent = readFileSync(pkgPath, "utf-8");
+    const parsed: unknown = JSON.parse(pkgContent);
+    if (!isPackageInfo(parsed)) {
+      throw new Error("Invalid package.json shape");
     }
+    packageInfo = parsed;
+    log.debug("[PackageInfo] Loaded package.json");
   }
 
   // Return frozen object to prevent mutations

@@ -90,59 +90,122 @@ describe("packageInfo", () => {
     expect(mockLogDebug).toHaveBeenCalledWith("[PackageInfo] Loaded package.json");
   });
 
-  describe("fallback on error", () => {
+  describe("throws on invalid shape", () => {
     beforeEach(async () => {
       vi.clearAllMocks();
       vi.resetModules();
+    });
 
+    async function loadModule(): Promise<typeof GetPackageInfoFn> {
+      const mod = await import("../../src/main/utils/packageInfo.js");
+      return mod.getPackageInfo;
+    }
+
+    it("throws when readFileSync throws (propagates fs error)", async () => {
       mockReadFileSync.mockImplementation(() => {
         throw new Error("ENOENT: no such file or directory");
       });
-
-      const mod = await import("../../src/main/utils/packageInfo.js");
-      getPackageInfo = mod.getPackageInfo;
+      const fn = await loadModule();
+      expect(() => fn()).toThrow("ENOENT: no such file or directory");
     });
 
-    it("returns fallback when readFileSync throws", () => {
-      const info = getPackageInfo();
-
-      expect(info.name).toBe("amphetamine");
-      expect(info.version).toBe("1.0.0");
+    it("throws when JSON is malformed (propagates parse error)", async () => {
+      mockReadFileSync.mockReturnValue("{ not valid json");
+      const fn = await loadModule();
+      expect(() => fn()).toThrow();
     });
 
-    it("logs error when readFileSync throws", () => {
-      getPackageInfo();
-
-      expect(mockLogError).toHaveBeenCalledWith(
-        "[PackageInfo] Failed to load package.json:",
-        expect.any(Error),
-      );
+    it("throws 'Invalid package.json shape' when name is missing", async () => {
+      const { name: _omit, ...rest } = MOCK_PKG;
+      void _omit;
+      mockReadFileSync.mockReturnValue(JSON.stringify(rest));
+      const fn = await loadModule();
+      expect(() => fn()).toThrow("Invalid package.json shape");
     });
 
-    it("fallback has all required PackageInfo fields", () => {
-      const info = getPackageInfo();
-
-      expect(info).toHaveProperty("name");
-      expect(info).toHaveProperty("productName");
-      expect(info).toHaveProperty("version");
-      expect(info).toHaveProperty("description");
-      expect(info).toHaveProperty("repository");
-      expect(info).toHaveProperty("homepage");
-      expect(info).toHaveProperty("author");
+    it("throws when name is a number", async () => {
+      mockReadFileSync.mockReturnValue(JSON.stringify({ ...MOCK_PKG, name: 42 }));
+      const fn = await loadModule();
+      expect(() => fn()).toThrow("Invalid package.json shape");
     });
 
-    it("fallback is also frozen", () => {
-      const info = getPackageInfo();
-
-      expect(Object.isFrozen(info)).toBe(true);
+    it("throws when name is empty string", async () => {
+      mockReadFileSync.mockReturnValue(JSON.stringify({ ...MOCK_PKG, name: "" }));
+      const fn = await loadModule();
+      expect(() => fn()).toThrow("Invalid package.json shape");
     });
 
-    it("fallback is cached on subsequent calls", () => {
-      const first = getPackageInfo();
-      const second = getPackageInfo();
+    it("throws when version is missing", async () => {
+      const { version: _omit, ...rest } = MOCK_PKG;
+      void _omit;
+      mockReadFileSync.mockReturnValue(JSON.stringify(rest));
+      const fn = await loadModule();
+      expect(() => fn()).toThrow("Invalid package.json shape");
+    });
 
-      expect(first).toBe(second);
-      expect(mockReadFileSync).toHaveBeenCalledTimes(1);
+    it("throws when productName is missing", async () => {
+      const { productName: _omit, ...rest } = MOCK_PKG;
+      void _omit;
+      mockReadFileSync.mockReturnValue(JSON.stringify(rest));
+      const fn = await loadModule();
+      expect(() => fn()).toThrow("Invalid package.json shape");
+    });
+
+    it("throws when description is missing", async () => {
+      const { description: _omit, ...rest } = MOCK_PKG;
+      void _omit;
+      mockReadFileSync.mockReturnValue(JSON.stringify(rest));
+      const fn = await loadModule();
+      expect(() => fn()).toThrow("Invalid package.json shape");
+    });
+
+    it("throws when repository is missing", async () => {
+      const { repository: _omit, ...rest } = MOCK_PKG;
+      void _omit;
+      mockReadFileSync.mockReturnValue(JSON.stringify(rest));
+      const fn = await loadModule();
+      expect(() => fn()).toThrow("Invalid package.json shape");
+    });
+
+    it("throws when homepage is missing", async () => {
+      const { homepage: _omit, ...rest } = MOCK_PKG;
+      void _omit;
+      mockReadFileSync.mockReturnValue(JSON.stringify(rest));
+      const fn = await loadModule();
+      expect(() => fn()).toThrow("Invalid package.json shape");
+    });
+
+    it("throws when author is missing", async () => {
+      const { author: _omit, ...rest } = MOCK_PKG;
+      void _omit;
+      mockReadFileSync.mockReturnValue(JSON.stringify(rest));
+      const fn = await loadModule();
+      expect(() => fn()).toThrow("Invalid package.json shape");
+    });
+
+    it("throws when license is present but not a string", async () => {
+      mockReadFileSync.mockReturnValue(JSON.stringify({ ...MOCK_PKG, license: 123 }));
+      const fn = await loadModule();
+      expect(() => fn()).toThrow("Invalid package.json shape");
+    });
+
+    it("throws when parsed value is null", async () => {
+      mockReadFileSync.mockReturnValue("null");
+      const fn = await loadModule();
+      expect(() => fn()).toThrow("Invalid package.json shape");
+    });
+
+    it("throws when parsed value is an array", async () => {
+      mockReadFileSync.mockReturnValue("[]");
+      const fn = await loadModule();
+      expect(() => fn()).toThrow("Invalid package.json shape");
+    });
+
+    it("accepts valid input with optional license field", async () => {
+      mockReadFileSync.mockReturnValue(JSON.stringify(MOCK_PKG));
+      const fn = await loadModule();
+      const info = fn();
+      expect(info.license).toBe("MIT");
     });
   });
 });

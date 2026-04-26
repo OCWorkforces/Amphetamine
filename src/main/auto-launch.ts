@@ -9,8 +9,8 @@ export function getAutoLaunchStatus(): boolean {
   try {
     const settings = app.getLoginItemSettings();
     return settings.openAtLogin;
-  } catch (error) {
-    log.error("[auto-launch] Failed to get login item status:", error);
+  } catch (err) {
+    log.error("[auto-launch] Failed to get login item status:", err);
     return false;
   }
 }
@@ -26,8 +26,8 @@ export function setAutoLaunch(enabled: boolean): void {
       openAsHidden: false,
     });
     log.info(`[auto-launch] ${enabled ? "Enabled" : "Disabled"} launch at login`);
-  } catch (error) {
-    log.error("[auto-launch] Failed to set login item:", error);
+  } catch (err) {
+    log.error("[auto-launch] Failed to set login item:", err);
   }
 }
 
