@@ -14,6 +14,8 @@ Electron renderer (web context). Vanilla TypeScript UI with native macOS popover
 | `settings/index.ts`   | Settings form logic, toggle + dropdown        |
 | `settings/index.html` | Settings HTML template                        |
 | `settings/styles.css` | Settings-specific styles (toggles + dropdown) |
+| `constants.ts`        | Popover UI status strings                     |
+| `settings/constants.ts` | Settings UI strings (shortcut + save indicator) |
 
 ## MAIN POPOVER UI
 
@@ -41,7 +43,7 @@ Separate renderer entry at `settings/`. **Five controls**: Launch at Login (togg
 - Per-indicator save timers (Map<string, timeout>) for independent fade timing
 - `errorMessage` module var holds inline error text (set via `setErrorMessage()`)
 - `isFocused()` guard prevents battery input sync from overwriting mid-edit
-- Per-indicator save timers (Map<string, timeout>) for independent fade timing
+- `runningSessionDuration` module var: set during init from `session.getStatus().durationMinutes` when a session is running; preserved in `onSettingsChanged` callback to avoid overwriting an active session's duration; cleared when user explicitly picks a new duration from the dropdown
 - Dropdown options: Indefinitely, 15min, 30min, 1h, 2h, 4h
 - Dropdown change starts session AND sets `preventSleep: true`
 - Keyboard Shortcut: click-to-record button, keyboard capture via `keydown` (capture phase), `keyEventToAccelerator()` converts to Electron accelerator string, `formatAcceleratorForDisplay()` for display (e.g. ⌘⇧A), Escape cancels recording
@@ -59,13 +61,6 @@ Separate renderer entry at `settings/`. **Five controls**: Launch at Login (togg
 - `resizeToContent()` measures `#app` height and sets window height
 - Error state: `statusError` flag + `statusErrorEl` ref shows "Status unavailable" text on `refreshSessionStatus()` failure
 
-- No virtual DOM, direct `innerHTML` assignment
-- DOM element refs (`statusDotEl`, `statusTextEl`, `timerTextEl`) cached after first `render()`, not re-queried on each update
-- `updateStatusUI()` wraps DOM writes in `requestAnimationFrame` for batched updates
-- Session status arrives via push subscription, no polling
-- Individual `addEventListener` per button/toggle/dropdown
-- `render()` function rebuilds entire DOM on each call
-- `resizeToContent()` measures `#app` height and sets window height
 
 ## API ACCESS
 
@@ -98,16 +93,29 @@ window.api.onSessionStatusUpdate(callback); // → () => void (unsubscribe)
 - `.visually-hidden`: position:absolute, 1×1px, overflow:hidden (for accessible SVG icon labels)
 - `:focus-visible` outlines on all interactive elements (`outline: 2px solid var(--accent); outline-offset: 2px`)
 
-- CSS variables in `:root` for theming
-- Dark mode: `@media (prefers-color-scheme: dark)`
-- Native fonts: `-apple-system, BlinkMacSystemFont, 'SF Pro Text'`
-- Backdrop blur: `blur(20px) saturate(180%)`
-- Reduced motion: `@media (prefers-reduced-motion: reduce)` disables transitions
+
 
 ## SECURITY
 
 - CSP in both HTML files: `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:`
 - Settings error messages set via `textContent` (prevents XSS)
+
+## UI STRINGS
+
+All user-facing strings extracted to constants modules — never hardcode in renderer files.
+
+**`src/renderer/constants.ts`** (popover):
+- `STATUS_PREVENTING_SLEEP = "Preventing Sleep"` — popover active status label
+- `STATUS_SLEEP_PREVENTION_OFF = "Sleep Prevention Off"` — popover inactive status label
+
+**`src/renderer/settings/constants.ts`** (settings window):
+- `SHORTCUT_PLACEHOLDER = "Click to record"` — shortcut button default text
+- `SHORTCUT_RECORDING = "Press keys…"` — shortcut button while capturing keys
+- `SAVED_INDICATOR = "✓ Saved"` — transient save confirmation indicator
+
+## ANTI-PATTERNS
+
+- Never hardcode status/UI strings in renderer files — use `src/renderer/constants.ts` and `src/renderer/settings/constants.ts`
 
 ## TESTS
 
