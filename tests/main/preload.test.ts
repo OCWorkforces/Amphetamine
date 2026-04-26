@@ -112,7 +112,7 @@ describe("preload", () => {
     expect(mockOn).toHaveBeenCalledWith(IPC_CHANNELS.SETTINGS_CHANGED, expect.any(Function));
 
     // Simulate settings push from main process
-    const listener = mockOn.mock.calls[0][1];
+    const listener = mockOn.mock.calls[0]![1];
     const testSettings = { preventSleep: true, launchAtLogin: false, sessionDuration: null };
     listener({}, testSettings);
     expect(callback).toHaveBeenCalledWith(testSettings);
@@ -133,7 +133,7 @@ describe("preload", () => {
     const sessionCall = calls.find(
       (c: unknown[]) => c[0] === IPC_CHANNELS.SESSION_STATUS_UPDATE,
     );
-    const listener = sessionCall[1];
+    const listener = sessionCall![1];
     const testStatus = {
       isRunning: true,
       startedAt: 1000,
@@ -165,7 +165,7 @@ describe("preload", () => {
     expect(mockOn).toHaveBeenCalledWith(IPC_CHANNELS.AUTO_UPDATER_STATUS, expect.any(Function));
 
     // Simulate status push from main process
-    const listener = mockOn.mock.calls[0][1];
+    const listener = mockOn.mock.calls[0]![1];
     const testStatus = {
       status: "available",
       info: { version: "2.0.0", releaseDate: "2025-01-01" },

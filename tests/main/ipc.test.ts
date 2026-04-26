@@ -7,84 +7,84 @@ describe("validateSender", () => {
   it("accepts file:// origin for app index.html (exact match)", () => {
     const event = {
       senderFrame: { url: "file:///path/to/app.asar/index.html" },
-    } as IpcMainInvokeEvent;
+    } as unknown as IpcMainEvent;
     expect(validateSender(event)).toBe(true);
   });
 
   it("accepts file:// origin for settings/index.html (exact match)", () => {
     const event = {
       senderFrame: { url: "file:///path/to/app.asar/settings/index.html" },
-    } as IpcMainInvokeEvent;
+    } as unknown as IpcMainEvent;
     expect(validateSender(event)).toBe(true);
   });
 
   it("rejects file:// origin with path prefix attack (substring bypass)", () => {
     const event = {
       senderFrame: { url: "file:///path/to/app.asar.evil/index.html" },
-    } as IpcMainInvokeEvent;
+    } as unknown as IpcMainEvent;
     expect(validateSender(event)).toBe(false);
   });
 
   it("rejects file:// origin to non-allowlisted path within bundle", () => {
     const event = {
       senderFrame: { url: "file:///path/to/app.asar/src/renderer/index.html" },
-    } as IpcMainInvokeEvent;
+    } as unknown as IpcMainEvent;
     expect(validateSender(event)).toBe(false);
   });
 
   it("accepts http://localhost:5173 origin (dev server)", () => {
     const event = {
       senderFrame: { url: "http://localhost:5173/" },
-    } as IpcMainInvokeEvent;
+    } as unknown as IpcMainEvent;
     expect(validateSender(event)).toBe(true);
   });
 
   it("accepts http://127.0.0.1:5173 origin (dev server)", () => {
     const event = {
       senderFrame: { url: "http://127.0.0.1:5173/index.html" },
-    } as IpcMainInvokeEvent;
+    } as unknown as IpcMainEvent;
     expect(validateSender(event)).toBe(true);
   });
 
   it("rejects file:// origin outside app bundle", () => {
     const event = {
       senderFrame: { url: "file:///tmp/malicious.html" },
-    } as IpcMainInvokeEvent;
+    } as unknown as IpcMainEvent;
     expect(validateSender(event)).toBe(false);
   });
 
   it("rejects malicious origin", () => {
     const event = {
       senderFrame: { url: "https://evil.com/" },
-    } as IpcMainInvokeEvent;
+    } as unknown as IpcMainEvent;
     expect(validateSender(event)).toBe(false);
   });
 
   it("rejects empty sender URL", () => {
     const event = {
       senderFrame: { url: "" },
-    } as IpcMainInvokeEvent;
+    } as unknown as IpcMainEvent;
     expect(validateSender(event)).toBe(false);
   });
 
   it("rejects undefined sender frame", () => {
     const event = {
       senderFrame: undefined,
-    } as IpcMainInvokeEvent;
+    } as unknown as IpcMainEvent;
     expect(validateSender(event)).toBe(false);
   });
 
   it("rejects non-allowlisted port", () => {
     const event = {
       senderFrame: { url: "http://localhost:3000/" },
-    } as IpcMainInvokeEvent;
+    } as unknown as IpcMainEvent;
     expect(validateSender(event)).toBe(false);
   });
 
   it("rejects similar but different domain", () => {
     const event = {
       senderFrame: { url: "http://localhost.com:5173/" },
-    } as IpcMainInvokeEvent;
+    } as unknown as IpcMainEvent;
     expect(validateSender(event)).toBe(false);
   });
 });

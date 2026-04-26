@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { AppSettings, SessionStatusResponse } from "../../src/shared/types.js";
+import { DEFAULT_SETTINGS } from "../../src/shared/types.js";
 import { SAVED_INDICATOR } from "../../src/renderer/settings/constants.js";
 
 const mockApi = {
@@ -15,7 +16,7 @@ const mockApi = {
     cancel: vi.fn(),
     getStatus: vi.fn<() => Promise<SessionStatusResponse | null>>(),
   },
-  onSettingsChanged: vi.fn(() => vi.fn()),
+  onSettingsChanged: vi.fn<(_cb: (s: AppSettings) => void) => () => void>(() => vi.fn()),
   autoUpdater: {
     checkForUpdates: vi.fn(),
     onStatus: vi.fn(() => vi.fn()),
@@ -37,6 +38,7 @@ function setupDom(): void {
 
 describe("renderer settings", () => {
   const defaultSettings: AppSettings = {
+    ...DEFAULT_SETTINGS,
     launchAtLogin: false,
     preventSleep: false,
     sessionDuration: null,
@@ -452,7 +454,7 @@ describe("renderer settings", () => {
       expect(mockApi.settings.set).toHaveBeenCalledTimes(1);
 
       // Resolve the pending save
-      resolveSet?.({ ...defaultSettings, launchAtLogin: true });
+      (resolveSet as ((v: AppSettings) => void) | null)?.({ ...defaultSettings, launchAtLogin: true });
       await vi.advanceTimersByTimeAsync(0);
     });
   });

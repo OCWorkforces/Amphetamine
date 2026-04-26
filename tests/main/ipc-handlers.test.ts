@@ -9,7 +9,7 @@ const mockIpcMainOn = vi.fn();
 const mockBrowserWindowGetAllWindows = vi.fn().mockReturnValue([]);
 
 vi.mock("electron", async (importOriginal) => {
-  const actual = await importOriginal();
+  const actual = (await importOriginal()) as Record<string, unknown>;
   return {
     ...actual,
     app: {
@@ -72,7 +72,7 @@ vi.mock("../../src/main/session-timer.js", () => ({
 }));
 
 describe("ipc-handlers", () => {
-  let registerIpcHandlers: (_win: { setSize?: (_w: number, _h: number, _animate?: boolean) => void }) => void;
+  let registerIpcHandlers: (_win: unknown) => void;
   let registeredHandlers: Map<string, (..._args: unknown[]) => unknown>;
 
   beforeEach(async () => {
@@ -104,7 +104,7 @@ describe("ipc-handlers", () => {
 
     // Import the module
     const mod = await import("../../src/main/ipc.js");
-    registerIpcHandlers = mod.registerIpcHandlers;
+    registerIpcHandlers = mod.registerIpcHandlers as unknown as (_win: unknown) => void;
   });
 
   describe("WINDOW_SET_HEIGHT handler", () => {
@@ -120,7 +120,7 @@ describe("ipc-handlers", () => {
       };
 
       // Height below minimum (220)
-      handler(mockEvent, 100);
+      handler!(mockEvent, 100);
 
       expect(mockWindow.setSize).toHaveBeenCalledWith(360, 220, true);
     });
@@ -135,7 +135,7 @@ describe("ipc-handlers", () => {
       };
 
       // Height above maximum (480)
-      handler(mockEvent, 1000);
+      handler!(mockEvent, 1000);
 
       expect(mockWindow.setSize).toHaveBeenCalledWith(360, 480, true);
     });
@@ -149,7 +149,7 @@ describe("ipc-handlers", () => {
         senderFrame: { url: "file:///mock/app/index.html" },
       };
 
-      handler(mockEvent, 350);
+      handler!(mockEvent, 350);
 
       expect(mockWindow.setSize).toHaveBeenCalledWith(360, 350, true);
     });
@@ -163,8 +163,8 @@ describe("ipc-handlers", () => {
         senderFrame: { url: "file:///mock/app/index.html" },
       };
 
-      handler(mockEvent, -50);
-      handler(mockEvent, 0);
+      handler!(mockEvent, -50);
+      handler!(mockEvent, 0);
 
       expect(mockWindow.setSize).not.toHaveBeenCalled();
     });
@@ -182,7 +182,7 @@ describe("ipc-handlers", () => {
         senderFrame: { url: "file:///mock/app/index.html" },
       };
 
-      const result = await handler(mockEvent);
+      const result = await handler!(mockEvent);
       expect(result).toBe("1.0.0");
     });
   });
@@ -200,7 +200,7 @@ describe("ipc-handlers", () => {
         senderFrame: { url: "file:///mock/app/index.html" },
       };
 
-      const result = await handler(mockEvent);
+      const result = await handler!(mockEvent);
       expect(result).toEqual(mockSettings);
     });
   });
@@ -217,7 +217,7 @@ describe("ipc-handlers", () => {
 
       mockUpdateSettings.mockReturnValue({ ...DEFAULT_SETTINGS, preventSleep: true });
 
-      await handler(mockEvent, { preventSleep: true });
+      await handler!(mockEvent, { preventSleep: true });
 
       expect(mockUpdateSettings).toHaveBeenCalledWith({ preventSleep: true });
     });
@@ -233,7 +233,7 @@ describe("ipc-handlers", () => {
         senderFrame: { url: "file:///mock/app/index.html" },
       };
 
-      await handler(mockEvent);
+      await handler!(mockEvent);
 
       expect(mockCreateSettingsWindow).toHaveBeenCalledTimes(1);
     });
@@ -250,7 +250,7 @@ describe("ipc-handlers", () => {
 
       const handler = registeredHandlers.get(IPC_CHANNELS.SESSION_START);
 
-      await handler(validEvent, { durationMinutes: null });
+      await handler!(validEvent, { durationMinutes: null });
 
       expect(mockStartSession).toHaveBeenCalledWith(null);
     });
@@ -261,7 +261,7 @@ describe("ipc-handlers", () => {
 
       const handler = registeredHandlers.get(IPC_CHANNELS.SESSION_CANCEL);
 
-      await handler(validEvent);
+      await handler!(validEvent);
 
       expect(mockCancelSession).toHaveBeenCalledTimes(1);
     });
@@ -272,7 +272,7 @@ describe("ipc-handlers", () => {
 
       const handler = registeredHandlers.get(IPC_CHANNELS.SESSION_CANCEL);
 
-      await handler(validEvent);
+      await handler!(validEvent);
 
       expect(mockCancelSession).toHaveBeenCalledTimes(1);
     });
@@ -291,7 +291,7 @@ describe("ipc-handlers", () => {
 
       const handler = registeredHandlers.get(IPC_CHANNELS.SESSION_STATUS);
 
-      const result = await handler(validEvent);
+      const result = await handler!(validEvent);
       expect(result).toEqual({
         isRunning: false,
         startedAt: null,

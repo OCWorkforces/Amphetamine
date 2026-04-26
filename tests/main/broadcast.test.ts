@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { PushChannel, IpcResponse } from "../../src/shared/types.js";
-import { IPC_CHANNELS } from "../../src/shared/types.js";
+import { IPC_CHANNELS, DEFAULT_SETTINGS } from "../../src/shared/types.js";
 
 const { mockGetAllWindows } = vi.hoisted(() => ({
   mockGetAllWindows: vi.fn().mockReturnValue([]),
@@ -43,12 +43,14 @@ describe("broadcastToWindows", () => {
     ]);
 
     broadcastToWindows(IPC_CHANNELS.SETTINGS_CHANGED, {
+      ...DEFAULT_SETTINGS,
       launchAtLogin: false,
       preventSleep: true,
       sessionDuration: null,
     });
 
     expect(mockSend).toHaveBeenCalledWith("settings:changed", {
+      ...DEFAULT_SETTINGS,
       launchAtLogin: false,
       preventSleep: true,
       sessionDuration: null,
