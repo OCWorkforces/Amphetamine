@@ -53,12 +53,18 @@ export type SessionStatusResponse =
       durationMinutes: null;
     };
 
-/** Response shape for SESSION_START channel */
-export interface SessionStartResponse {
-  startedAt: number;
-  durationMinutes: number | null;
-  expiresAt: number | null;
-}
+/** Response shape for SESSION_START channel — discriminated union */
+export type SessionStartResponse =
+  | {
+      ok: true;
+      startedAt: number;
+      durationMinutes: number | null;
+      expiresAt: number | null;
+    }
+  | {
+      ok: false;
+      reason: "invalid-duration" | "rejected";
+    };
 
 /** IPC Request/Response type map for type-safe IPC */
 export type IpcChannelMap = {

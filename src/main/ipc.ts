@@ -133,7 +133,7 @@ function registerSettingsIpc(): void {
 function registerSessionIpc(): void {
   typedHandle(IPC_CHANNELS.SESSION_START, async (event, request) => {
     if (!validateSender(event)) {
-      return { startedAt: 0, durationMinutes: null, expiresAt: null };
+      return { ok: false, reason: "rejected" };
     }
     if (request.durationMinutes !== null && request.durationMinutes !== undefined) {
       if (
@@ -142,16 +142,17 @@ function registerSessionIpc(): void {
         !Number.isInteger(request.durationMinutes)
       ) {
         log.warn("[ipc] SESSION_START rejected invalid durationMinutes:", request.durationMinutes);
-        return { startedAt: 0, durationMinutes: null, expiresAt: null };
+        return { ok: false, reason: "invalid-duration" };
       }
     }
     const result = sessionTimer.startSession(request.durationMinutes);
     // startSession() guarantees non-null startedAt; SessionState type is widened for getStatus() reuse.
     if (result.startedAt === null) {
       log.error("[ipc] SESSION_START: startSession returned null startedAt (invariant violation)");
-      return { startedAt: 0, durationMinutes: null, expiresAt: null };
+      return { ok: false, reason: "rejected" };
     }
     return {
+      ok: true,
       startedAt: result.startedAt,
       durationMinutes: result.durationMinutes,
       expiresAt: result.expiresAt,

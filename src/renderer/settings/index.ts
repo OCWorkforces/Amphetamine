@@ -240,7 +240,22 @@ function attachFormListeners(): void {
       // User explicitly chose a new duration — stop overriding from running session
       runningSessionDuration = null;
       settings.sessionDuration = duration;
-      void window.api.session.start(duration);
+      void (async () => {
+        try {
+          const resp = await window.api.session.start(duration);
+          if (resp.ok) {
+            setErrorMessage(null);
+          } else {
+            const message =
+              resp.reason === "invalid-duration"
+                ? "Invalid session duration"
+                : "Failed to start session";
+            setErrorMessage(message);
+          }
+        } catch {
+          setErrorMessage("Failed to start session");
+        }
+      })();
       void saveSettings({ sessionDuration: duration, preventSleep: true }, "duration-save-indicator");
     });
   }

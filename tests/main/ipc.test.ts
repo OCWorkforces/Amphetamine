@@ -232,42 +232,78 @@ describe("ipc additional coverage", () => {
   });
 
   describe("SESSION_START with invalid durationMinutes", () => {
-    const emptyResponse = { startedAt: 0, durationMinutes: null, expiresAt: null };
+    const invalidDurationResponse = { ok: false, reason: "invalid-duration" } as const;
 
-    it("negative number: returns empty response and does not start session", async () => {
+    it("negative number: returns invalid-duration failure and does not start session", async () => {
       const mockWindow = { setSize: vi.fn() };
       registerIpcHandlers(mockWindow);
       const handler = registeredHandlers.get(IPC_CHANNELS.SESSION_START);
       const result = await handler!(validEvent, { durationMinutes: -5 });
-      expect(result).toEqual(emptyResponse);
+      expect(result).toEqual(invalidDurationResponse);
       expect(mockStartSession).not.toHaveBeenCalled();
     });
 
-    it("NaN: returns empty response and does not start session", async () => {
+    it("NaN: returns invalid-duration failure and does not start session", async () => {
       const mockWindow = { setSize: vi.fn() };
       registerIpcHandlers(mockWindow);
       const handler = registeredHandlers.get(IPC_CHANNELS.SESSION_START);
       const result = await handler!(validEvent, { durationMinutes: NaN });
-      expect(result).toEqual(emptyResponse);
+      expect(result).toEqual(invalidDurationResponse);
       expect(mockStartSession).not.toHaveBeenCalled();
     });
 
-    it("zero: returns empty response and does not start session", async () => {
+    it("zero: returns invalid-duration failure and does not start session", async () => {
       const mockWindow = { setSize: vi.fn() };
       registerIpcHandlers(mockWindow);
       const handler = registeredHandlers.get(IPC_CHANNELS.SESSION_START);
       const result = await handler!(validEvent, { durationMinutes: 0 });
-      expect(result).toEqual(emptyResponse);
+      expect(result).toEqual(invalidDurationResponse);
       expect(mockStartSession).not.toHaveBeenCalled();
     });
 
-    it("non-integer (e.g. 1.5): returns empty response and does not start session", async () => {
+    it("non-integer (e.g. 1.5): returns invalid-duration failure and does not start session", async () => {
       const mockWindow = { setSize: vi.fn() };
       registerIpcHandlers(mockWindow);
       const handler = registeredHandlers.get(IPC_CHANNELS.SESSION_START);
       const result = await handler!(validEvent, { durationMinutes: 1.5 });
-      expect(result).toEqual(emptyResponse);
+      expect(result).toEqual(invalidDurationResponse);
       expect(mockStartSession).not.toHaveBeenCalled();
+    });
+
+    it("invalid sender: returns rejected failure", async () => {
+      const mockWindow = { setSize: vi.fn() };
+      registerIpcHandlers(mockWindow);
+      const handler = registeredHandlers.get(IPC_CHANNELS.SESSION_START);
+      const result = await handler!(invalidEvent, { durationMinutes: 30 });
+      expect(result).toEqual({ ok: false, reason: "rejected" });
+      expect(mockStartSession).not.toHaveBeenCalled();
+    });
+
+    it("startSession returns null startedAt: returns rejected failure (invariant violation)", async () => {
+      mockStartSession.mockReturnValueOnce({
+        isRunning: false,
+        startedAt: null,
+        expiresAt: null,
+        durationMinutes: null,
+      });
+      const mockWindow = { setSize: vi.fn() };
+      registerIpcHandlers(mockWindow);
+      const handler = registeredHandlers.get(IPC_CHANNELS.SESSION_START);
+      const result = await handler!(validEvent, { durationMinutes: 30 });
+      expect(result).toEqual({ ok: false, reason: "rejected" });
+    });
+
+    it("valid duration: returns ok success with payload", async () => {
+      const mockWindow = { setSize: vi.fn() };
+      registerIpcHandlers(mockWindow);
+      const handler = registeredHandlers.get(IPC_CHANNELS.SESSION_START);
+      const result = await handler!(validEvent, { durationMinutes: 30 });
+      expect(result).toMatchObject({
+        ok: true,
+        startedAt: 1_700_000_000_000,
+        durationMinutes: null,
+        expiresAt: null,
+      });
     });
   });
 
