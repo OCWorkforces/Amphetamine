@@ -1,7 +1,31 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type { IpcRendererEvent } from "electron";
 import { IPC_CHANNELS } from "../shared/types.js";
-import type { AppSettings, IpcRequest, IpcResponse } from "../shared/types.js";
+import type {
+  AppSettings,
+  IpcChannel,
+  IpcChannelMap,
+  IpcRequest,
+  IpcResponse,
+} from "../shared/types.js";
+
+/**
+ * Type-safe wrapper around `ipcRenderer.invoke`.
+ *
+ * Channels whose request type is `void` or `undefined` accept zero arguments;
+ * all others require a single payload of the exact request type. The single
+ * cast on the returned Promise is the boundary cast — Electron's typings for
+ * `invoke` return `Promise<unknown>` and we narrow to the channel-specific
+ * response type from `IpcChannelMap`.
+ */
+function invoke<K extends IpcChannel>(
+  channel: K,
+  ...args: IpcChannelMap[K]["request"] extends void | undefined
+    ? []
+    : [IpcChannelMap[K]["request"]]
+): Promise<IpcChannelMap[K]["response"]> {
+  return ipcRenderer.invoke(channel, ...args) as Promise<IpcChannelMap[K]["response"]>;
+}
 
 const api = {
   window: {
@@ -12,46 +36,33 @@ const api = {
 
   app: {
     getVersion: (): Promise<IpcResponse<typeof IPC_CHANNELS.APP_GET_VERSION>> =>
-      ipcRenderer.invoke(IPC_CHANNELS.APP_GET_VERSION),
-    quit: () =>
-      ipcRenderer.invoke(
-        IPC_CHANNELS.APP_QUIT,
-        undefined as IpcRequest<typeof IPC_CHANNELS.APP_QUIT>,
-      ),
+      invoke(IPC_CHANNELS.APP_GET_VERSION),
+    quit: (): Promise<IpcResponse<typeof IPC_CHANNELS.APP_QUIT>> =>
+      invoke(IPC_CHANNELS.APP_QUIT),
   },
 
   settings: {
     get: (): Promise<IpcResponse<typeof IPC_CHANNELS.SETTINGS_GET>> =>
-      ipcRenderer.invoke(IPC_CHANNELS.SETTINGS_GET),
+      invoke(IPC_CHANNELS.SETTINGS_GET),
 
     set: (
       partial: IpcRequest<typeof IPC_CHANNELS.SETTINGS_SET>,
     ): Promise<IpcResponse<typeof IPC_CHANNELS.SETTINGS_SET>> =>
-      ipcRenderer.invoke(IPC_CHANNELS.SETTINGS_SET, partial),
+      invoke(IPC_CHANNELS.SETTINGS_SET, partial),
 
-    open: () =>
-      ipcRenderer.invoke(
-        IPC_CHANNELS.SETTINGS_OPEN,
-        undefined as IpcRequest<typeof IPC_CHANNELS.SETTINGS_OPEN>,
-      ),
+    open: (): Promise<IpcResponse<typeof IPC_CHANNELS.SETTINGS_OPEN>> =>
+      invoke(IPC_CHANNELS.SETTINGS_OPEN),
   },
 
   session: {
-    start: (durationMinutes: number | null) =>
-      ipcRenderer.invoke(
-        IPC_CHANNELS.SESSION_START,
-        { durationMinutes } as IpcRequest<typeof IPC_CHANNELS.SESSION_START>,
-      ),
-    cancel: () =>
-      ipcRenderer.invoke(
-        IPC_CHANNELS.SESSION_CANCEL,
-        undefined as IpcRequest<typeof IPC_CHANNELS.SESSION_CANCEL>,
-      ),
-    getStatus: () =>
-      ipcRenderer.invoke(
-        IPC_CHANNELS.SESSION_STATUS,
-        undefined as IpcRequest<typeof IPC_CHANNELS.SESSION_STATUS>,
-      ),
+    start: (
+      durationMinutes: number | null,
+    ): Promise<IpcResponse<typeof IPC_CHANNELS.SESSION_START>> =>
+      invoke(IPC_CHANNELS.SESSION_START, { durationMinutes }),
+    cancel: (): Promise<IpcResponse<typeof IPC_CHANNELS.SESSION_CANCEL>> =>
+      invoke(IPC_CHANNELS.SESSION_CANCEL),
+    getStatus: (): Promise<IpcResponse<typeof IPC_CHANNELS.SESSION_STATUS>> =>
+      invoke(IPC_CHANNELS.SESSION_STATUS),
   },
 
   onSettingsChanged: (callback: (_settings: AppSettings) => void) => {
@@ -80,11 +91,8 @@ const api = {
   },
 
   autoUpdater: {
-    checkForUpdates: () =>
-      ipcRenderer.invoke(
-        IPC_CHANNELS.AUTO_UPDATER_CHECK,
-        undefined as IpcRequest<typeof IPC_CHANNELS.AUTO_UPDATER_CHECK>,
-      ),
+    checkForUpdates: (): Promise<IpcResponse<typeof IPC_CHANNELS.AUTO_UPDATER_CHECK>> =>
+      invoke(IPC_CHANNELS.AUTO_UPDATER_CHECK),
     onStatus: (callback: (_data: IpcResponse<typeof IPC_CHANNELS.AUTO_UPDATER_STATUS>) => void) => {
       const listener = (_event: IpcRendererEvent, data: IpcResponse<typeof IPC_CHANNELS.AUTO_UPDATER_STATUS>) => {
         callback(data);
@@ -101,3 +109,36 @@ const api = {
 contextBridge.exposeInMainWorld("api", api);
 
 export type Api = typeof api;
+
+/**
+ * Compile-time exhaustiveness check: every channel in `IPC_CHANNELS` must be
+ * wired through `window.api`. If a new channel is added to `IpcChannelMap`
+ * but not listed in `WiredChannels` below, `_UnwiredChannels` becomes a
+ * non-`never` union and `_ExhaustivenessCheck` resolves to a tuple type that
+ * cannot be assigned `true`, failing the build.
+ *
+ * The `[_UnwiredChannels] extends [never]` tuple wrapper is required to
+ * suppress distributive-conditional behavior over union members.
+ */
+type WiredChannels =
+  | typeof IPC_CHANNELS.WINDOW_SET_HEIGHT
+  | typeof IPC_CHANNELS.APP_GET_VERSION
+  | typeof IPC_CHANNELS.APP_QUIT
+  | typeof IPC_CHANNELS.SETTINGS_GET
+  | typeof IPC_CHANNELS.SETTINGS_SET
+  | typeof IPC_CHANNELS.SETTINGS_OPEN
+  | typeof IPC_CHANNELS.SESSION_START
+  | typeof IPC_CHANNELS.SESSION_CANCEL
+  | typeof IPC_CHANNELS.SESSION_STATUS
+  | typeof IPC_CHANNELS.SESSION_STATUS_UPDATE
+  | typeof IPC_CHANNELS.SETTINGS_CHANGED
+  | typeof IPC_CHANNELS.AUTO_UPDATER_CHECK
+  | typeof IPC_CHANNELS.AUTO_UPDATER_STATUS;
+
+type _UnwiredChannels = Exclude<IpcChannel, WiredChannels>;
+type _ExhaustivenessCheck = [_UnwiredChannels] extends [never]
+  ? true
+  : ["unwired channels:", _UnwiredChannels];
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const _check: _ExhaustivenessCheck = true;
+void _check;

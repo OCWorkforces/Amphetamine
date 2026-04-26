@@ -68,7 +68,7 @@ describe("preload", () => {
   it("settings.open calls ipcRenderer.invoke with correct channel", () => {
     api.settings.open();
 
-    expect(mockInvoke).toHaveBeenCalledWith(IPC_CHANNELS.SETTINGS_OPEN, undefined);
+    expect(mockInvoke).toHaveBeenCalledWith(IPC_CHANNELS.SETTINGS_OPEN);
   });
 
   it("session.start calls ipcRenderer.invoke with durationMinutes", () => {
@@ -90,19 +90,19 @@ describe("preload", () => {
   it("session.cancel calls ipcRenderer.invoke with correct channel", () => {
     api.session.cancel();
 
-    expect(mockInvoke).toHaveBeenCalledWith(IPC_CHANNELS.SESSION_CANCEL, undefined);
+    expect(mockInvoke).toHaveBeenCalledWith(IPC_CHANNELS.SESSION_CANCEL);
   });
 
   it("session.getStatus calls ipcRenderer.invoke with correct channel", () => {
     api.session.getStatus();
 
-    expect(mockInvoke).toHaveBeenCalledWith(IPC_CHANNELS.SESSION_STATUS, undefined);
+    expect(mockInvoke).toHaveBeenCalledWith(IPC_CHANNELS.SESSION_STATUS);
   });
 
   it("quit calls ipcRenderer.invoke with correct channel", () => {
     api.app.quit();
 
-    expect(mockInvoke).toHaveBeenCalledWith(IPC_CHANNELS.APP_QUIT, undefined);
+    expect(mockInvoke).toHaveBeenCalledWith(IPC_CHANNELS.APP_QUIT);
   });
 
   it("onSettingsChanged registers listener and returns unsubscribe function", () => {
@@ -155,7 +155,7 @@ describe("preload", () => {
   it("autoUpdater.checkForUpdates calls ipcRenderer.invoke with correct channel", () => {
     api.autoUpdater.checkForUpdates();
 
-    expect(mockInvoke).toHaveBeenCalledWith(IPC_CHANNELS.AUTO_UPDATER_CHECK, undefined);
+    expect(mockInvoke).toHaveBeenCalledWith(IPC_CHANNELS.AUTO_UPDATER_CHECK);
   });
 
   it("autoUpdater.onStatus registers listener and returns unsubscribe function", () => {

@@ -3,7 +3,7 @@ import type { AppSettings } from "../shared/types.js";
 import { DEFAULT_SETTINGS } from "../shared/types.js";
 import { STATUS_PREVENTING_SLEEP, STATUS_SLEEP_PREVENTION_OFF } from "./constants.js";
 
-type SessionStatus = Awaited<ReturnType<typeof window.api.session.getStatus>>;
+type SessionStatus = Awaited<ReturnType<typeof window.api.session.getStatus>> | null;
 
 const MIN_H = 180;
 const MAX_H = 420;
@@ -40,15 +40,7 @@ function formatTimerLabel(): string {
     return `${TIMER_ICON_SVG} Indefinitely`;
   }
 
-  const computedRemaining =
-    sessionStatus.remainingSeconds ??
-    (sessionStatus.expiresAt === null
-      ? null
-      : Math.max(0, Math.floor((sessionStatus.expiresAt - performance.now()) / 1000)));
-
-  if (computedRemaining === null) {
-    return `${TIMER_ICON_SVG} Indefinitely`;
-  }
+  const computedRemaining = sessionStatus.remainingSeconds;
 
   const totalSeconds = Math.max(0, Math.ceil(computedRemaining));
   const hours = Math.floor(totalSeconds / 3600);
