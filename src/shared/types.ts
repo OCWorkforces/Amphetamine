@@ -15,8 +15,31 @@ export const IPC_CHANNELS = {
   AUTO_UPDATER_STATUS: "auto-updater:status",
 } as const;
 
-/** Response shape for SESSION_STATUS and SESSION_STATUS_UPDATE channels */
+/**
+ * Canonical session status payload.
+ *
+ * Used as the response shape for both the `SESSION_STATUS` IPC request/response
+ * channel and the `SESSION_STATUS_UPDATE` push channel — renderers should treat
+ * these payloads as interchangeable.
+ *
+ * Field semantics:
+ * - `isRunning` — discriminant flag indicating whether a session is active.
+ *   - When `false`: all other fields (`startedAt`, `expiresAt`,
+ *     `remainingSeconds`, `durationMinutes`) are `null`.
+ *   - When `true`: `startedAt` is always set (non-null). `durationMinutes`,
+ *     `expiresAt`, and `remainingSeconds` are `null` for indefinite sessions
+ *     (no scheduled end time) and non-null for timed sessions.
+ * - `startedAt` — epoch ms when the active session began, or `null` when idle.
+ * - `expiresAt` — epoch ms when the active timed session will expire; `null`
+ *   when idle or for indefinite sessions.
+ * - `remainingSeconds` — seconds remaining for the active timed session.
+ *   `null` for indefinite sessions (no end). `0` when the session has
+ *   reached/passed its expiry but has not yet been reaped.
+ * - `durationMinutes` — originally requested duration in minutes for a timed
+ *   session; `null` when idle or for indefinite sessions.
+ */
 export interface SessionStatusResponse {
+  /** Discriminant: true when a session is currently active. */
   isRunning: boolean;
   startedAt: number | null;
   expiresAt: number | null;
@@ -59,10 +82,22 @@ export type IpcChannelMap = {
   };
   [IPC_CHANNELS.SESSION_STATUS]: {
     request: undefined;
+    /**
+     * Transitional safety: `| null` is retained for one release while
+     * historical callers may still observe legacy null payloads.
+     * Main process now always returns a `SessionStatusResponse`.
+     * Will be tightened to non-null in the next release.
+     */
     response: SessionStatusResponse | null;
   };
   [IPC_CHANNELS.SESSION_STATUS_UPDATE]: {
     request: undefined;
+    /**
+     * Transitional safety: `| null` is retained for one release while
+     * historical subscribers may still observe legacy null payloads.
+     * Main process now always pushes a `SessionStatusResponse`.
+     * Will be tightened to non-null in the next release.
+     */
     response: SessionStatusResponse | null;
   };
   [IPC_CHANNELS.SETTINGS_CHANGED]: {
