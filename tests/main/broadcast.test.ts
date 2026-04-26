@@ -26,7 +26,13 @@ describe("broadcastToWindows", () => {
 
   it("does nothing when there are no windows", () => {
     mockGetAllWindows.mockReturnValue([]);
-    broadcastToWindows(IPC_CHANNELS.SESSION_STATUS_UPDATE, null);
+    broadcastToWindows(IPC_CHANNELS.SESSION_STATUS_UPDATE, {
+      isRunning: false,
+      startedAt: null,
+      expiresAt: null,
+      remainingSeconds: null,
+      durationMinutes: null,
+    });
     expect(mockGetAllWindows).toHaveBeenCalledTimes(1);
   });
 

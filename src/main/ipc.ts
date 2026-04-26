@@ -163,7 +163,15 @@ function registerSessionIpc(): void {
     return { cancelled: true };
   });
   typedHandle(IPC_CHANNELS.SESSION_STATUS, (event) => {
-    if (!validateSender(event)) return null;
+    if (!validateSender(event)) {
+      return {
+        isRunning: false,
+        startedAt: null,
+        expiresAt: null,
+        remainingSeconds: null,
+        durationMinutes: null,
+      };
+    }
     return sessionTimer.getStatus();
   });
 }
