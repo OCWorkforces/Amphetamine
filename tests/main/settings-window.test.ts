@@ -26,7 +26,7 @@ vi.mock("electron", () => ({
       setIcon: mockSetDockIcon,
     },
   },
-  BrowserWindow: vi.fn().mockImplementation(function (this: Record<string, ReturnType<typeof vi.fn>>) {
+  BrowserWindow: vi.fn().mockImplementation(function (this: Record<string, unknown>) {
     this.focus = mockFocus;
     this.close = mockClose;
     this.show = mockShow;

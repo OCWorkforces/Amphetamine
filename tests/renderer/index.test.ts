@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { AppSettings, SessionStatusResponse } from "../../src/shared/types.js";
+import { DEFAULT_SETTINGS } from "../../src/shared/types.js";
+import {
+  STATUS_PREVENTING_SLEEP,
+  STATUS_SLEEP_PREVENTION_OFF,
+} from "../../src/renderer/constants.js";
 
 const mockApi = {
   window: { setHeight: vi.fn() },
@@ -14,8 +19,10 @@ const mockApi = {
     cancel: vi.fn(),
     getStatus: vi.fn<() => Promise<SessionStatusResponse | null>>(),
   },
-  onSettingsChanged: vi.fn(() => vi.fn()),
-  onSessionStatusUpdate: vi.fn(() => vi.fn()),
+  onSettingsChanged: vi.fn<(_cb: (s: AppSettings) => void) => () => void>(() => vi.fn()),
+  onSessionStatusUpdate: vi.fn<(_cb: (s: SessionStatusResponse) => void) => () => void>(
+    () => vi.fn(),
+  ),
   autoUpdater: {
     checkForUpdates: vi.fn(),
     onStatus: vi.fn(() => vi.fn()),
@@ -46,6 +53,7 @@ describe("renderer popover (index.ts)", () => {
 
     // Default: preventSleep off
     const defaultSettings: AppSettings = {
+      ...DEFAULT_SETTINGS,
       launchAtLogin: false,
       preventSleep: false,
       sessionDuration: null,
@@ -73,7 +81,7 @@ describe("renderer popover (index.ts)", () => {
 
   describe("formatTimerLabel via render", () => {
     it('renders "Timer Indefinitely" when preventSleep is false', async () => {
-      mockApi.settings.get.mockResolvedValue({
+      mockApi.settings.get.mockResolvedValue({ ...DEFAULT_SETTINGS,
         launchAtLogin: false,
         preventSleep: false,
         sessionDuration: null,
@@ -92,7 +100,7 @@ describe("renderer popover (index.ts)", () => {
     });
 
     it('renders "Timer Indefinitely" when session not running', async () => {
-      mockApi.settings.get.mockResolvedValue({
+      mockApi.settings.get.mockResolvedValue({ ...DEFAULT_SETTINGS,
         launchAtLogin: false,
         preventSleep: true,
         sessionDuration: null,
@@ -114,7 +122,7 @@ describe("renderer popover (index.ts)", () => {
     });
 
     it('renders "Timer Indefinitely" when running with null durationMinutes', async () => {
-      mockApi.settings.get.mockResolvedValue({
+      mockApi.settings.get.mockResolvedValue({ ...DEFAULT_SETTINGS,
         launchAtLogin: false,
         preventSleep: true,
         sessionDuration: null,
@@ -136,7 +144,7 @@ describe("renderer popover (index.ts)", () => {
     });
 
     it("renders hours and minutes remaining for large durations", async () => {
-      mockApi.settings.get.mockResolvedValue({
+      mockApi.settings.get.mockResolvedValue({ ...DEFAULT_SETTINGS,
         launchAtLogin: false,
         preventSleep: true,
         sessionDuration: 120,
@@ -162,7 +170,7 @@ describe("renderer popover (index.ts)", () => {
     });
 
     it("renders minutes only when less than an hour", async () => {
-      mockApi.settings.get.mockResolvedValue({
+      mockApi.settings.get.mockResolvedValue({ ...DEFAULT_SETTINGS,
         launchAtLogin: false,
         preventSleep: true,
         sessionDuration: 30,
@@ -190,7 +198,7 @@ describe("renderer popover (index.ts)", () => {
 
   describe("status UI", () => {
     it("shows active status dot and text when preventSleep is true", async () => {
-      mockApi.settings.get.mockResolvedValue({
+      mockApi.settings.get.mockResolvedValue({ ...DEFAULT_SETTINGS,
         launchAtLogin: false,
         preventSleep: true,
         sessionDuration: null,
@@ -203,11 +211,11 @@ describe("renderer popover (index.ts)", () => {
       await vi.advanceTimersByTimeAsync(0);
 
       expect(getStatusDot()?.classList.contains("active")).toBe(true);
-      expect(getStatusText()).toBe("Preventing Sleep");
+      expect(getStatusText()).toBe(STATUS_PREVENTING_SLEEP);
     });
 
     it("shows inactive status when preventSleep is false", async () => {
-      mockApi.settings.get.mockResolvedValue({
+      mockApi.settings.get.mockResolvedValue({ ...DEFAULT_SETTINGS,
         launchAtLogin: false,
         preventSleep: false,
         sessionDuration: null,
@@ -220,14 +228,14 @@ describe("renderer popover (index.ts)", () => {
       await vi.advanceTimersByTimeAsync(0);
 
       expect(getStatusDot()?.classList.contains("active")).toBe(false);
-      expect(getStatusText()).toBe("Sleep Prevention Off");
+      expect(getStatusText()).toBe(STATUS_SLEEP_PREVENTION_OFF);
     });
   });
 
   describe("render", () => {
     it("renders version in header", async () => {
       mockApi.app.getVersion.mockResolvedValue("2.5.0");
-      mockApi.settings.get.mockResolvedValue({
+      mockApi.settings.get.mockResolvedValue({ ...DEFAULT_SETTINGS,
         launchAtLogin: false,
         preventSleep: false,
         sessionDuration: null,
@@ -243,7 +251,7 @@ describe("renderer popover (index.ts)", () => {
     });
 
     it("renders settings and quit buttons", async () => {
-      mockApi.settings.get.mockResolvedValue({
+      mockApi.settings.get.mockResolvedValue({ ...DEFAULT_SETTINGS,
         launchAtLogin: false,
         preventSleep: false,
         sessionDuration: null,
@@ -259,7 +267,7 @@ describe("renderer popover (index.ts)", () => {
     });
 
     it("calls settings.open when settings button clicked", async () => {
-      mockApi.settings.get.mockResolvedValue({
+      mockApi.settings.get.mockResolvedValue({ ...DEFAULT_SETTINGS,
         launchAtLogin: false,
         preventSleep: false,
         sessionDuration: null,
@@ -275,7 +283,7 @@ describe("renderer popover (index.ts)", () => {
     });
 
     it("calls app.quit when quit button clicked", async () => {
-      mockApi.settings.get.mockResolvedValue({
+      mockApi.settings.get.mockResolvedValue({ ...DEFAULT_SETTINGS,
         launchAtLogin: false,
         preventSleep: false,
         sessionDuration: null,
@@ -306,7 +314,7 @@ describe("renderer popover (index.ts)", () => {
 
   describe("resize", () => {
     it("calls window.api.window.setHeight after render", async () => {
-      mockApi.settings.get.mockResolvedValue({
+      mockApi.settings.get.mockResolvedValue({ ...DEFAULT_SETTINGS,
         launchAtLogin: false,
         preventSleep: false,
         sessionDuration: null,
@@ -344,7 +352,7 @@ describe("renderer popover (index.ts)", () => {
     });
 
     it("updates status when settings push arrives (preventSleep on)", async () => {
-      mockApi.settings.get.mockResolvedValue({
+      mockApi.settings.get.mockResolvedValue({ ...DEFAULT_SETTINGS,
         launchAtLogin: false,
         preventSleep: false,
         sessionDuration: null,
@@ -356,11 +364,12 @@ describe("renderer popover (index.ts)", () => {
       await vi.advanceTimersByTimeAsync(0);
 
       // Initially off
-      expect(getStatusText()).toBe("Sleep Prevention Off");
+      expect(getStatusText()).toBe(STATUS_SLEEP_PREVENTION_OFF);
 
       // Simulate push: preventSleep turned on
       const settingsCallback = mockApi.onSettingsChanged.mock.calls[0]![0];
       settingsCallback({
+        ...DEFAULT_SETTINGS,
         launchAtLogin: false,
         preventSleep: true,
         sessionDuration: null,
@@ -369,12 +378,12 @@ describe("renderer popover (index.ts)", () => {
       // Wait for rAF
       await vi.advanceTimersByTimeAsync(16);
 
-      expect(getStatusText()).toBe("Preventing Sleep");
+      expect(getStatusText()).toBe(STATUS_PREVENTING_SLEEP);
       expect(getStatusDot()?.classList.contains("active")).toBe(true);
     });
 
     it("updates timer when session status push arrives", async () => {
-      mockApi.settings.get.mockResolvedValue({
+      mockApi.settings.get.mockResolvedValue({ ...DEFAULT_SETTINGS,
         launchAtLogin: false,
         preventSleep: true,
         sessionDuration: 30,
@@ -410,7 +419,7 @@ describe("renderer popover (index.ts)", () => {
     });
 
     it("clears session status when preventSleep is turned off via push", async () => {
-      mockApi.settings.get.mockResolvedValue({
+      mockApi.settings.get.mockResolvedValue({ ...DEFAULT_SETTINGS,
         launchAtLogin: false,
         preventSleep: true,
         sessionDuration: 30,
@@ -431,6 +440,7 @@ describe("renderer popover (index.ts)", () => {
       // Turn off preventSleep via push
       const settingsCallback = mockApi.onSettingsChanged.mock.calls[0]![0];
       settingsCallback({
+        ...DEFAULT_SETTINGS,
         launchAtLogin: false,
         preventSleep: false,
         sessionDuration: null,
@@ -439,13 +449,13 @@ describe("renderer popover (index.ts)", () => {
       await vi.advanceTimersByTimeAsync(16);
 
       expect(getTimerText()).toBe("Timer Indefinitely");
-      expect(getStatusText()).toBe("Sleep Prevention Off");
+      expect(getStatusText()).toBe(STATUS_SLEEP_PREVENTION_OFF);
     });
   });
 
   describe("session display", () => {
     it("renders seconds when less than a minute", async () => {
-      mockApi.settings.get.mockResolvedValue({
+      mockApi.settings.get.mockResolvedValue({ ...DEFAULT_SETTINGS,
         launchAtLogin: false,
         preventSleep: true,
         sessionDuration: 15,
@@ -470,7 +480,7 @@ describe("renderer popover (index.ts)", () => {
     });
 
     it("renders zero remaining as 0m", async () => {
-      mockApi.settings.get.mockResolvedValue({
+      mockApi.settings.get.mockResolvedValue({ ...DEFAULT_SETTINGS,
         launchAtLogin: false,
         preventSleep: true,
         sessionDuration: 15,

@@ -2,15 +2,17 @@ import "./styles.css";
 import log from "electron-log";
 import type { AppSettings } from "../../shared/types.js";
 import { DEFAULT_SETTINGS } from "../../shared/types.js";
+import { SAVED_INDICATOR, SHORTCUT_PLACEHOLDER, SHORTCUT_RECORDING } from "./constants.js";
 
 const heroIcon = new URL("../../assets/settings-hero-icon.png", import.meta.url).toString();
 
 let settings: AppSettings = { ...DEFAULT_SETTINGS };
+/** Duration from an actively-running session; overrides stored sessionDuration in the UI. Cleared when the user explicitly picks a new duration. */
+let runningSessionDuration: number | null = null;
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
 let errorMessage: string | null = null;
 let isSaving = false;
 const saveIndicatorTimers = new Map<string, ReturnType<typeof setTimeout>>();
-let lastValidBatteryThreshold: number = DEFAULT_SETTINGS.batteryThreshold;
 let isRecordingShortcut = false;
 let shortcutKeydownHandler: ((e: KeyboardEvent) => void) | null = null;
 
@@ -135,19 +137,22 @@ function buildSettingsForm(): string {
           </select>
         </div>
       </div>
-      <div class="setting-row setting-row--number">
+      <div class="setting-row setting-row--select">
         <div class="setting-row-inner">
-          <label class="setting-label" for="battery-threshold-input">
+          <label class="setting-label" for="battery-threshold-select">
             🪫 Auto-disable Battery Threshold
           </label>
           <span class="setting-description">Automatically disable sleep prevention when battery drops below this level</span>
         </div>
         <div class="setting-control">
           <span class="save-indicator" id="battery-save-indicator"></span>
-          <div class="number-input-wrap">
-            <input type="number" id="battery-threshold-input" class="setting-number" min="0" max="100" step="1" value="${settings.batteryThreshold}" />
-            <span class="number-input-suffix">%</span>
-          </div>
+          <select id="battery-threshold-select" class="setting-select">
+            <option value="0"${settings.batteryThreshold === 0 ? " selected" : ""}>0% – Disabled</option>
+            <option value="5"${settings.batteryThreshold === 5 ? " selected" : ""}>5%</option>
+            <option value="10"${settings.batteryThreshold === 10 ? " selected" : ""}>10%</option>
+            <option value="15"${settings.batteryThreshold === 15 ? " selected" : ""}>15%</option>
+            <option value="20"${settings.batteryThreshold === 20 ? " selected" : ""}>20%</option>
+          </select>
         </div>
       </div>
       <div class="setting-row setting-row--shortcut">
@@ -159,7 +164,7 @@ function buildSettingsForm(): string {
         </div>
         <div class="setting-control">
           <span class="save-indicator" id="shortcut-save-indicator"></span>
-          <button type="button" id="shortcut-input" class="setting-shortcut" aria-label="Toggle shortcut recorder">${formatAcceleratorForDisplay(settings.shortcut) || "Click to record"}</button>
+          <button type="button" id="shortcut-input" class="setting-shortcut" aria-label="Toggle shortcut recorder">${formatAcceleratorForDisplay(settings.shortcut) || SHORTCUT_PLACEHOLDER}</button>
         </div>
       </div>
     </div>
@@ -169,16 +174,12 @@ function buildSettingsForm(): string {
   `;
 }
 
-function isFocused(el: HTMLElement): boolean {
-  return document.activeElement === el;
-}
-
 function startRecordingShortcut(): void {
   if (isRecordingShortcut) return;
   const btn = document.getElementById("shortcut-input") as HTMLButtonElement | null;
   if (!btn) return;
   isRecordingShortcut = true;
-  btn.textContent = "Press keys…";
+  btn.textContent = SHORTCUT_RECORDING;
   btn.classList.add("recording");
 
   shortcutKeydownHandler = (e: KeyboardEvent): void => {
@@ -207,7 +208,7 @@ function stopRecordingShortcut(): void {
   const btn = document.getElementById("shortcut-input") as HTMLButtonElement | null;
   if (btn) {
     btn.classList.remove("recording");
-    btn.textContent = formatAcceleratorForDisplay(settings.shortcut) || "Click to record";
+    btn.textContent = formatAcceleratorForDisplay(settings.shortcut) || SHORTCUT_PLACEHOLDER;
   }
 }
 
@@ -234,26 +235,35 @@ function attachFormListeners(): void {
     durationSelect.addEventListener("change", () => {
       const raw = durationSelect.value;
       const duration: number | null = raw === "" ? null : parseInt(raw, 10);
+      // User explicitly chose a new duration — stop overriding from running session
+      runningSessionDuration = null;
       settings.sessionDuration = duration;
-      void window.api.session.start(duration);
+      void (async () => {
+        try {
+          const resp = await window.api.session.start(duration);
+          if (resp.ok) {
+            setErrorMessage(null);
+          } else {
+            const message =
+              resp.reason === "invalid-duration"
+                ? "Invalid session duration"
+                : "Failed to start session";
+            setErrorMessage(message);
+          }
+        } catch {
+          setErrorMessage("Failed to start session");
+        }
+      })();
       void saveSettings({ sessionDuration: duration, preventSleep: true }, "duration-save-indicator");
     });
   }
 
-  const batteryInput = document.getElementById(
-    "battery-threshold-input",
-  ) as HTMLInputElement | null;
-  if (batteryInput) {
-    lastValidBatteryThreshold = settings.batteryThreshold;
-    batteryInput.addEventListener("change", () => {
-      const raw = batteryInput.value.trim();
-      const parsed = Number(raw);
-      if (raw === "" || !Number.isFinite(parsed) || !Number.isInteger(parsed) || parsed < 0 || parsed > 100) {
-        // Invalid input: revert to last valid value
-        batteryInput.value = String(lastValidBatteryThreshold);
-        return;
-      }
-      lastValidBatteryThreshold = parsed;
+  const batterySelect = document.getElementById(
+    "battery-threshold-select",
+  ) as HTMLSelectElement | null;
+  if (batterySelect) {
+    batterySelect.addEventListener("change", () => {
+      const parsed = parseInt(batterySelect.value, 10);
       void saveSettings({ batteryThreshold: parsed }, "battery-save-indicator");
     });
   }
@@ -309,17 +319,16 @@ function updateSettingsUI(s: AppSettings): void {
     durationSelect.value = s.sessionDuration === null ? "" : String(s.sessionDuration);
   }
 
-  const batteryInput = document.getElementById(
-    "battery-threshold-input",
-  ) as HTMLInputElement | null;
-  if (batteryInput && !isFocused(batteryInput)) {
-    batteryInput.value = String(s.batteryThreshold);
-    lastValidBatteryThreshold = s.batteryThreshold;
+  const batterySelect = document.getElementById(
+    "battery-threshold-select",
+  ) as HTMLSelectElement | null;
+  if (batterySelect) {
+    batterySelect.value = String(s.batteryThreshold);
   }
 
   const shortcutBtn = document.getElementById("shortcut-input") as HTMLButtonElement | null;
   if (shortcutBtn && !isRecordingShortcut) {
-    shortcutBtn.textContent = formatAcceleratorForDisplay(s.shortcut) || "Click to record";
+    shortcutBtn.textContent = formatAcceleratorForDisplay(s.shortcut) || SHORTCUT_PLACEHOLDER;
   }
 }
 
@@ -361,7 +370,7 @@ async function saveSettings(
     try {
       await window.api.settings.set(settings);
       setErrorMessage(null);
-      showSaveIndicator(indicatorId, "✓ Saved");
+      showSaveIndicator(indicatorId, SAVED_INDICATOR);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to save settings";
       setErrorMessage(message);
@@ -381,7 +390,8 @@ async function init(): Promise<void> {
   try {
     const status = await window.api.session.getStatus();
     if (!isSaving && status?.isRunning) {
-      settings.sessionDuration = status.durationMinutes;
+      runningSessionDuration = status.durationMinutes;
+      settings.sessionDuration = runningSessionDuration;
     }
   } catch (e2) {
     log.info("[settings] Failed to get session status", e2);
@@ -391,6 +401,12 @@ async function init(): Promise<void> {
 
   window.api.onSettingsChanged((newSettings: AppSettings) => {
     settings = newSettings;
+    // If a session is actively running, keep the running duration visible
+    // in the dropdown — the push carries the stored (disk) sessionDuration,
+    // not the live session duration, so we must not overwrite it.
+    if (runningSessionDuration !== null) {
+      settings = { ...settings, sessionDuration: runningSessionDuration };
+    }
     updateSettingsUI(settings);
   });
 }

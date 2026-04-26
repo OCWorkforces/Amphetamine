@@ -1,7 +1,7 @@
 # Amphetamine — Project Knowledge Base
 
 **Generated:** 2026-04-26
-**Commit:** 5587778
+**Commit:** 64c35c4
 **Branch:** develop
 
 ## OVERVIEW
@@ -14,7 +14,7 @@ macOS tray-only Electron app that prevents the system from sleeping. Session tim
 | Framework | Electron 41                               |
 | Build     | Rslib (main/preload) + Rsbuild (renderer) |
 | Package   | Bun                                       |
-| Test      | Vitest 4 (workspace, 313 tests)           |
+| Test      | Vitest 4 (workspace, 338 tests)           |
 | Linter   | ESLint 10 flat config, @typescript-eslint/no-explicit-any: error, no-floating-promises, no-eval |
 
 ## STRUCTURE
@@ -78,6 +78,8 @@ src/
 | Broadcast utility     | `src/main/utils/broadcast.ts`          | `broadcastToWindows<T>(channel, data)`           |
 | Build config          | `rslib.config.ts`, `rsbuild.config.ts` | Separate for each process                       |
 | Web content security  | `src/main/security.ts`                 | `hardenWebContents(win)` — navigation allowlist + window.open deny |
+| Renderer status strings | `src/renderer/constants.ts`            | STATUS_PREVENTING_SLEEP, STATUS_SLEEP_PREVENTION_OFF |
+| Settings UI strings   | `src/renderer/settings/constants.ts`   | SHORTCUT_PLACEHOLDER, SHORTCUT_RECORDING, SAVED_INDICATOR |
 
 ## CODE MAP
 
@@ -123,6 +125,25 @@ src/
 | `SessionStartResponse`       | iface | src/shared/types.ts:28          | Session start response shape                                                    |
 | `PUSH_CHANNELS`              | const | src/shared/types.ts:101         | Push channel names tuple (single source of truth)                              |
 | `PushChannel`                | type  | src/shared/types.ts:107         | Derived from PUSH_CHANNELS tuple                                                |
+| `isBoolean`                  | fn    | src/main/settings.ts            | Type guard predicate for boolean                                                |
+| `isPositiveNumber`           | fn    | src/main/settings.ts            | Type guard: finite number > 0                                                   |
+| `isClamped0to100`            | fn    | src/main/settings.ts            | Type guard: 0 ≤ n ≤ 100                                                         |
+| `isNonEmptyString`           | fn    | src/main/settings.ts            | Type guard: non-empty string                                                    |
+| `VALIDATORS`                 | const | src/main/settings.ts            | Dispatch table keyed by AppSettings field                                       |
+| `invoke<K>`                  | fn    | src/preload/index.ts            | Typed IPC invoke helper with conditional rest params                            |
+| `WiredChannels`              | type  | src/preload/index.ts            | Union of all wired channel literals                                             |
+| `_ExhaustivenessCheck`       | type  | src/preload/index.ts            | Compile-time exhaustiveness guard                                               |
+| `isPackageInfo`              | fn    | src/main/utils/packageInfo.ts   | Runtime type guard for package.json shape                                       |
+| `STATUS_PREVENTING_SLEEP`    | const | src/renderer/constants.ts       | Popover status label                                                            |
+| `STATUS_SLEEP_PREVENTION_OFF`| const | src/renderer/constants.ts       | Popover status label                                                            |
+| `SHORTCUT_PLACEHOLDER`       | const | src/renderer/settings/constants.ts | Settings shortcut button placeholder                                         |
+| `SHORTCUT_RECORDING`         | const | src/renderer/settings/constants.ts | Settings shortcut recording label                                            |
+| `SAVED_INDICATOR`            | const | src/renderer/settings/constants.ts | Settings save indicator                                                      |
+| `MENU_PREVENT_SLEEP`         | const | src/main/constants.ts           | Tray menu label                                                                 |
+| `MENU_SETTINGS`              | const | src/main/constants.ts           | Tray menu label                                                                 |
+| `MENU_ABOUT`                 | const | src/main/constants.ts           | Tray menu label                                                                 |
+| `MENU_QUIT`                  | const | src/main/constants.ts           | Tray menu label                                                                 |
+| `ACCELERATOR_QUIT`           | const | src/main/constants.ts           | Tray menu accelerator                                                           |
 
 ## CONVENTIONS
 - **Coordinator pattern**: `coordinator.ts` centralizes settings→system sync (sleep-prevention, battery-monitor, auto-launch, session cancel, broadcast, shortcut). Individual modules do NOT import each other.
@@ -144,6 +165,10 @@ src/
 - **Constants**: All magic numbers extracted to `src/main/constants.ts`
 - **Settings validators exported**: `validatePositiveNumber`, `validateClampedNumber`, `validateBoolean` — use in tests and IPC handlers
 - **Monotonic timing**: Use `performance.now()` for session timing, not `Date.now()` (immune to system clock changes)
+- **Discriminated unions**: SessionStatusResponse (3-arm: not-running / timed / indefinite) and SessionStartResponse (ok/fail) enable compile-time narrowing; never use flat nullable interfaces for IPC responses
+- **Validator dispatch table**: mergeValidatedPartial uses VALIDATORS lookup table — no per-field if/else. Add new AppSettings fields to VALIDATORS in settings.ts
+- **UI string constants**: All UI labels/strings extracted to constants files — never hardcode in renderer or tray
+- **Preload exhaustiveness**: WiredChannels + _ExhaustivenessCheck in preload/index.ts fail compile if any IpcChannel is unwired
 
 ## ANTI-PATTERNS (THIS PROJECT)
 
@@ -169,11 +194,15 @@ src/
 - Never use `Date.now()` for session timing — use `performance.now()` for monotonic clock
 - IPC origin validation uses exact path allowlist via `path.resolve()` — `startsWith` is insufficient (path-traversal attack)
 - Auto-updater URL: open at most once per discovered version (`lastNotifiedVersion` tracking)
+- Never mutate `DEFAULT_SETTINGS` — it is `Readonly<AppSettings>`; always clone via `{ ...DEFAULT_SETTINGS, ...overrides }`
+- Never add per-field if/else to `mergeValidatedPartial` — add to `VALIDATORS` dispatch table
+- Never use `JSON.parse(...) as T` casts — use runtime type guards (`isPackageInfo` pattern)
+- Never hardcode UI strings in renderer or tray — use constants files
 
 ## COMMANDS
 
 ```bash
-bun run test           # Run Vitest tests (313 tests, 21 files)
+bun run test           # Run Vitest tests (338 tests, 21 files)
 bun run build          # Build all (main + preload + renderer)
 bun run package        # Build + DMG/ZIP + flip fuses (macOS arm64)
 bun run package:x64    # Build + DMG/ZIP + flip fuses (macOS x64)
@@ -216,7 +245,7 @@ Runtime deps (`electron-log`, `electron-updater`) are externalized in rslib conf
 
 | Project  | Env   | Tests | Focus                                                                                           |
 | -------- | ----- | ----- | ----------------------------------------------------------------------------------------------- |
-| main     | node  | 275   | Coordinator, session timer, IPC, power-saver, battery-monitor, settings, tray, shortcut, auto-launch, auto-updater |
+| main     | node  | 300   | Coordinator, session timer, IPC, power-saver, battery-monitor, settings, tray, shortcut, auto-launch, auto-updater |
 | renderer | jsdom | 38    | Popover UI, settings UI, event delegation, push subscriptions, error paths                                        |
 
 **Setup**: `tests/setup.main.ts` mocks full Electron API (app, BrowserWindow, ipcMain, Tray, Menu, webContents.{on,setWindowOpenHandler}, app.getAppPath, etc.)
@@ -251,7 +280,6 @@ Runtime deps (`electron-log`, `electron-updater`) are externalized in rslib conf
 - `build/notarize.cjs`: Wired via `afterSign` but `@electron/notarize` not installed — non-functional
 - `build/flip-fuses.cjs`: Flips Electron fuses (RunAsNode disabled, EnableCookieEncryption, EnableFuses, OnlyLoadAppFromAsar)
 - `DEV_SERVER_URL`: Used in 3 files — correct name (previously VITE_DEV_SERVER_URL from Vite era)
-- `utils/packageInfo.ts:52`: Fallback description stale string — **FIXED** (removed Google Meet reference)
 
 ## SCRIPTS
 

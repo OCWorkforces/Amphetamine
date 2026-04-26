@@ -24,7 +24,7 @@ const mockProcessOn = vi.hoisted(() => vi.fn());
 
 // Mock electron
 vi.mock("electron", async (importOriginal) => {
-  const actual = await importOriginal();
+  const actual = (await importOriginal()) as Record<string, unknown>;
   return {
     ...actual,
     app: {
@@ -38,7 +38,7 @@ vi.mock("electron", async (importOriginal) => {
       setActivationPolicy: mockSetActivationPolicy,
       exit: mockExit,
     },
-    BrowserWindow: vi.fn().mockImplementation(function (this: Record<string, ReturnType<typeof vi.fn>>) {
+    BrowserWindow: vi.fn().mockImplementation(function (this: Record<string, unknown>) {
       this.loadURL = vi.fn();
       this.loadFile = vi.fn();
       this.show = vi.fn();
@@ -109,7 +109,7 @@ vi.stubGlobal("process", {
 });
 
 describe("main index - createWindow", () => {
-  let BrowserWindow: ReturnType<typeof vi.fn>;
+  let BrowserWindow: ReturnType<typeof vi.fn> & { mock: { calls: unknown[][] } };
 
   beforeEach(async () => {
     vi.clearAllMocks();
@@ -117,7 +117,9 @@ describe("main index - createWindow", () => {
 
     // Get BrowserWindow reference
     const electron = await import("electron");
-    BrowserWindow = electron.BrowserWindow as ReturnType<typeof vi.fn>;
+    BrowserWindow = electron.BrowserWindow as unknown as ReturnType<typeof vi.fn> & {
+      mock: { calls: unknown[][] };
+    };
 
     // Reset mocks
     mockGetSettings.mockReturnValue({ launchAtLogin: false, preventSleep: false });
@@ -127,7 +129,7 @@ describe("main index - createWindow", () => {
     await import("../../src/main/index.js");
 
     expect(BrowserWindow).toHaveBeenCalledTimes(1);
-    const callArgs = BrowserWindow.mock.calls[0][0];
+    const callArgs = BrowserWindow.mock.calls[0]![0] as Record<string, unknown>;
     expect(callArgs.width).toBe(360);
     expect(callArgs.height).toBe(480);
   });
@@ -135,14 +137,14 @@ describe("main index - createWindow", () => {
   it("creates BrowserWindow with alwaysOnTop true", async () => {
     await import("../../src/main/index.js");
 
-    const callArgs = BrowserWindow.mock.calls[0][0];
+    const callArgs = BrowserWindow.mock.calls[0]![0] as Record<string, unknown>;
     expect(callArgs.alwaysOnTop).toBe(true);
   });
 
   it("creates BrowserWindow with frame false and transparent true", async () => {
     await import("../../src/main/index.js");
 
-    const callArgs = BrowserWindow.mock.calls[0][0];
+    const callArgs = BrowserWindow.mock.calls[0]![0] as Record<string, unknown>;
     expect(callArgs.frame).toBe(false);
     expect(callArgs.transparent).toBe(true);
   });
@@ -150,14 +152,14 @@ describe("main index - createWindow", () => {
   it("creates BrowserWindow with vibrancy popover", async () => {
     await import("../../src/main/index.js");
 
-    const callArgs = BrowserWindow.mock.calls[0][0];
+    const callArgs = BrowserWindow.mock.calls[0]![0] as Record<string, unknown>;
     expect(callArgs.vibrancy).toBe("popover");
   });
 
   it("creates BrowserWindow with sandboxed webPreferences", async () => {
     await import("../../src/main/index.js");
 
-    const callArgs = BrowserWindow.mock.calls[0][0];
+    const callArgs = BrowserWindow.mock.calls[0]![0] as { webPreferences: Record<string, unknown> };
     expect(callArgs.webPreferences.sandbox).toBe(true);
     expect(callArgs.webPreferences.contextIsolation).toBe(true);
     expect(callArgs.webPreferences.nodeIntegration).toBe(false);
@@ -166,7 +168,7 @@ describe("main index - createWindow", () => {
   it("sets preload path in webPreferences", async () => {
     await import("../../src/main/index.js");
 
-    const callArgs = BrowserWindow.mock.calls[0][0];
+    const callArgs = BrowserWindow.mock.calls[0]![0] as { webPreferences: Record<string, unknown> };
     expect(callArgs.webPreferences.preload).toContain("preload");
     expect(callArgs.webPreferences.preload).toContain("index.cjs");
   });

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { PushChannel, IpcResponse } from "../../src/shared/types.js";
-import { IPC_CHANNELS } from "../../src/shared/types.js";
+import { IPC_CHANNELS, DEFAULT_SETTINGS } from "../../src/shared/types.js";
 
 const { mockGetAllWindows } = vi.hoisted(() => ({
   mockGetAllWindows: vi.fn().mockReturnValue([]),
@@ -26,7 +26,13 @@ describe("broadcastToWindows", () => {
 
   it("does nothing when there are no windows", () => {
     mockGetAllWindows.mockReturnValue([]);
-    broadcastToWindows(IPC_CHANNELS.SESSION_STATUS_UPDATE, null);
+    broadcastToWindows(IPC_CHANNELS.SESSION_STATUS_UPDATE, {
+      isRunning: false,
+      startedAt: null,
+      expiresAt: null,
+      remainingSeconds: null,
+      durationMinutes: null,
+    });
     expect(mockGetAllWindows).toHaveBeenCalledTimes(1);
   });
 
@@ -37,12 +43,14 @@ describe("broadcastToWindows", () => {
     ]);
 
     broadcastToWindows(IPC_CHANNELS.SETTINGS_CHANGED, {
+      ...DEFAULT_SETTINGS,
       launchAtLogin: false,
       preventSleep: true,
       sessionDuration: null,
     });
 
     expect(mockSend).toHaveBeenCalledWith("settings:changed", {
+      ...DEFAULT_SETTINGS,
       launchAtLogin: false,
       preventSleep: true,
       sessionDuration: null,

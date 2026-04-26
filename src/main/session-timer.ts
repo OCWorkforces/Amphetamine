@@ -166,23 +166,33 @@ export function getStatus(): SessionStatusResponse {
   if (sessionStartedAt === null) {
     return {
       isRunning: false,
-      remainingSeconds: null,
       startedAt: null,
       expiresAt: null,
+      remainingSeconds: null,
       durationMinutes: null,
     };
   }
 
-  const remainingMs =
-    sessionExpiresAt !== null ? Math.max(0, sessionExpiresAt - performance.now()) : null;
-  const remainingSeconds = remainingMs !== null ? Math.floor(remainingMs / 1000) : null;
+  // Indefinite session: no expiry, no remaining countdown, no duration.
+  if (sessionExpiresAt === null || sessionDuration === null) {
+    return {
+      isRunning: true,
+      startedAt: sessionStartedAt,
+      expiresAt: null,
+      remainingSeconds: null,
+      durationMinutes: null,
+    };
+  }
 
+  // Timed session: all numeric fields are non-null.
+  const remainingMs = Math.max(0, sessionExpiresAt - performance.now());
+  const remainingSeconds = Math.floor(remainingMs / 1000);
   return {
     isRunning: true,
     startedAt: sessionStartedAt,
     expiresAt: sessionExpiresAt,
-    durationMinutes: sessionDuration,
     remainingSeconds,
+    durationMinutes: sessionDuration,
   };
 }
 

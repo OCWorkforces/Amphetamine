@@ -81,7 +81,7 @@ describe("settings", () => {
 
   describe("saveSettings", () => {
     it("persists to disk", async () => {
-      const settingsToSave = { launchAtLogin: true };
+      const settingsToSave = { ...DEFAULT_SETTINGS, launchAtLogin: true };
 
       await saveSettings(settingsToSave);
 
@@ -94,7 +94,7 @@ describe("settings", () => {
     });
 
     it("writes atomically so final file only appears when write is complete", async () => {
-      const settingsToSave = { launchAtLogin: true, preventSleep: true };
+      const settingsToSave = { ...DEFAULT_SETTINGS, launchAtLogin: true, preventSleep: true };
 
       await saveSettings(settingsToSave);
 
@@ -119,7 +119,7 @@ describe("settings", () => {
 
   describe("updateSettings", () => {
     it("merges partial, saves, and returns full settings", async () => {
-      await saveSettings({ launchAtLogin: false });
+      await saveSettings({ ...DEFAULT_SETTINGS, launchAtLogin: false });
 
       const result = await updateSettings({ launchAtLogin: true });
 
@@ -144,7 +144,7 @@ describe("settings", () => {
     });
 
     it("updates launchAtLogin correctly", async () => {
-      await saveSettings({ launchAtLogin: false });
+      await saveSettings({ ...DEFAULT_SETTINGS, launchAtLogin: false });
 
       const result = await updateSettings({ launchAtLogin: true });
 

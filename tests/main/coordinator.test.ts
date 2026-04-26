@@ -27,7 +27,7 @@ const mockCleanupBatteryMonitoring = vi.hoisted(() => vi.fn());
 const mockCreateSettingsWindow = vi.hoisted(() => vi.fn());
 
 vi.mock("electron", async (importOriginal) => {
-  const actual = await importOriginal();
+  const actual = (await importOriginal()) as Record<string, unknown>;
   return {
     ...actual,
     app: { isPackaged: false },

@@ -77,7 +77,7 @@ Electron main process (Node.js). App lifecycle, system tray, IPC, session timer,
 
 ## CONSTANTS
 
-`constants.ts` extracts all magic numbers: window dimensions (360×480, 520×430), popover height bounds (220–480), timeouts (hide delay 160ms, battery check 5s, update check 3s/4h), `MS_PER_SECOND`, `MS_PER_MINUTE`, `SESSION_BROADCAST_INTERVAL_MS`, `MAX_UPDATE_CHECK_INTERVAL_MS` (24h), `TRAY_ICON_SIZE`, `TRAY_ICON_COLOR_ACTIVE/INACTIVE`, `DEV_ORIGINS`, `getDevServerUrl()`, `isDev`.
+`constants.ts` extracts all magic numbers: window dimensions (360×480, 520×540), popover height bounds (220–480), timeouts (hide delay 160ms, battery check 5s, update check 3s/4h), `MS_PER_SECOND`, `MS_PER_MINUTE`, `SESSION_BROADCAST_INTERVAL_MS`, `MAX_UPDATE_CHECK_INTERVAL_MS` (24h), `TRAY_ICON_SIZE`, `TRAY_ICON_COLOR_ACTIVE/INACTIVE`, `DEV_ORIGINS`, `getDevServerUrl()`, `isDev`. Tray menu strings: `MENU_PREVENT_SLEEP` ("Prevent Sleep"), `MENU_SETTINGS` ("Settings..."), `MENU_ABOUT` ("About Amphetamine"), `MENU_QUIT` ("Quit"), `ACCELERATOR_QUIT` ("Cmd+Q").
 
 ## SESSION TIMER
 
@@ -121,7 +121,8 @@ Electron main process (Node.js). App lifecycle, system tray, IPC, session timer,
 
 - JSON file in `app.getPath('userData')/settings.json`
 - Loaded on module import (`loadSettings()` at bottom of settings.ts)
-- Validated: each field checked with `validatePositiveNumber`/`validateClampedNumber`/`validateBoolean`. **Exported** from settings.ts for reuse in IPC handlers and tests.
+- Validated via type-guard predicates (exported): `isBoolean`, `isPositiveNumber` (finite > 0), `isClamped0to100` (0 ≤ n ≤ 100), `isNonEmptyString`. Wrapper validators: `validateBoolean`, `validatePositiveNumber`, `validateClampedNumber` — exported from settings.ts for reuse in IPC handlers and tests.
+- `VALIDATORS: { [K in keyof AppSettings]: SettingsValidator<K> }` — per-field dispatch table consumed by `mergeValidatedPartial`. Mapped type ensures every AppSettings field has an entry (compile error if missing). Add new fields here — no per-field if/else.
 - `saveSettings()`: Async — uses `writeFile`/`rename` from `node:fs/promises` + `randomUUID()` from `node:crypto` for unique temp files
 - `updateSettings(partial)`: Async — has no-change dedup, updates cache BEFORE disk write, persists asynchronously, notifies listeners, returns copy.
 - `getSettings()`: Returns shallow copy of cache (never expose mutable ref)
@@ -145,6 +146,9 @@ Electron main process (Node.js). App lifecycle, system tray, IPC, session timer,
 - Orchestration belongs in `coordinator.ts` — modules must NOT import each other directly
 - `Date.now()` — never use for session timing; use `performance.now()` for monotonic clock
 - `updateSettings()` is async — always use `void` prefix or `await`, never fire-and-forget silently
+- Validator dispatch table: `VALIDATORS` lookup in settings.ts; add new AppSettings fields to `VALIDATORS` — no per-field if/else in `mergeValidatedPartial`
+- UI string constants: tray menu labels must be imported from `constants.ts` (`MENU_*`, `ACCELERATOR_*`); never hardcode in `tray.ts`
+- `utils/packageInfo.ts`: never use `JSON.parse(...) as PackageInfo` cast — uses internal `isPackageInfo(v: unknown): v is PackageInfo` runtime guard; throws `"Invalid package.json shape"` on failure (`isPackageInfo` is NOT exported)
 
 ## STALE / CLEANUP
 

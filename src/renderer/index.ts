@@ -1,8 +1,9 @@
 import "./styles/main.css";
 import type { AppSettings } from "../shared/types.js";
 import { DEFAULT_SETTINGS } from "../shared/types.js";
+import { STATUS_PREVENTING_SLEEP, STATUS_SLEEP_PREVENTION_OFF } from "./constants.js";
 
-type SessionStatus = Awaited<ReturnType<typeof window.api.session.getStatus>>;
+type SessionStatus = Awaited<ReturnType<typeof window.api.session.getStatus>> | null;
 
 const MIN_H = 180;
 const MAX_H = 420;
@@ -39,15 +40,7 @@ function formatTimerLabel(): string {
     return `${TIMER_ICON_SVG} Indefinitely`;
   }
 
-  const computedRemaining =
-    sessionStatus.remainingSeconds ??
-    (sessionStatus.expiresAt === null
-      ? null
-      : Math.max(0, Math.floor((sessionStatus.expiresAt - performance.now()) / 1000)));
-
-  if (computedRemaining === null) {
-    return `${TIMER_ICON_SVG} Indefinitely`;
-  }
+  const computedRemaining = sessionStatus.remainingSeconds;
 
   const totalSeconds = Math.max(0, Math.ceil(computedRemaining));
   const hours = Math.floor(totalSeconds / 3600);
@@ -79,8 +72,8 @@ function updateStatusUI(): void {
     statusDotEl?.classList.toggle("active", settings.preventSleep);
     if (statusTextEl) {
       statusTextEl.textContent = settings.preventSleep
-        ? "Preventing Sleep"
-        : "Sleep Prevention Off";
+        ? STATUS_PREVENTING_SLEEP
+        : STATUS_SLEEP_PREVENTION_OFF;
     }
     if (timerTextEl) {
       timerTextEl.innerHTML = formatTimerLabel();
@@ -162,7 +155,7 @@ function render(version: string): void {
 
       <section class="popover-status" aria-live="polite">
         <span id="status-dot" class="status-dot${settings.preventSleep ? " active" : ""}"></span>
-        <span id="status-text" class="status-text">${settings.preventSleep ? "Preventing Sleep" : "Sleep Prevention Off"}</span>
+        <span id="status-text" class="status-text">${settings.preventSleep ? STATUS_PREVENTING_SLEEP : STATUS_SLEEP_PREVENTION_OFF}</span>
       </section>
 
       <p id="status-error" class="status-error${statusError !== null ? " visible" : ""}">${statusError ?? ""}</p>

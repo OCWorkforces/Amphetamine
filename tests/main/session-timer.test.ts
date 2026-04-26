@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { SessionState } from "../../src/main/session-timer.js";
+import type { AppSettings, SessionStatusResponse } from "../../src/shared/types.js";
+import { DEFAULT_SETTINGS } from "../../src/shared/types.js";
 
 // Hoisted mock functions - evaluated before vi.mock calls
 const mockGetSettings = vi.hoisted(() => vi.fn());
@@ -7,10 +9,11 @@ const mockOnSessionStateChange = vi.hoisted(() => vi.fn());
 const mockBroadcastToWindows = vi.hoisted(() => vi.fn());
 
 // Mutable settings state - updated by mockOnSessionStateChange
-let settingsState = {
+let settingsState: AppSettings = {
+  ...DEFAULT_SETTINGS,
   launchAtLogin: false,
   preventSleep: false,
-  sessionDuration: null as number | null,
+  sessionDuration: null,
 };
 
 // Set up getSettings to return the current state
@@ -28,7 +31,7 @@ vi.mock("../../src/main/settings.js", () => ({
 describe("session-timer", () => {
   let startSession: (_durationMinutes: number | null) => SessionState;
   let cancelSession: () => SessionState;
-  let getStatus: () => SessionState;
+  let getStatus: () => SessionStatusResponse;
   let cleanup: () => void;
   let setOnSessionStateChange: (cb: (updates: Partial<typeof settingsState>) => void) => void;
   let setSettingsReader: (getSettings: () => typeof settingsState) => void;
@@ -40,6 +43,7 @@ describe("session-timer", () => {
 
     // Reset settings state
     settingsState = {
+      ...DEFAULT_SETTINGS,
       launchAtLogin: false,
       preventSleep: false,
       sessionDuration: null,
@@ -233,6 +237,7 @@ describe("session-timer", () => {
       vi.resetModules();
 
       settingsState = {
+        ...DEFAULT_SETTINGS,
         launchAtLogin: false,
         preventSleep: false,
         sessionDuration: null,
@@ -263,6 +268,7 @@ describe("session-timer", () => {
 
       vi.resetModules();
       settingsState = {
+        ...DEFAULT_SETTINGS,
         launchAtLogin: false,
         preventSleep: false,
         sessionDuration: null,
@@ -301,6 +307,7 @@ describe("session-timer", () => {
 
       vi.resetModules();
       settingsState = {
+        ...DEFAULT_SETTINGS,
         launchAtLogin: false,
         preventSleep: false,
         sessionDuration: null,
@@ -332,6 +339,7 @@ describe("session-timer", () => {
 
       vi.resetModules();
       settingsState = {
+        ...DEFAULT_SETTINGS,
         launchAtLogin: false,
         preventSleep: false,
         sessionDuration: null,
@@ -389,6 +397,7 @@ describe("session-timer", () => {
       vi.resetModules();
       vi.clearAllMocks();
       settingsState = {
+        ...DEFAULT_SETTINGS,
         launchAtLogin: false,
         preventSleep: false,
         sessionDuration: null,
@@ -472,6 +481,7 @@ describe("session-timer", () => {
       vi.resetModules();
       vi.clearAllMocks();
       settingsState = {
+        ...DEFAULT_SETTINGS,
         launchAtLogin: false,
         preventSleep: false,
         sessionDuration: null,
@@ -511,7 +521,6 @@ describe("session-timer", () => {
       mockBroadcastToWindows.mockClear();
 
       vi.advanceTimersByTime(2000);
-      const callsBeforeStop = mockBroadcastToWindows.mock.calls.length;
 
       stopSessionBroadcast();
       mockBroadcastToWindows.mockClear();
@@ -529,7 +538,7 @@ describe("session-timer", () => {
 describe("session-timer additional edge cases", () => {
   let startSession: (_durationMinutes: number | null) => SessionState;
   let cancelSession: () => SessionState;
-  let getStatus: () => SessionState;
+  let getStatus: () => SessionStatusResponse;
   let setOnSessionStateChange: (cb: (updates: Partial<typeof settingsState>) => void) => void;
   let setSettingsReader: (getSettings: () => typeof settingsState) => void;
   let setBroadcastFn: (fn: (channel: string, data: unknown) => void) => void;
@@ -538,6 +547,7 @@ describe("session-timer additional edge cases", () => {
     vi.useRealTimers();
     vi.clearAllMocks();
     settingsState = {
+      ...DEFAULT_SETTINGS,
       launchAtLogin: false,
       preventSleep: false,
       sessionDuration: null,
@@ -565,6 +575,7 @@ describe("session-timer additional edge cases", () => {
     it("getStatus().remainingSeconds is computed from mocked performance.now()", async () => {
       vi.resetModules();
       settingsState = {
+        ...DEFAULT_SETTINGS,
         launchAtLogin: false,
         preventSleep: false,
         sessionDuration: null,
@@ -596,6 +607,7 @@ describe("session-timer additional edge cases", () => {
       vi.useFakeTimers();
       vi.resetModules();
       settingsState = {
+        ...DEFAULT_SETTINGS,
         launchAtLogin: false,
         preventSleep: false,
         sessionDuration: null,
@@ -637,6 +649,7 @@ describe("session-timer additional edge cases", () => {
       vi.useFakeTimers();
       vi.resetModules();
       settingsState = {
+        ...DEFAULT_SETTINGS,
         launchAtLogin: false,
         preventSleep: false,
         sessionDuration: null,

@@ -43,3 +43,13 @@ export function getDevServerUrl(): string {
 // === Environment ===
 // NOTE (security): electron pinned to ^41.3.0 — satisfies CVE-2026-34780 patch (>= 41.0.2).
 export const isDev = !app.isPackaged;
+
+// === Tray Menu Labels ===
+/** Tray context-menu labels. */
+export const MENU_PREVENT_SLEEP = "Prevent Sleep" as const;
+export const MENU_SETTINGS = "Settings..." as const;
+export const MENU_ABOUT = "About Amphetamine" as const;
+export const MENU_QUIT = "Quit" as const;
+
+/** Tray accelerator strings. */
+export const ACCELERATOR_QUIT = "Cmd+Q" as const;

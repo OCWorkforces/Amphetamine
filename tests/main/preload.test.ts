@@ -68,7 +68,7 @@ describe("preload", () => {
   it("settings.open calls ipcRenderer.invoke with correct channel", () => {
     api.settings.open();
 
-    expect(mockInvoke).toHaveBeenCalledWith(IPC_CHANNELS.SETTINGS_OPEN, undefined);
+    expect(mockInvoke).toHaveBeenCalledWith(IPC_CHANNELS.SETTINGS_OPEN);
   });
 
   it("session.start calls ipcRenderer.invoke with durationMinutes", () => {
@@ -90,19 +90,19 @@ describe("preload", () => {
   it("session.cancel calls ipcRenderer.invoke with correct channel", () => {
     api.session.cancel();
 
-    expect(mockInvoke).toHaveBeenCalledWith(IPC_CHANNELS.SESSION_CANCEL, undefined);
+    expect(mockInvoke).toHaveBeenCalledWith(IPC_CHANNELS.SESSION_CANCEL);
   });
 
   it("session.getStatus calls ipcRenderer.invoke with correct channel", () => {
     api.session.getStatus();
 
-    expect(mockInvoke).toHaveBeenCalledWith(IPC_CHANNELS.SESSION_STATUS, undefined);
+    expect(mockInvoke).toHaveBeenCalledWith(IPC_CHANNELS.SESSION_STATUS);
   });
 
   it("quit calls ipcRenderer.invoke with correct channel", () => {
     api.app.quit();
 
-    expect(mockInvoke).toHaveBeenCalledWith(IPC_CHANNELS.APP_QUIT, undefined);
+    expect(mockInvoke).toHaveBeenCalledWith(IPC_CHANNELS.APP_QUIT);
   });
 
   it("onSettingsChanged registers listener and returns unsubscribe function", () => {
@@ -112,7 +112,7 @@ describe("preload", () => {
     expect(mockOn).toHaveBeenCalledWith(IPC_CHANNELS.SETTINGS_CHANGED, expect.any(Function));
 
     // Simulate settings push from main process
-    const listener = mockOn.mock.calls[0][1];
+    const listener = mockOn.mock.calls[0]![1];
     const testSettings = { preventSleep: true, launchAtLogin: false, sessionDuration: null };
     listener({}, testSettings);
     expect(callback).toHaveBeenCalledWith(testSettings);
@@ -133,7 +133,7 @@ describe("preload", () => {
     const sessionCall = calls.find(
       (c: unknown[]) => c[0] === IPC_CHANNELS.SESSION_STATUS_UPDATE,
     );
-    const listener = sessionCall[1];
+    const listener = sessionCall![1];
     const testStatus = {
       isRunning: true,
       startedAt: 1000,
@@ -155,7 +155,7 @@ describe("preload", () => {
   it("autoUpdater.checkForUpdates calls ipcRenderer.invoke with correct channel", () => {
     api.autoUpdater.checkForUpdates();
 
-    expect(mockInvoke).toHaveBeenCalledWith(IPC_CHANNELS.AUTO_UPDATER_CHECK, undefined);
+    expect(mockInvoke).toHaveBeenCalledWith(IPC_CHANNELS.AUTO_UPDATER_CHECK);
   });
 
   it("autoUpdater.onStatus registers listener and returns unsubscribe function", () => {
@@ -165,7 +165,7 @@ describe("preload", () => {
     expect(mockOn).toHaveBeenCalledWith(IPC_CHANNELS.AUTO_UPDATER_STATUS, expect.any(Function));
 
     // Simulate status push from main process
-    const listener = mockOn.mock.calls[0][1];
+    const listener = mockOn.mock.calls[0]![1];
     const testStatus = {
       status: "available",
       info: { version: "2.0.0", releaseDate: "2025-01-01" },

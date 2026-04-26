@@ -29,14 +29,13 @@ export const IPC_CHANNELS = {
 } as const;
 ```
 
-`IpcChannelMap` (types.ts:35) maps each channel to its `request` / `response` types.
+`IpcChannelMap` maps each channel to its `request` / `response` types. Note: `SESSION_STATUS` and `SESSION_STATUS_UPDATE` always return `SessionStatusResponse` — never `null`.
 
 ## DATA MODELS
 
 ### AppSettings
 
 ```typescript
-// types.ts:110-121
 export interface AppSettings {
   launchAtLogin: boolean; // macOS login item toggle
   preventSleep: boolean; // powerSaveBlocker toggle
@@ -45,8 +44,7 @@ export interface AppSettings {
   shortcut: string; // global shortcut accelerator string. Empty = use default
 }
 
-// types.ts:124-130
-export const DEFAULT_SETTINGS: AppSettings = {
+export const DEFAULT_SETTINGS: Readonly<AppSettings> = {
   launchAtLogin: false,
   preventSleep: false,
   sessionDuration: null,
@@ -55,34 +53,65 @@ export const DEFAULT_SETTINGS: AppSettings = {
 };
 ```
 
+> **Note**: When adding a new field to `AppSettings`, it MUST be added to the `VALIDATORS` dispatch table in `src/main/settings.ts` — otherwise validation silently drops the field.
+
 ### SessionStatusResponse
 
+Discriminated union with three arms (discriminated by `isRunning` + `expiresAt`):
+
 ```typescript
-// types.ts:19-25 — used by SESSION_STATUS and SESSION_STATUS_UPDATE
-// JSDoc discriminant: isRunning=false means all time fields are null.
-// Indefinite sessions (durationMinutes=null) always have expiresAt=null.
-// remainingSeconds is always computed by getStatus() — never duplicated in callers.
-export interface SessionStatusResponse {
-// types.ts:19-25 — used by SESSION_STATUS and SESSION_STATUS_UPDATE
-export interface SessionStatusResponse {
-  isRunning: boolean;
-  startedAt: number | null;
-  expiresAt: number | null;
-  remainingSeconds: number | null;
-  durationMinutes: number | null;
-}
+// types.ts — used by SESSION_STATUS and SESSION_STATUS_UPDATE
+export type SessionStatusResponse =
+  | {
+      // Not running
+      isRunning: false;
+      startedAt: null;
+      expiresAt: null;
+      remainingSeconds: null;
+      durationMinutes: null;
+    }
+  | {
+      // Timed session
+      isRunning: true;
+      startedAt: number;
+      expiresAt: number;
+      remainingSeconds: number;
+      durationMinutes: number;
+    }
+  | {
+      // Indefinite session
+      isRunning: true;
+      startedAt: number;
+      expiresAt: null;
+      remainingSeconds: null;
+      durationMinutes: null;
+    };
 ```
+
+> **Narrowing**: Access fields only after narrowing — first `if (status.isRunning)` to discriminate running vs not, then `if (status.expiresAt !== null)` to discriminate timed vs indefinite.
 
 ### SessionStartResponse
 
+Discriminated union with two arms (discriminated by `ok`):
+
 ```typescript
-// types.ts:28-32 — used by SESSION_START
-export interface SessionStartResponse {
-  startedAt: number;
-  durationMinutes: number | null;
-  expiresAt: number | null;
-}
+// types.ts — used by SESSION_START
+export type SessionStartResponse =
+  | {
+      // Success
+      ok: true;
+      startedAt: number;
+      durationMinutes: number | null;
+      expiresAt: number | null;
+    }
+  | {
+      // Failure
+      ok: false;
+      reason: "invalid-duration" | "rejected";
+    };
 ```
+
+> **Narrowing**: Always check `resp.ok` before accessing other fields. On `ok: false`, only `reason` is available.
 
 ### Session Cancel
 
@@ -94,7 +123,6 @@ export interface SessionStartResponse {
 ## TYPE UTILITIES
 
 ```typescript
-// types.ts:96-98
 export type IpcChannel = keyof IpcChannelMap;
 export type IpcRequest<K extends IpcChannel> = IpcChannelMap[K]["request"];
 export type IpcResponse<K extends IpcChannel> = IpcChannelMap[K]["response"];
@@ -103,7 +131,6 @@ export type IpcResponse<K extends IpcChannel> = IpcChannelMap[K]["response"];
 ## PUSH CHANNELS
 
 ```typescript
-// types.ts:101-107
 export const PUSH_CHANNELS = [
   IPC_CHANNELS.SETTINGS_CHANGED,
   IPC_CHANNELS.SESSION_STATUS_UPDATE,

@@ -1,5 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { TrayDeps } from "../../src/main/tray.js";
+import {
+  ACCELERATOR_QUIT,
+  MENU_ABOUT,
+  MENU_PREVENT_SLEEP,
+  MENU_QUIT,
+  MENU_SETTINGS,
+} from "../../src/main/constants.js";
 
 const mockTrayConstructor = vi.hoisted(() =>
   vi.fn().mockImplementation(function (this: Record<string, ReturnType<typeof vi.fn>>) {
@@ -223,7 +230,7 @@ describe("tray", () => {
 
       const template = mockBuildFromTemplate.mock.calls[0]![0];
       const preventSleepItem = template.find(
-        (item: { label?: string }) => item.label === "Prevent Sleep",
+        (item: { label?: string }) => item.label === MENU_PREVENT_SLEEP,
       );
       expect(preventSleepItem).toBeDefined();
       expect(preventSleepItem.type).toBe("checkbox");
@@ -235,7 +242,7 @@ describe("tray", () => {
 
       const template = mockBuildFromTemplate.mock.calls[0]![0];
       const preventSleepItem = template.find(
-        (item: { label?: string }) => item.label === "Prevent Sleep",
+        (item: { label?: string }) => item.label === MENU_PREVENT_SLEEP,
       );
       expect(preventSleepItem.checked).toBe(false);
     });
@@ -247,7 +254,7 @@ describe("tray", () => {
 
       const template = mockBuildFromTemplate.mock.calls[0]![0];
       const preventSleepItem = template.find(
-        (item: { label?: string }) => item.label === "Prevent Sleep",
+        (item: { label?: string }) => item.label === MENU_PREVENT_SLEEP,
       );
       expect(preventSleepItem.checked).toBe(true);
     });
@@ -259,9 +266,9 @@ describe("tray", () => {
       const template = mockBuildFromTemplate.mock.calls[0]![0];
       const labels = template.map((item: { label?: string }) => item.label).filter(Boolean);
 
-      expect(labels).toContain("Settings...");
-      expect(labels).toContain("About Amphetamine");
-      expect(labels).toContain("Quit");
+      expect(labels).toContain(MENU_SETTINGS);
+      expect(labels).toContain(MENU_ABOUT);
+      expect(labels).toContain(MENU_QUIT);
     });
 
     it("Quit menu item has Cmd+Q accelerator", async () => {
@@ -270,9 +277,9 @@ describe("tray", () => {
 
       const template = mockBuildFromTemplate.mock.calls[0]![0];
       const quitItem = template.find(
-        (item: { label?: string }) => item.label === "Quit",
+        (item: { label?: string }) => item.label === MENU_QUIT,
       );
-      expect(quitItem.accelerator).toBe("Cmd+Q");
+      expect(quitItem.accelerator).toBe(ACCELERATOR_QUIT);
     });
 
     it("menu is rebuilt when settings change", async () => {
