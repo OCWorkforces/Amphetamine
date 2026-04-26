@@ -14,7 +14,8 @@ export const MAX_POPOVER_HEIGHT = 480;
 export const HIDE_DELAY_MS = 160;
 export const BATTERY_CHECK_TIMEOUT_MS = 5000;
 export const INITIAL_UPDATE_CHECK_DELAY_MS = 3000;
-export const PERIODIC_UPDATE_CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000; // 4 hours
+export const PERIODIC_UPDATE_CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000; // 4 hours (base interval)
+export const MAX_UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours (max backoff)
 
 // === Time Conversion ===
 export const MS_PER_MINUTE = 60 * 1000;
@@ -40,4 +41,5 @@ export function getDevServerUrl(): string {
 }
 
 // === Environment ===
+// NOTE (security): electron pinned to ^41.3.0 — satisfies CVE-2026-34780 patch (>= 41.0.2).
 export const isDev = !app.isPackaged;

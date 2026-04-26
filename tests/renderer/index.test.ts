@@ -3,8 +3,7 @@ import type { AppSettings, SessionStatusResponse } from "../../src/shared/types.
 
 const mockApi = {
   window: { setHeight: vi.fn() },
-  app: { getVersion: vi.fn().mockResolvedValue("1.0.0") },
-  quit: vi.fn(),
+  app: { getVersion: vi.fn().mockResolvedValue("1.0.0"), quit: vi.fn() },
   settings: {
     get: vi.fn<() => Promise<AppSettings>>(),
     set: vi.fn(),
@@ -73,7 +72,7 @@ describe("renderer popover (index.ts)", () => {
   });
 
   describe("formatTimerLabel via render", () => {
-    it('renders "⏱ Indefinitely" when preventSleep is false', async () => {
+    it('renders "Timer Indefinitely" when preventSleep is false', async () => {
       mockApi.settings.get.mockResolvedValue({
         launchAtLogin: false,
         preventSleep: false,
@@ -89,10 +88,10 @@ describe("renderer popover (index.ts)", () => {
       // Let promises resolve
       await vi.advanceTimersByTimeAsync(0);
 
-      expect(getTimerText()).toBe("⏱ Indefinitely");
+      expect(getTimerText()).toBe("Timer Indefinitely");
     });
 
-    it('renders "⏱ Indefinitely" when session not running', async () => {
+    it('renders "Timer Indefinitely" when session not running', async () => {
       mockApi.settings.get.mockResolvedValue({
         launchAtLogin: false,
         preventSleep: true,
@@ -111,10 +110,10 @@ describe("renderer popover (index.ts)", () => {
       document.dispatchEvent(new Event("DOMContentLoaded"));
       await vi.advanceTimersByTimeAsync(0);
 
-      expect(getTimerText()).toBe("⏱ Indefinitely");
+      expect(getTimerText()).toBe("Timer Indefinitely");
     });
 
-    it('renders "⏱ Indefinitely" when running with null durationMinutes', async () => {
+    it('renders "Timer Indefinitely" when running with null durationMinutes', async () => {
       mockApi.settings.get.mockResolvedValue({
         launchAtLogin: false,
         preventSleep: true,
@@ -133,7 +132,7 @@ describe("renderer popover (index.ts)", () => {
       document.dispatchEvent(new Event("DOMContentLoaded"));
       await vi.advanceTimersByTimeAsync(0);
 
-      expect(getTimerText()).toBe("⏱ Indefinitely");
+      expect(getTimerText()).toBe("Timer Indefinitely");
     });
 
     it("renders hours and minutes remaining for large durations", async () => {
@@ -157,7 +156,7 @@ describe("renderer popover (index.ts)", () => {
       await vi.advanceTimersByTimeAsync(0);
 
       const text = getTimerText();
-      expect(text).toContain("⏱");
+      expect(text).toContain("Timer");
       expect(text).toContain("h");
       expect(text).toContain("m remaining");
     });
@@ -183,7 +182,7 @@ describe("renderer popover (index.ts)", () => {
       await vi.advanceTimersByTimeAsync(0);
 
       const text = getTimerText();
-      expect(text).toContain("⏱");
+      expect(text).toContain("Timer");
       expect(text).toContain("m remaining");
       expect(text).not.toContain("h");
     });
@@ -288,7 +287,7 @@ describe("renderer popover (index.ts)", () => {
       await vi.advanceTimersByTimeAsync(0);
 
       document.getElementById("quit-action")?.click();
-      expect(mockApi.quit).toHaveBeenCalledOnce();
+      expect(mockApi.app.quit).toHaveBeenCalledOnce();
     });
 
     it("renders fallback when init throws", async () => {
@@ -406,7 +405,7 @@ describe("renderer popover (index.ts)", () => {
       await vi.advanceTimersByTimeAsync(16);
 
       const text = getTimerText();
-      expect(text).toContain("⏱");
+      expect(text).toContain("Timer");
       expect(text).toContain("m remaining");
     });
 
@@ -439,7 +438,7 @@ describe("renderer popover (index.ts)", () => {
 
       await vi.advanceTimersByTimeAsync(16);
 
-      expect(getTimerText()).toBe("⏱ Indefinitely");
+      expect(getTimerText()).toBe("Timer Indefinitely");
       expect(getStatusText()).toBe("Sleep Prevention Off");
     });
   });
@@ -465,7 +464,7 @@ describe("renderer popover (index.ts)", () => {
       await vi.advanceTimersByTimeAsync(0);
 
       const text = getTimerText();
-      expect(text).toContain("⏱");
+      expect(text).toContain("Timer");
       // 45 seconds rounds up to 1 minute
       expect(text).toContain("m remaining");
     });
@@ -490,7 +489,7 @@ describe("renderer popover (index.ts)", () => {
       await vi.advanceTimersByTimeAsync(0);
 
       const text = getTimerText();
-      expect(text).toContain("⏱");
+      expect(text).toContain("Timer");
       expect(text).toContain("0m remaining");
     });
   });

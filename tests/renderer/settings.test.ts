@@ -442,5 +442,118 @@ describe("renderer settings", () => {
       const select = document.getElementById("session-duration-select") as HTMLSelectElement;
       expect(select.value).toBe("60");
     });
+  describe("saveSettings failure", () => {
+    it("preserves user's intended UI state when save fails", async () => {
+      mockApi.settings.set.mockRejectedValue(new Error("Disk full"));
+
+      vi.resetModules();
+      await import("../../src/renderer/settings/index.js");
+      document.dispatchEvent(new Event("DOMContentLoaded"));
+      await vi.advanceTimersByTimeAsync(0);
+
+      const toggle = document.getElementById("prevent-sleep-toggle") as HTMLInputElement;
+      toggle.checked = true;
+      toggle.dispatchEvent(new Event("change"));
+
+      // Wait for debounce + save failure
+      await vi.advanceTimersByTimeAsync(350);
+
+      // After failure, render() is called with the error message which rebuilds
+      // the form from local `settings` state — the user's intended state must persist,
+      // not revert to the original server-side value.
+      const refreshedToggle = document.getElementById(
+        "prevent-sleep-toggle",
+      ) as HTMLInputElement;
+      expect(refreshedToggle.checked).toBe(true);
+
+      // Error message displayed
+      const errorEl = document.getElementById("settings-error-text");
+      expect(errorEl?.textContent).toBe("Disk full");
+    });
   });
+
+  describe("session.start failure", () => {
+    it("does not crash the renderer when session.start rejects", async () => {
+      mockApi.session.start.mockRejectedValue(new Error("Session start failed"));
+
+      vi.resetModules();
+      await import("../../src/renderer/settings/index.js");
+      document.dispatchEvent(new Event("DOMContentLoaded"));
+      await vi.advanceTimersByTimeAsync(0);
+
+      const select = document.getElementById("session-duration-select") as HTMLSelectElement;
+      select.value = "30";
+
+      // Should not throw synchronously even though session.start rejects
+      expect(() => select.dispatchEvent(new Event("change"))).not.toThrow();
+
+      expect(mockApi.session.start).toHaveBeenCalledWith(30);
+
+      // Allow rejection to settle without breaking the test
+      await vi.advanceTimersByTimeAsync(0);
+      await vi.advanceTimersByTimeAsync(350);
+    });
+  });
+
+  describe("loadInitialData partial failure", () => {
+    it("renders with defaults when settings.get fails but session.getStatus succeeds", async () => {
+      mockApi.settings.get.mockRejectedValue(new Error("IPC timeout"));
+      mockApi.session.getStatus.mockResolvedValue({
+        isRunning: true,
+        startedAt: Date.now(),
+        expiresAt: Date.now() + 30 * 60 * 1000,
+        remainingSeconds: 1800,
+        durationMinutes: 30,
+      });
+
+      vi.resetModules();
+      await import("../../src/renderer/settings/index.js");
+      document.dispatchEvent(new Event("DOMContentLoaded"));
+      // init() awaits settings.get (rejects), then session.getStatus (resolves), then render()
+      await vi.advanceTimersByTimeAsync(0);
+      await vi.advanceTimersByTimeAsync(0);
+
+      // Form must render despite settings.get failure — using defaults
+      const launchToggle = document.getElementById(
+        "launch-at-login-toggle",
+      ) as HTMLInputElement | null;
+      expect(launchToggle).not.toBeNull();
+      expect(launchToggle?.checked).toBe(false);
+
+      // Successfully-loaded session status applied to the duration dropdown
+      const select = document.getElementById(
+        "session-duration-select",
+      ) as HTMLSelectElement | null;
+      expect(select).not.toBeNull();
+      expect(select?.value).toBe("30");
+    });
+
+    it("renders settings when settings.get succeeds but session.getStatus fails", async () => {
+      mockApi.settings.get.mockResolvedValue({
+        ...defaultSettings,
+        launchAtLogin: true,
+        preventSleep: true,
+      });
+      mockApi.session.getStatus.mockRejectedValue(new Error("Status unavailable"));
+
+      vi.resetModules();
+      await import("../../src/renderer/settings/index.js");
+      document.dispatchEvent(new Event("DOMContentLoaded"));
+      await vi.advanceTimersByTimeAsync(0);
+      await vi.advanceTimersByTimeAsync(0);
+
+      // Settings successfully applied to UI even though getStatus failed
+      const launchToggle = document.getElementById(
+        "launch-at-login-toggle",
+      ) as HTMLInputElement | null;
+      expect(launchToggle?.checked).toBe(true);
+
+      const sleepToggle = document.getElementById(
+        "prevent-sleep-toggle",
+      ) as HTMLInputElement | null;
+      expect(sleepToggle?.checked).toBe(true);
+    });
+  });
+});
+
 });

@@ -34,6 +34,12 @@ mac:
   # Apple Silicon + Intel support
   minimumSystemVersion: "11.0.0"
   mergeASARs: false
+  # hardenedRuntime is intentionally DISABLED.
+  # Electron's V8 renderer requires JIT + unsigned executable memory (see
+  # build/entitlements.mac.plist: com.apple.security.cs.allow-jit and
+  # com.apple.security.cs.allow-unsigned-executable-memory). Enabling hardened runtime
+  # without notarization (notarize: false) would cause Gatekeeper to reject the app on
+  # first launch for many users. Re-enable ONLY together with notarization + JIT entitlements.
   hardenedRuntime: false
   gatekeeperAssess: false
   entitlements: build/entitlements.mac.plist

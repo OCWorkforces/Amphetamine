@@ -23,7 +23,7 @@ export function registerGlobalShortcut(deps: ShortcutDeps): void {
     });
 
     if (!registered) {
-      log.warn(`[global-shortcut] Failed to register global shortcut: ${shortcut}`);
+      log.error(`[global-shortcut] Failed to register shortcut: ${shortcut}`);
     } else {
       log.info(`[global-shortcut] Registered global shortcut: ${shortcut}`);
     }

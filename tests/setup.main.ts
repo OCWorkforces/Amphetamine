@@ -19,7 +19,11 @@ export interface MockBrowserWindowInstance {
   on: Mock<(event: string, listener: (...args: unknown[]) => void) => void>;
   removeListener: Mock<(event: string, listener: (...args: unknown[]) => void) => void>;
   isDestroyed: Mock<() => boolean>;
-  webContents: { send: Mock<(channel: string, ...args: unknown[]) => void> };
+  webContents: {
+    send: Mock<(channel: string, ...args: unknown[]) => void>;
+    on: Mock<(event: string, listener: (...args: unknown[]) => void) => void>;
+    setWindowOpenHandler: Mock<(handler: (details: unknown) => unknown) => void>;
+  };
 }
 
 export interface MockNotificationInstance {
@@ -158,7 +162,11 @@ const electronMock: MockElectronAPI = {
       removeListener:
         vi.fn<(event: string, listener: (...args: unknown[]) => void) => void>(),
       isDestroyed: vi.fn<() => boolean>().mockReturnValue(false),
-      webContents: { send: vi.fn<(channel: string, ...args: unknown[]) => void>() },
+      webContents: {
+        send: vi.fn<(channel: string, ...args: unknown[]) => void>(),
+        on: vi.fn<(event: string, listener: (...args: unknown[]) => void) => void>(),
+        setWindowOpenHandler: vi.fn<(handler: (details: unknown) => unknown) => void>(),
+      },
     })),
     {
       getAllWindows: vi.fn<() => MockBrowserWindowInstance[]>().mockReturnValue([]),

@@ -9,14 +9,21 @@ const MAX_H = 420;
 
 let settings: AppSettings = { ...DEFAULT_SETTINGS };
 let sessionStatus: SessionStatus = null;
+let statusError: string | null = null;
 let unsubscribeSettings: (() => void) | null = null;
 let unsubscribeSessionStatus: (() => void) | null = null;
 let isPopoverVisible = false;
+let isLoading = true;
+
+const TIMER_ICON_SVG = `<svg class="popover-timer-icon" aria-hidden="true" width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="6" cy="6" r="5"/><path d="M6 3v3l2 2"/></svg><span class="visually-hidden">Timer</span>`;
+
+const BOLT_ICON_SVG = `<svg class="app-title-icon" aria-hidden="true" width="12" height="12" viewBox="0 0 12 12" fill="currentColor"><path d="M7 1L1 7h4l-1 4 6-6H6z"/></svg><span class="visually-hidden">Active</span>`;
 
 // Cached DOM element references (populated after render)
 let statusDotEl: HTMLElement | null = null;
 let statusTextEl: HTMLElement | null = null;
 let timerTextEl: HTMLElement | null = null;
+let statusErrorEl: HTMLElement | null = null;
 let rafId: number | null = null;
 
 function getApp(): HTMLElement | null {
@@ -25,11 +32,11 @@ function getApp(): HTMLElement | null {
 
 function formatTimerLabel(): string {
   if (!settings.preventSleep) {
-    return "⏱ Indefinitely";
+    return `${TIMER_ICON_SVG} Indefinitely`;
   }
 
   if (!sessionStatus?.isRunning || sessionStatus.durationMinutes === null) {
-    return "⏱ Indefinitely";
+    return `${TIMER_ICON_SVG} Indefinitely`;
   }
 
   const computedRemaining =
@@ -39,7 +46,7 @@ function formatTimerLabel(): string {
       : Math.max(0, Math.floor((sessionStatus.expiresAt - performance.now()) / 1000)));
 
   if (computedRemaining === null) {
-    return "⏱ Indefinitely";
+    return `${TIMER_ICON_SVG} Indefinitely`;
   }
 
   const totalSeconds = Math.max(0, Math.ceil(computedRemaining));
@@ -47,11 +54,11 @@ function formatTimerLabel(): string {
   const minutes = Math.ceil((totalSeconds % 3600) / 60);
 
   if (hours >= 1) {
-    return `⏱ ${hours}h ${minutes}m remaining`;
+    return `${TIMER_ICON_SVG} ${hours}h ${minutes}m remaining`;
   }
 
   const minuteValue = Math.max(0, Math.ceil(totalSeconds / 60));
-  return `⏱ ${minuteValue}m remaining`;
+  return `${TIMER_ICON_SVG} ${minuteValue}m remaining`;
 }
 
 function resizeToContent(): void {
@@ -63,6 +70,7 @@ function resizeToContent(): void {
 }
 
 function updateStatusUI(): void {
+  if (isLoading) return;
   if (rafId !== null) {
     cancelAnimationFrame(rafId);
   }
@@ -75,7 +83,11 @@ function updateStatusUI(): void {
         : "Sleep Prevention Off";
     }
     if (timerTextEl) {
-      timerTextEl.textContent = formatTimerLabel();
+      timerTextEl.innerHTML = formatTimerLabel();
+    }
+    if (statusErrorEl) {
+      statusErrorEl.textContent = statusError ?? "";
+      statusErrorEl.classList.toggle("visible", statusError !== null);
     }
   });
 }
@@ -83,15 +95,18 @@ function updateStatusUI(): void {
 async function refreshSessionStatus(): Promise<void> {
   if (!settings.preventSleep) {
     sessionStatus = null;
+    statusError = null;
     updateStatusUI();
     return;
   }
 
   try {
     sessionStatus = await window.api.session.getStatus();
+    statusError = null;
   } catch {
     console.warn("[renderer] Failed to get session status");
     sessionStatus = null;
+    statusError = "Status unavailable";
   }
 
   updateStatusUI();
@@ -110,8 +125,28 @@ function bindEvents(): void {
   });
 
   quitButton?.addEventListener("click", () => {
-    void window.api.quit();
+    void window.api.app.quit();
   });
+}
+
+function renderLoading(): void {
+  const app = document.getElementById("app");
+  if (!app) return;
+
+  app.innerHTML = `
+    <div class="popover">
+      <div id="popover-loading" class="popover-loading" role="status" aria-live="polite">
+        <span class="visually-hidden">Loading</span>
+        <span class="popover-loading-dot" aria-hidden="true"></span>
+        <span class="popover-loading-dot" aria-hidden="true"></span>
+        <span class="popover-loading-dot" aria-hidden="true"></span>
+      </div>
+    </div>
+  `;
+
+  if (isPopoverVisible) {
+    app.classList.add("visible");
+  }
 }
 
 function render(version: string): void {
@@ -121,7 +156,7 @@ function render(version: string): void {
   app.innerHTML = `
     <div class="popover">
       <header class="popover-header">
-        <span class="app-title">⚡ Amphetamine</span>
+        <span class="app-title">${BOLT_ICON_SVG} Amphetamine</span>
         <span class="app-version">v${version}</span>
       </header>
 
@@ -129,6 +164,8 @@ function render(version: string): void {
         <span id="status-dot" class="status-dot${settings.preventSleep ? " active" : ""}"></span>
         <span id="status-text" class="status-text">${settings.preventSleep ? "Preventing Sleep" : "Sleep Prevention Off"}</span>
       </section>
+
+      <p id="status-error" class="status-error${statusError !== null ? " visible" : ""}">${statusError ?? ""}</p>
 
       <p id="timer-text" class="popover-timer">${formatTimerLabel()}</p>
 
@@ -148,6 +185,7 @@ function render(version: string): void {
     statusDotEl = app.querySelector("#status-dot");
     statusTextEl = app.querySelector("#status-text");
     timerTextEl = app.querySelector("#timer-text");
+    statusErrorEl = app.querySelector("#status-error");
     resizeToContent();
 
     if (isPopoverVisible) {
@@ -218,6 +256,7 @@ function attachWindowEvents(): void {
     statusDotEl = null;
     statusTextEl = null;
     timerTextEl = null;
+    statusErrorEl = null;
     unsubscribeSessionStatus?.();
     unsubscribeSessionStatus = null;
     unsubscribeSettings?.();
@@ -235,18 +274,23 @@ function attachWindowEvents(): void {
 }
 
 async function init() {
+  isLoading = true;
+  isPopoverVisible = true;
+  renderLoading();
+
   try {
     const data = await loadInitialData();
     settings = data.settings;
-    isPopoverVisible = true;
 
     await refreshSessionStatus();
+    isLoading = false;
     render(data.version);
 
     setupPushSubscriptions();
     attachWindowEvents();
   } catch {
     // Render fallback UI on init failure
+    isLoading = false;
     const version = "-";
     render(version);
     requestAnimationFrame(() => {
@@ -257,6 +301,7 @@ async function init() {
       statusDotEl = app.querySelector("#status-dot");
       statusTextEl = app.querySelector("#status-text");
       timerTextEl = app.querySelector("#timer-text");
+      statusErrorEl = app.querySelector("#status-error");
 
       isPopoverVisible = true;
       app.classList.add("visible");

@@ -95,14 +95,14 @@ describe("shortcut", () => {
       expect(toggleCalled).toBe(true);
     });
 
-    it("logs warning when shortcut registration fails", () => {
+    it("logs error when shortcut registration fails", () => {
       mockRegister.mockImplementation(() => {
         registeredCallback = null;
         return false;
       });
       registerGlobalShortcut(createDeps());
 
-      expect(mockLogWarn).toHaveBeenCalled();
+      expect(mockLogError).toHaveBeenCalled();
     });
 
     it("logs error when shortcut registration throws", () => {

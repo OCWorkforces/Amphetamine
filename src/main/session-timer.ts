@@ -1,7 +1,7 @@
-import type { AppSettings, IpcResponse, PushChannel } from "../shared/types.js";
+import type { AppSettings, IpcResponse, PushChannel, SessionStatusResponse } from "../shared/types.js";
 import { DEFAULT_SETTINGS, IPC_CHANNELS } from "../shared/types.js";
 import log from "electron-log";
-import { MS_PER_MINUTE, MS_PER_SECOND, SESSION_BROADCAST_INTERVAL_MS } from "./constants.js";
+import { MS_PER_MINUTE, SESSION_BROADCAST_INTERVAL_MS } from "./constants.js";
 
 let onSessionStateChange: ((updates: Partial<AppSettings>) => void) | null = null;
 let getSettingsRef: () => AppSettings = () => ({ ...DEFAULT_SETTINGS });
@@ -44,6 +44,8 @@ let expiryTimer: ReturnType<typeof setTimeout> | null = null;
 let sessionBroadcastTimer: ReturnType<typeof setInterval> | null = null;
 let sessionStartedAt: number | null = null;
 let sessionExpiresAt: number | null = null;
+let sessionDuration: number | null = null;
+let isStarting = false;
 
 function clearExpiryTimer(): void {
   if (expiryTimer) {
@@ -53,61 +55,91 @@ function clearExpiryTimer(): void {
 }
 /** Reset session state: notify coordinator and broadcast to renderers. */
 function resetSessionState(preventSleep: boolean): void {
+  isStarting = false;
   onSessionStateChange?.({ sessionDuration: null, preventSleep });
   broadcastSessionUpdate();
 }
 
-export function startSession(durationMinutes: number | null): SessionState {
-  // Clear any existing session
-  clearExpiryTimer();
-
-  if (durationMinutes === null) {
-    // Indefinite session — no timer
-    sessionStartedAt = performance.now();
+/**
+ * Reconcile in-memory session state against settings.
+ * If settings say no session is active but module state still holds one,
+ * clear the in-memory state. Called by coordinator on settings change.
+ */
+export function reconcileSessionState(): void {
+  if (sessionStartedAt !== null && getSettingsRef().sessionDuration === null) {
+    sessionStartedAt = null;
     sessionExpiresAt = null;
-    onSessionStateChange?.({ sessionDuration: null, preventSleep: true });
+    sessionDuration = null;
+  }
+}
+
+export function startSession(durationMinutes: number | null): SessionState {
+  // Concurrency guard: if a start is already in progress (re-entrant call from
+  // event loop / settings subscriber), cancel the existing session first and
+  // allow this call to replace it.
+  if (isStarting) {
+    cancelSession();
+  }
+  isStarting = true;
+  try {
+    // Clear any existing session
+    clearExpiryTimer();
+
+    if (durationMinutes === null) {
+      // Indefinite session — no timer
+      // performance.now() used for monotonic timing — immune to system clock changes
+      sessionStartedAt = performance.now();
+      sessionExpiresAt = null;
+      sessionDuration = null;
+      onSessionStateChange?.({ sessionDuration: null, preventSleep: true });
+      broadcastSessionUpdate();
+      return {
+        isRunning: true,
+        startedAt: sessionStartedAt,
+        expiresAt: null,
+        durationMinutes: null,
+      };
+    }
+
+    // Timed session
+    // performance.now() used for monotonic timing — immune to system clock changes
+    const startedAt = performance.now();
+    const expiresAt = startedAt + durationMinutes * MS_PER_MINUTE;
+    sessionStartedAt = startedAt;
+    sessionExpiresAt = expiresAt;
+    sessionDuration = durationMinutes;
+
+    onSessionStateChange?.({ sessionDuration: durationMinutes, preventSleep: true });
+
+    expiryTimer = setTimeout(
+      () => {
+        try {
+          expiryTimer = null;
+          sessionStartedAt = null;
+          sessionExpiresAt = null;
+          sessionDuration = null;
+          stopSessionBroadcast();
+          // Session expired — coordinator will sync power-saver via settings change
+          resetSessionState(false);
+        } catch (err) {
+          log.error("[session-timer] Error in session expiry callback:", err);
+        }
+      },
+      durationMinutes * MS_PER_MINUTE,
+    );
+
     broadcastSessionUpdate();
+    startSessionBroadcast();
+
     return {
       isRunning: true,
       startedAt: sessionStartedAt,
-      expiresAt: null,
-      durationMinutes: null,
+      expiresAt: sessionExpiresAt,
+      durationMinutes,
     };
+  } finally {
+    isStarting = false;
   }
-
-  // Timed session
-  const startedAt = performance.now();
-  const expiresAt = startedAt + durationMinutes * MS_PER_MINUTE;
-  sessionStartedAt = startedAt;
-  sessionExpiresAt = expiresAt;
-
-  onSessionStateChange?.({ sessionDuration: durationMinutes, preventSleep: true });
-
-  expiryTimer = setTimeout(
-    () => {
-      try {
-        expiryTimer = null;
-        sessionStartedAt = null;
-        sessionExpiresAt = null;
-        stopSessionBroadcast();
-        // Session expired — coordinator will sync power-saver via settings change
-        resetSessionState(false);
-      } catch (err) {
-        log.error("[session-timer] Error in session expiry callback:", err);
-      }
-    },
-    durationMinutes * MS_PER_MINUTE,
-  );
-
-  broadcastSessionUpdate();
-  startSessionBroadcast();
-
-  return {
-    isRunning: true,
-    startedAt: sessionStartedAt,
-    expiresAt: sessionExpiresAt,
-    durationMinutes,
-  };
 }
 
 export function cancelSession(): SessionState {
@@ -117,6 +149,7 @@ export function cancelSession(): SessionState {
   resetSessionState(false);
   sessionStartedAt = null;
   sessionExpiresAt = null;
+  sessionDuration = null;
   return {
     isRunning: false,
     startedAt: null,
@@ -125,29 +158,31 @@ export function cancelSession(): SessionState {
   };
 }
 
-export function getStatus(settings?: AppSettings): SessionState {
-  if (!expiryTimer) {
-    // If sessionDuration is set in settings but no timer, state is inconsistent
-    const s = settings ?? getSettingsRef();
-    if (s.sessionDuration !== null) {
-      // Settings say session is active but no timer running — cancel it
-      onSessionStateChange?.({ sessionDuration: null });
-    }
+/**
+ * Pure status reader — no side effects, never returns null.
+ * Uses module-level `sessionStartedAt` as discriminant for `isRunning`.
+ */
+export function getStatus(): SessionStatusResponse {
+  if (sessionStartedAt === null) {
     return {
       isRunning: false,
+      remainingSeconds: null,
       startedAt: null,
       expiresAt: null,
       durationMinutes: null,
     };
   }
 
-  // Timer is running — return full state
-  const s = settings ?? getSettingsRef();
+  const remainingMs =
+    sessionExpiresAt !== null ? Math.max(0, sessionExpiresAt - performance.now()) : null;
+  const remainingSeconds = remainingMs !== null ? Math.floor(remainingMs / 1000) : null;
+
   return {
     isRunning: true,
     startedAt: sessionStartedAt,
     expiresAt: sessionExpiresAt,
-    durationMinutes: s.sessionDuration,
+    durationMinutes: sessionDuration,
+    remainingSeconds,
   };
 }
 
@@ -156,24 +191,12 @@ export function cleanup(): void {
   clearExpiryTimer();
   sessionStartedAt = null;
   sessionExpiresAt = null;
+  sessionDuration = null;
 }
 
-/** Compute and broadcast current session status to all renderer windows. */
+/** Compute and broadcast current session status to all renderer windows. Never broadcasts null. */
 export function broadcastSessionUpdate(): void {
-  const status = getStatus();
-  const now = performance.now();
-  const response: IpcResponse<typeof IPC_CHANNELS.SESSION_STATUS_UPDATE> = status.isRunning
-    ? {
-        isRunning: true,
-        startedAt: status.startedAt,
-        expiresAt: status.expiresAt,
-        remainingSeconds: status.expiresAt
-          ? Math.max(0, Math.round((status.expiresAt - now) / MS_PER_SECOND))
-          : null,
-        durationMinutes: status.durationMinutes,
-      }
-    : null;
-  broadcastFn?.(IPC_CHANNELS.SESSION_STATUS_UPDATE, response);
+  broadcastFn?.(IPC_CHANNELS.SESSION_STATUS_UPDATE, getStatus());
 }
 
 /** Start periodic session status broadcast (every 1 second). */

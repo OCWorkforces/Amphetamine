@@ -2,6 +2,7 @@ import { app, BrowserWindow, nativeImage } from "electron";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { SETTINGS_WINDOW_WIDTH, SETTINGS_WINDOW_HEIGHT, getDevServerUrl, isDev } from "./constants.js";
+import { hardenWebContents } from "./security.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -60,12 +61,14 @@ export function createSettingsWindow(): BrowserWindow {
     },
   });
 
+  hardenWebContents(win);
+
   // Load settings page
   if (isDev) {
     const devUrl = getDevServerUrl();
-    win.loadURL(`${devUrl}/settings.html`);
+    void win.loadURL(`${devUrl}/settings.html`);
   } else {
-    win.loadFile(path.join(__dirname, "..", "renderer", "settings.html"));
+    void win.loadFile(path.join(__dirname, "..", "renderer", "settings.html"));
   }
 
   // Show window when ready

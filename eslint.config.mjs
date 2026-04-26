@@ -113,8 +113,10 @@ export default [
       parserOptions: {
         ecmaVersion: 2024,
         sourceType: "module",
+        project: "./tsconfig.tests.json",
+        tsconfigRootDir: import.meta.dirname,
       },
-      },
+    },
 
     plugins: {
       "@typescript-eslint": tseslint,
@@ -136,6 +138,14 @@ export default [
 
       // Relax overly strict rules
       "@typescript-eslint/no-explicit-any": "error",
+
+      // Security (Electron)
+      "no-eval": "error",
+      "no-new-func": "error",
+
+      // Type safety / async correctness
+      "@typescript-eslint/no-floating-promises": "error",
+      "@typescript-eslint/consistent-type-imports": "error",
     },
   },
   prettier, // Prettier must be last to override formatting rules

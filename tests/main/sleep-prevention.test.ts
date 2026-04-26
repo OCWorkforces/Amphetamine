@@ -184,4 +184,25 @@ describe("sleep-prevention", () => {
       expect(isPreventingSleep()).toBe(false);
     });
   });
+
+  describe("error handling and idempotency", () => {
+    it("does not crash when powerSaveBlocker.start returns -1", () => {
+      mockPowerSaveBlocker.start.mockReturnValue(-1);
+
+      expect(() => startPreventingSleep()).not.toThrow();
+      expect(mockLogError).toHaveBeenCalled();
+      // Subsequent stop is safe — blockerId was never set
+      expect(() => stopPreventingSleep()).not.toThrow();
+      expect(mockPowerSaveBlocker.stop).not.toHaveBeenCalled();
+    });
+
+    it("stopPreventingSleep when already stopped is idempotent and throws no error", () => {
+      // Never started
+      expect(() => stopPreventingSleep()).not.toThrow();
+      // Stop again — still no-op
+      expect(() => stopPreventingSleep()).not.toThrow();
+      expect(() => stopPreventingSleep()).not.toThrow();
+      expect(mockPowerSaveBlocker.stop).not.toHaveBeenCalled();
+    });
+  });
 });

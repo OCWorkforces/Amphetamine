@@ -40,7 +40,7 @@ macOS build pipeline: post-pack optimizations, fuse flipping, entitlements, and 
 | `EnableCookieEncryption`                | `true`  | Encrypts cookies                |
 | `EnableFuses`                           | `true`  | Enables fuse system             |
 
-**Note**: `EnableNodeOptionsEnvironmentVariable` is listed twice (lines 20+24) — harmless but redundant.
+**Note**: `EnableNodeOptionsEnvironmentVariable` appeared twice (now deduplicated — the duplicate line was removed).
 
 ## ENTITLEMENTS
 

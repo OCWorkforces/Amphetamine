@@ -7,8 +7,12 @@ const heroIcon = new URL("../../assets/settings-hero-icon.png", import.meta.url)
 
 let settings: AppSettings = { ...DEFAULT_SETTINGS };
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
+let errorMessage: string | null = null;
 let isSaving = false;
 const saveIndicatorTimers = new Map<string, ReturnType<typeof setTimeout>>();
+let lastValidBatteryThreshold: number = DEFAULT_SETTINGS.batteryThreshold;
+let isRecordingShortcut = false;
+let shortcutKeydownHandler: ((e: KeyboardEvent) => void) | null = null;
 
 window.addEventListener("beforeunload", () => {
   for (const timer of saveIndicatorTimers.values()) {
@@ -16,6 +20,52 @@ window.addEventListener("beforeunload", () => {
   }
   saveIndicatorTimers.clear();
 });
+
+/** Map an Electron-style accelerator string to display symbols (e.g. "CommandOrControl+Shift+A" -> "⌘⇧A"). */
+function formatAcceleratorForDisplay(accelerator: string): string {
+  if (!accelerator) return "";
+  const SYMBOLS: Record<string, string> = {
+    CommandOrControl: "⌘",
+    CmdOrCtrl: "⌘",
+    Command: "⌘",
+    Cmd: "⌘",
+    Control: "⌃",
+    Ctrl: "⌃",
+    Shift: "⇧",
+    Alt: "⌥",
+    Option: "⌥",
+    Super: "⌘",
+    Meta: "⌘",
+  };
+  return accelerator
+    .split("+")
+    .map((p) => SYMBOLS[p] ?? p.toUpperCase())
+    .join("");
+}
+
+/** Convert a KeyboardEvent into an Electron accelerator string. Returns null when the combo lacks a non-modifier key. */
+function keyEventToAccelerator(e: KeyboardEvent): string | null {
+  const parts: string[] = [];
+  if (e.metaKey || e.ctrlKey) parts.push("CommandOrControl");
+  if (e.altKey) parts.push("Alt");
+  if (e.shiftKey) parts.push("Shift");
+
+  const key = e.key;
+  if (["Control", "Shift", "Alt", "Meta", "Command", "Option"].includes(key)) {
+    return null;
+  }
+  let normalized: string;
+  if (key === " ") {
+    normalized = "Space";
+  } else if (key.length === 1) {
+    normalized = key.toUpperCase();
+  } else {
+    normalized = key;
+  }
+  parts.push(normalized);
+  // Require at least one modifier + one regular key
+  return parts.length >= 2 ? parts.join("+") : null;
+}
 
 /** Build the settings form HTML template */
 function buildSettingsForm(): string {
@@ -85,11 +135,80 @@ function buildSettingsForm(): string {
           </select>
         </div>
       </div>
+      <div class="setting-row setting-row--number">
+        <div class="setting-row-inner">
+          <label class="setting-label" for="battery-threshold-input">
+            🪫 Auto-disable Battery Threshold
+          </label>
+          <span class="setting-description">Automatically disable sleep prevention when battery drops below this level</span>
+        </div>
+        <div class="setting-control">
+          <span class="save-indicator" id="battery-save-indicator"></span>
+          <div class="number-input-wrap">
+            <input type="number" id="battery-threshold-input" class="setting-number" min="0" max="100" step="1" value="${settings.batteryThreshold}" />
+            <span class="number-input-suffix">%</span>
+          </div>
+        </div>
+      </div>
+      <div class="setting-row setting-row--shortcut">
+        <div class="setting-row-inner">
+          <label class="setting-label" for="shortcut-input">
+            ⌨️ Toggle Shortcut
+          </label>
+          <span class="setting-description">Global keyboard shortcut to toggle sleep prevention</span>
+        </div>
+        <div class="setting-control">
+          <span class="save-indicator" id="shortcut-save-indicator"></span>
+          <button type="button" id="shortcut-input" class="setting-shortcut" aria-label="Toggle shortcut recorder">${formatAcceleratorForDisplay(settings.shortcut) || "Click to record"}</button>
+        </div>
+      </div>
     </div>
     <div class="settings-footer">
       <span class="settings-footer-text">Amphetamine &middot; &copy; ${new Date().getFullYear()}</span>
     </div>
   `;
+}
+
+function isFocused(el: HTMLElement): boolean {
+  return document.activeElement === el;
+}
+
+function startRecordingShortcut(): void {
+  if (isRecordingShortcut) return;
+  const btn = document.getElementById("shortcut-input") as HTMLButtonElement | null;
+  if (!btn) return;
+  isRecordingShortcut = true;
+  btn.textContent = "Press keys…";
+  btn.classList.add("recording");
+
+  shortcutKeydownHandler = (e: KeyboardEvent): void => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.key === "Escape") {
+      stopRecordingShortcut();
+      return;
+    }
+    const accelerator = keyEventToAccelerator(e);
+    if (accelerator) {
+      stopRecordingShortcut();
+      void saveSettings({ shortcut: accelerator }, "shortcut-save-indicator");
+    }
+  };
+  window.addEventListener("keydown", shortcutKeydownHandler, true);
+}
+
+function stopRecordingShortcut(): void {
+  if (!isRecordingShortcut) return;
+  isRecordingShortcut = false;
+  if (shortcutKeydownHandler) {
+    window.removeEventListener("keydown", shortcutKeydownHandler, true);
+    shortcutKeydownHandler = null;
+  }
+  const btn = document.getElementById("shortcut-input") as HTMLButtonElement | null;
+  if (btn) {
+    btn.classList.remove("recording");
+    btn.textContent = formatAcceleratorForDisplay(settings.shortcut) || "Click to record";
+  }
 }
 
 /** Attach change listeners to toggles and dropdown */
@@ -120,9 +239,41 @@ function attachFormListeners(): void {
       void saveSettings({ sessionDuration: duration, preventSleep: true }, "duration-save-indicator");
     });
   }
+
+  const batteryInput = document.getElementById(
+    "battery-threshold-input",
+  ) as HTMLInputElement | null;
+  if (batteryInput) {
+    lastValidBatteryThreshold = settings.batteryThreshold;
+    batteryInput.addEventListener("change", () => {
+      const raw = batteryInput.value.trim();
+      const parsed = Number(raw);
+      if (raw === "" || !Number.isFinite(parsed) || !Number.isInteger(parsed) || parsed < 0 || parsed > 100) {
+        // Invalid input: revert to last valid value
+        batteryInput.value = String(lastValidBatteryThreshold);
+        return;
+      }
+      lastValidBatteryThreshold = parsed;
+      void saveSettings({ batteryThreshold: parsed }, "battery-save-indicator");
+    });
+  }
+
+  const shortcutBtn = document.getElementById("shortcut-input") as HTMLButtonElement | null;
+  if (shortcutBtn) {
+    shortcutBtn.addEventListener("click", () => startRecordingShortcut());
+  }
 }
 
-function render(errorMessage?: string): void {
+function setErrorMessage(message: string | null): void {
+  errorMessage = message;
+  const errorEl = document.getElementById("settings-error-text");
+  if (errorEl) {
+    errorEl.textContent = message ?? "";
+    errorEl.classList.toggle("visible", message !== null);
+  }
+}
+
+function render(): void {
   const app = document.getElementById("app");
   if (!app) return;
 
@@ -132,6 +283,7 @@ function render(errorMessage?: string): void {
   const errorEl = document.getElementById("settings-error-text");
   if (errorEl) {
     errorEl.textContent = errorMessage ?? "";
+    errorEl.classList.toggle("visible", errorMessage !== null);
   }
 
   attachFormListeners();
@@ -155,6 +307,19 @@ function updateSettingsUI(s: AppSettings): void {
   ) as HTMLSelectElement | null;
   if (durationSelect) {
     durationSelect.value = s.sessionDuration === null ? "" : String(s.sessionDuration);
+  }
+
+  const batteryInput = document.getElementById(
+    "battery-threshold-input",
+  ) as HTMLInputElement | null;
+  if (batteryInput && !isFocused(batteryInput)) {
+    batteryInput.value = String(s.batteryThreshold);
+    lastValidBatteryThreshold = s.batteryThreshold;
+  }
+
+  const shortcutBtn = document.getElementById("shortcut-input") as HTMLButtonElement | null;
+  if (shortcutBtn && !isRecordingShortcut) {
+    shortcutBtn.textContent = formatAcceleratorForDisplay(s.shortcut) || "Click to record";
   }
 }
 
@@ -195,10 +360,11 @@ async function saveSettings(
     isSaving = true;
     try {
       await window.api.settings.set(settings);
+      setErrorMessage(null);
       showSaveIndicator(indicatorId, "✓ Saved");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to save settings";
-      render(message);
+      setErrorMessage(message);
     } finally {
       isSaving = false;
     }
@@ -214,7 +380,7 @@ async function init(): Promise<void> {
 
   try {
     const status = await window.api.session.getStatus();
-    if (status?.isRunning) {
+    if (!isSaving && status?.isRunning) {
       settings.sessionDuration = status.durationMinutes;
     }
   } catch (e2) {

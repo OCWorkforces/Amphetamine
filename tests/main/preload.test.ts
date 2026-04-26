@@ -100,7 +100,7 @@ describe("preload", () => {
   });
 
   it("quit calls ipcRenderer.invoke with correct channel", () => {
-    api.quit();
+    api.app.quit();
 
     expect(mockInvoke).toHaveBeenCalledWith(IPC_CHANNELS.APP_QUIT, undefined);
   });

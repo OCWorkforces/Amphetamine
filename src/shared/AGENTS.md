@@ -59,6 +59,11 @@ export const DEFAULT_SETTINGS: AppSettings = {
 
 ```typescript
 // types.ts:19-25 — used by SESSION_STATUS and SESSION_STATUS_UPDATE
+// JSDoc discriminant: isRunning=false means all time fields are null.
+// Indefinite sessions (durationMinutes=null) always have expiresAt=null.
+// remainingSeconds is always computed by getStatus() — never duplicated in callers.
+export interface SessionStatusResponse {
+// types.ts:19-25 — used by SESSION_STATUS and SESSION_STATUS_UPDATE
 export interface SessionStatusResponse {
   isRunning: boolean;
   startedAt: number | null;

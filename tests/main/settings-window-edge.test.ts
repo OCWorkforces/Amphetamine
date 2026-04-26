@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import type { BrowserWindow } from "electron";
 
 const {
   mockFocus,
@@ -24,6 +25,7 @@ vi.mock("electron", () => ({
   app: {
     isPackaged: false,
     setActivationPolicy: mockSetActivationPolicy,
+    getAppPath: vi.fn().mockReturnValue("/test/app"),
     dock: {
       setIcon: mockSetDockIcon,
     },
@@ -43,6 +45,7 @@ vi.mock("electron", () => ({
       }
     });
     this.on = vi.fn();
+    this.webContents = { on: vi.fn(), setWindowOpenHandler: vi.fn(), send: vi.fn() };
   }),
   nativeImage: {
     createFromPath: vi.fn().mockReturnValue({
@@ -52,7 +55,7 @@ vi.mock("electron", () => ({
 }));
 
 describe("settings-window — edge cases", () => {
-  let createSettingsWindow: () => import("../../src/main/settings-window.js").BrowserWindow;
+  let createSettingsWindow: () => BrowserWindow;
 
   beforeEach(async () => {
     vi.resetModules();

@@ -167,4 +167,63 @@ describe("settings", () => {
       expect(settings.launchAtLogin).toBe(false);
     });
   });
+
+  describe("validation edge cases", () => {
+    it("rejects NaN sessionDuration (no change)", async () => {
+      await updateSettings({ sessionDuration: 60 });
+      const before = getSettings().sessionDuration;
+
+      const result = await updateSettings({ sessionDuration: Number.NaN });
+
+      expect(result.sessionDuration).toBe(before);
+      expect(result.sessionDuration).toBe(60);
+    });
+
+    it("rejects Infinity sessionDuration (no change)", async () => {
+      await updateSettings({ sessionDuration: 60 });
+      const before = getSettings().sessionDuration;
+
+      const result = await updateSettings({ sessionDuration: Number.POSITIVE_INFINITY });
+
+      expect(result.sessionDuration).toBe(before);
+      expect(result.sessionDuration).toBe(60);
+
+      const result2 = await updateSettings({ sessionDuration: Number.NEGATIVE_INFINITY });
+      expect(result2.sessionDuration).toBe(60);
+    });
+  });
+
+  describe("concurrent updateSettings", () => {
+    it("final state matches the last call when fired rapidly", async () => {
+      await updateSettings({ sessionDuration: 10 });
+
+      const p1 = updateSettings({ sessionDuration: 30 });
+      const p2 = updateSettings({ sessionDuration: 60 });
+      const p3 = updateSettings({ sessionDuration: 90 });
+
+      const results = await Promise.all([p1, p2, p3]);
+
+      // Final result observed by caller and cache must reflect the last update
+      expect(results[2].sessionDuration).toBe(90);
+      expect(getSettings().sessionDuration).toBe(90);
+    });
+  });
+
+  describe("no-change dedup", () => {
+    it("does not write to disk when partial matches current settings", async () => {
+      // Establish baseline on disk
+      await updateSettings({ launchAtLogin: true });
+      expect(existsSync(settingsPath)).toBe(true);
+
+      // Remove the file — if updateSettings tries to write again, the file will reappear
+      rmSync(settingsPath);
+      expect(existsSync(settingsPath)).toBe(false);
+
+      // Same value as cache — dedup must skip the disk write
+      const result = await updateSettings({ launchAtLogin: true });
+
+      expect(result.launchAtLogin).toBe(true);
+      expect(existsSync(settingsPath)).toBe(false);
+    });
+  });
 });

@@ -31,18 +31,33 @@ Interactive session status display. Shows prevent-sleep state, session timer cou
 
 ## SETTINGS WINDOW
 
-Separate renderer entry at `settings/`. Three controls: Launch at Login (toggle), Prevent Sleep (toggle), Activate For (dropdown).
+Separate renderer entry at `settings/`. **Five controls**: Launch at Login (toggle), Prevent Sleep (toggle), Activate For (dropdown), Battery Threshold (number input, 0-100), Keyboard Shortcut (recorder).
 
 - Uses native window chrome (`titleBarStyle: "hiddenInset"`)
 - Shows in Dock when open (tray-only app otherwise)
 - Singleton BrowserWindow (focus if already open)
-- Auto-saves on change with "✓ Saved" indicator (1.5s fade)
+- Auto-saves on change with "✓ Saved" indicator (1.5s fade). On save failure, shows inline error message without DOM re-render (preserves local state).
 - `isSaving` guard prevents concurrent saves
+- Per-indicator save timers (Map<string, timeout>) for independent fade timing
+- `errorMessage` module var holds inline error text (set via `setErrorMessage()`)
+- `isFocused()` guard prevents battery input sync from overwriting mid-edit
 - Per-indicator save timers (Map<string, timeout>) for independent fade timing
 - Dropdown options: Indefinitely, 15min, 30min, 1h, 2h, 4h
 - Dropdown change starts session AND sets `preventSleep: true`
+- Keyboard Shortcut: click-to-record button, keyboard capture via `keydown` (capture phase), `keyEventToAccelerator()` converts to Electron accelerator string, `formatAcceleratorForDisplay()` for display (e.g. ⌘⇧A), Escape cancels recording
+- Battery Threshold: `<input type="number" min=0 max=100>` + `%` suffix label, validated before save
 
 ## RENDERING PATTERN
+
+- No virtual DOM, direct `innerHTML` assignment
+- DOM element refs (`statusDotEl`, `statusTextEl`, `timerTextEl`) cached after first `render()`, not re-queried on each update
+- `updateStatusUI()` wraps DOM writes in `requestAnimationFrame` for batched updates
+- `renderLoading()` shows 3-dot animation while `loadInitialData()` resolves (`isLoading` flag). `@media (prefers-reduced-motion)` disables animation.
+- Session status arrives via push subscription, no polling
+- Individual `addEventListener` per button/toggle/dropdown
+- `render()` function rebuilds entire DOM on each call
+- `resizeToContent()` measures `#app` height and sets window height
+- Error state: `statusError` flag + `statusErrorEl` ref shows "Status unavailable" text on `refreshSessionStatus()` failure
 
 - No virtual DOM, direct `innerHTML` assignment
 - DOM element refs (`statusDotEl`, `statusTextEl`, `timerTextEl`) cached after first `render()`, not re-queried on each update
@@ -59,7 +74,7 @@ Separate renderer entry at `settings/`. Three controls: Launch at Login (toggle)
 // Single source of truth — if preload changes, renderer type-check catches drift
 window.api.window.setHeight(height); // → void (fire-and-forget)
 window.api.app.getVersion(); // → Promise<string>
-window.api.quit(); // → Promise<void>  (top-level, NOT under app namespace)
+window.api.app.quit(); // → Promise<void>  (under app namespace)
 window.api.settings.get(); // → Promise<AppSettings>
 window.api.settings.set(partial); // → Promise<AppSettings>
 window.api.settings.open(); // → Promise<void>
@@ -73,6 +88,15 @@ window.api.onSessionStatusUpdate(callback); // → () => void (unsubscribe)
 ```
 
 ## CSS CONVENTIONS
+
+- CSS variables in `:root` for theming: `--bg`, `--surface`, `--border`, `--text-primary`, `--text-secondary`, `--text-tertiary`, `--accent: #007aff`, `--accent-hover`, `--danger`, `--success: #34c759`, `--radius`, `--shadow`
+- Dark mode: `@media (prefers-color-scheme: dark)` redefines all variables
+- Settings adds: `--surface-elevated`, `--border-subtle`, `--accent-bg`, `--success-bg`, `--toggle-shadow-on`, `--toggle-thumb-shadow`, `--toggle-thumb-shadow-active`, `--radius-sm`, `--shadow-sm`
+- Native fonts: `-apple-system, BlinkMacSystemFont, 'SF Pro Text'`
+- Backdrop blur: `blur(20px) saturate(180%)`
+- Reduced motion: `@media (prefers-reduced-motion: reduce)` disables transitions and loading animation
+- `.visually-hidden`: position:absolute, 1×1px, overflow:hidden (for accessible SVG icon labels)
+- `:focus-visible` outlines on all interactive elements (`outline: 2px solid var(--accent); outline-offset: 2px`)
 
 - CSS variables in `:root` for theming
 - Dark mode: `@media (prefers-color-scheme: dark)`

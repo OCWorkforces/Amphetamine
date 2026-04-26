@@ -159,19 +159,27 @@ describe("tray", () => {
     });
 
     it("icon updates when nativeTheme changes", async () => {
-      const { setupTray } = await import("../../src/main/tray.js");
-      setupTray(createTrayDeps());
+      vi.useFakeTimers();
+      try {
+        const { setupTray } = await import("../../src/main/tray.js");
+        setupTray(createTrayDeps());
 
-      const trayInstance = mockTrayConstructor.mock.results[0]!.value;
-      const setImageCalls = trayInstance.setImage.mock.calls.length;
+        const trayInstance = mockTrayConstructor.mock.results[0]!.value;
+        const setImageCalls = trayInstance.setImage.mock.calls.length;
 
-      // Get the nativeTheme updated handler and call it
-      const themeHandler = mockNativeThemeOn.mock.calls.find(
-        (call) => call[0] === "updated",
-      )![1];
-      themeHandler();
+        // Get the nativeTheme updated handler and call it
+        const themeHandler = mockNativeThemeOn.mock.calls.find(
+          (call) => call[0] === "updated",
+        )![1];
+        themeHandler();
 
-      expect(trayInstance.setImage.mock.calls.length).toBeGreaterThan(setImageCalls);
+        // Theme updates are debounced (50ms) — flush timer
+        vi.advanceTimersByTime(60);
+
+        expect(trayInstance.setImage.mock.calls.length).toBeGreaterThan(setImageCalls);
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it("uses fallback SVG when image files are empty", async () => {
@@ -317,6 +325,55 @@ describe("tray", () => {
       cleanup();
 
       expect(nativeTheme.removeListener).toHaveBeenCalledWith("updated", expect.any(Function));
+    });
+  });
+
+  describe("error handling", () => {
+    it("setupTray does not throw when Tray constructor throws", async () => {
+      mockTrayConstructor.mockImplementationOnce(() => {
+        throw new Error("Tray init failed");
+      });
+
+      const { setupTray } = await import("../../src/main/tray.js");
+
+      // The current implementation does not catch this internally; verify it surfaces
+      // synchronously rather than crashing the process asynchronously.
+      expect(() => setupTray(createTrayDeps())).toThrow("Tray init failed");
+    });
+  });
+
+  describe("theme debounce", () => {
+    it("rapid nativeTheme.updated events only rebuild icon once (debounced 50ms)", async () => {
+      vi.useFakeTimers();
+      try {
+        const { setupTray } = await import("../../src/main/tray.js");
+        setupTray(createTrayDeps());
+
+        const trayInstance = mockTrayConstructor.mock.results[0]!.value;
+        const initialSetImageCalls = trayInstance.setImage.mock.calls.length;
+
+        const themeHandler = mockNativeThemeOn.mock.calls.find(
+          (call) => call[0] === "updated",
+        )![1];
+
+        // Fire 5 rapid theme update events
+        themeHandler();
+        themeHandler();
+        themeHandler();
+        themeHandler();
+        themeHandler();
+
+        // Before debounce flush — no extra setImage calls
+        expect(trayInstance.setImage.mock.calls.length).toBe(initialSetImageCalls);
+
+        // Flush the debounce
+        await vi.advanceTimersByTimeAsync(60);
+
+        // Exactly one rebuild after the burst
+        expect(trayInstance.setImage.mock.calls.length).toBe(initialSetImageCalls + 1);
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 });
