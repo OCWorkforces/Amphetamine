@@ -34,21 +34,38 @@ export function setStopSleepPrevention(fn: StopSleepPreventionFn): void {
   stopSleepPrevention = fn;
 }
 
+let isCheckingBattery = false;
+let onBatteryListener: (() => void) | null = null;
+let onAcListener: (() => void) | null = null;
+
 /** @internal Power monitor listeners persist for app lifetime by design. */
 export async function initBatteryMonitoring(): Promise<void> {
-  powerMonitor.on("on-battery", () => {
-    void checkBatteryAndStop();
-  });
-
-  powerMonitor.on("on-ac", () => {
+  onBatteryListener = () => {
+    if (isCheckingBattery) return;
+    isCheckingBattery = true;
+    checkBatteryAndStop()
+      .catch((err) => log.error("[battery-monitor] Battery check error:", err))
+      .finally(() => {
+        isCheckingBattery = false;
+      });
+  };
+  onAcListener = () => {
     log.info("[battery-monitor] On AC power, battery monitoring reset");
-  });
+  };
+  powerMonitor.on("on-battery", onBatteryListener);
+  powerMonitor.on("on-ac", onAcListener);
 }
 
 /** Remove power monitor listeners. For completeness in cleanup paths. */
 export function cleanupBatteryMonitoring(): void {
-  powerMonitor.removeAllListeners("on-battery");
-  powerMonitor.removeAllListeners("on-ac");
+  if (onBatteryListener) {
+    powerMonitor.off?.("on-battery", onBatteryListener);
+    onBatteryListener = null;
+  }
+  if (onAcListener) {
+    powerMonitor.off?.("on-ac", onAcListener);
+    onAcListener = null;
+  }
 }
 
 async function checkBatteryAndStop(): Promise<void> {
@@ -73,6 +90,10 @@ export async function getBatteryPercent(): Promise<number | null> {
     const { stdout } = await execFileAsync("pmset", ["-g", "batt"], {
       timeout: BATTERY_CHECK_TIMEOUT_MS,
     });
+    if (!stdout.includes("InternalBattery")) {
+      log.warn("[battery-monitor] No InternalBattery found in pmset output (desktop Mac?)");
+      return null;
+    }
     const match = stdout.match(/(\d+)%/);
     if (match && match[1] !== undefined) {
       return parseInt(match[1], 10);

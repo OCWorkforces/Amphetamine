@@ -50,7 +50,7 @@ export function getPackageInfo(): Readonly<PackageInfo> {
         productName: "Amphetamine",
         version: "1.0.0",
         description:
-          "Amphetamine is a macOS menu bar app that keeps your Mac awake.",
+          "Amphetamine is a desktop application that helps macOS always stay awake.",
         repository: "https://github.com/OCWorkforces/Amphetamine",
         homepage: "https://github.com/OCWorkforces/Amphetamine",
         author: "OCWorkforces Engineers",

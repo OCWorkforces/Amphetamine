@@ -24,18 +24,18 @@ export function onSettingsChanged(callback: SettingsChangeCallback): () => void 
 let settingsCache: AppSettings = { ...DEFAULT_SETTINGS };
 
 /** Validate a boolean field, returning the default if invalid */
-function validateBoolean(value: unknown, defaultValue: boolean): boolean {
+export function validateBoolean(value: unknown, defaultValue: boolean): boolean {
   return typeof value === "boolean" ? value : defaultValue;
 }
 
 /** Validate a positive number field, returning the default if invalid */
-function validatePositiveNumber(value: unknown, defaultValue: number | null): number | null {
-  return typeof value === "number" && value > 0 ? value : defaultValue;
+export function validatePositiveNumber(value: unknown, defaultValue: number | null): number | null {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : defaultValue;
 }
 
 /** Validate a clamped number field (0-100), returning the default if invalid */
-function validateClampedNumber(value: unknown, defaultValue: number): number {
-  return typeof value === "number" && value >= 0 && value <= 100 ? value : defaultValue;
+export function validateClampedNumber(value: unknown, defaultValue: number): number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 100 ? value : defaultValue;
 }
 
 /** Validate a non-empty string field, returning the default if invalid */
@@ -63,12 +63,12 @@ function mergeValidatedPartial(base: AppSettings, partial: Partial<AppSettings>)
   if (typeof partial.preventSleep === "boolean") {
     merged.preventSleep = partial.preventSleep;
   }
-  if (typeof partial.sessionDuration === "number" && partial.sessionDuration > 0) {
+  if (typeof partial.sessionDuration === "number" && Number.isFinite(partial.sessionDuration) && partial.sessionDuration > 0) {
     merged.sessionDuration = partial.sessionDuration;
   } else if (partial.sessionDuration === null) {
     merged.sessionDuration = null;
   }
-  if (typeof partial.batteryThreshold === "number" && partial.batteryThreshold >= 0 && partial.batteryThreshold <= 100) {
+  if (typeof partial.batteryThreshold === "number" && Number.isFinite(partial.batteryThreshold) && partial.batteryThreshold >= 0 && partial.batteryThreshold <= 100) {
     merged.batteryThreshold = partial.batteryThreshold;
   }
   if (typeof partial.shortcut === "string" && partial.shortcut.length > 0) {

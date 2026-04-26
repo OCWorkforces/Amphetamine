@@ -26,7 +26,7 @@ import {
   initBatteryMonitoring,
   cleanupBatteryMonitoring,
 } from "./battery-monitor.js";
-import { cancelSession, setOnSessionStateChange, setSettingsReader, setBroadcastFn as setSessionBroadcastFn } from "./session-timer.js";
+import { cancelSession, reconcileSessionState, setOnSessionStateChange, setSettingsReader, setBroadcastFn as setSessionBroadcastFn } from "./session-timer.js";
 import { setBroadcastFn as setUpdaterBroadcastFn } from "./auto-updater.js";
 import type { TrayDeps } from "./tray.js";
 import { createSettingsWindow } from "./settings-window.js";
@@ -55,7 +55,7 @@ export function initCoordinator(): void {
   setBatteryAutoStopCallback(cancelSession);
   setSleepPreventionChecker(isPreventingSleep);
   setStopSleepPrevention(stopPreventingSleep);
-  void initBatteryMonitoring();
+  void initBatteryMonitoring().catch((err) => log.error("[coordinator] Battery init failed:", err));
 
   // Wire session state change callback (replaces direct updateSettings in session-timer)
   setOnSessionStateChange((updates) => {
@@ -81,24 +81,32 @@ export function initCoordinator(): void {
 
   // Subscribe to settings changes for automatic system sync
   unsubscribeSettings = onSettingsChanged((settings: AppSettings) => {
-    // Sync power-saver state with settings
-    syncPreventSleep(settings.preventSleep);
+    try {
+      // Reconcile in-memory session state against settings (replaces the side
+      // effect formerly hidden inside getStatus()).
+      reconcileSessionState();
 
-    // Sync auto-launch state with settings
-    syncAutoLaunch(settings.launchAtLogin);
+      // Sync power-saver state with settings
+      syncPreventSleep(settings.preventSleep);
 
-    // Update prevPreventSleep BEFORE cancelSession() to prevent infinite recursion.
-    // cancelSession() calls updateSettings() which re-triggers this subscriber synchronously.
-    const wasPreventingSleep = prevPreventSleep;
-    prevPreventSleep = settings.preventSleep;
+      // Sync auto-launch state with settings
+      syncAutoLaunch(settings.launchAtLogin);
 
-    // Cancel active session when preventSleep transitions true → false
-    if (wasPreventingSleep && !settings.preventSleep) {
-      cancelSession();
+      // Update prevPreventSleep BEFORE cancelSession() to prevent infinite recursion.
+      // cancelSession() calls updateSettings() which re-triggers this subscriber synchronously.
+      const wasPreventingSleep = prevPreventSleep;
+      prevPreventSleep = settings.preventSleep;
+
+      // Cancel active session when preventSleep transitions true → false
+      if (wasPreventingSleep && !settings.preventSleep) {
+        cancelSession();
+      }
+
+      // Broadcast settings to all renderer windows
+      broadcastToWindows(IPC_CHANNELS.SETTINGS_CHANGED, settings);
+    } catch (err) {
+      log.error("[coordinator] Settings subscriber error:", err);
     }
-
-    // Broadcast settings to all renderer windows
-    broadcastToWindows(IPC_CHANNELS.SETTINGS_CHANGED, settings);
   });
 
   log.info("[coordinator] Initialized");

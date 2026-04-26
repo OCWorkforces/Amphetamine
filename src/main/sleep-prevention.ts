@@ -10,9 +10,9 @@ export function startPreventingSleep(): void {
   const id = powerSaveBlocker.start("prevent-display-sleep");
   if (id >= 0) {
     blockerId = id;
-    log.info("[sleep-prevention] Started preventing sleep (id:", blockerId, ")");
+    log.info(`[sleep-prevention] Started preventing sleep (id: ${blockerId})`);
   } else {
-    log.error("[sleep-prevention] Failed to start preventing sleep (id:", id, ")");
+    log.error(`[sleep-prevention] Failed to start preventing sleep (id: ${id})`);
   }
 }
 

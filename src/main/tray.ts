@@ -15,6 +15,25 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 let tray: Tray | null = null;
 let cachedMenu: Menu | null = null;
+let themeDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+/**
+ * Module-scope SVG fallback icon — built once, reused on every cache miss.
+ * Avoids re-allocating the SVG buffer per failed icon load.
+ */
+const FALLBACK_SVG_SIZE = TRAY_ICON_SIZE;
+const fallbackIconDark = nativeImage.createFromBuffer(
+  Buffer.from(
+    `<svg width="${FALLBACK_SVG_SIZE}" height="${FALLBACK_SVG_SIZE}" xmlns="http://www.w3.org/2000/svg">` +
+      `<circle cx="${FALLBACK_SVG_SIZE / 2}" cy="${FALLBACK_SVG_SIZE / 2}" r="${FALLBACK_SVG_SIZE / 2 - 1}" fill="${TRAY_ICON_COLOR_ACTIVE}"/></svg>`,
+  ),
+);
+const fallbackIconLight = nativeImage.createFromBuffer(
+  Buffer.from(
+    `<svg width="${FALLBACK_SVG_SIZE}" height="${FALLBACK_SVG_SIZE}" xmlns="http://www.w3.org/2000/svg">` +
+      `<circle cx="${FALLBACK_SVG_SIZE / 2}" cy="${FALLBACK_SVG_SIZE / 2}" r="${FALLBACK_SVG_SIZE / 2 - 1}" fill="${TRAY_ICON_COLOR_INACTIVE}"/></svg>`,
+  ),
+);
 
 function showAbout(): void {
   // app.showAboutPanel() is a native macOS dialog, managed by the OS as a singleton.
@@ -60,16 +79,7 @@ export function setupTray(deps: TrayDeps): () => void {
     // Fall back to a programmatic icon if image files are missing or corrupted
     if (icon1x.isEmpty() || icon2x.isEmpty()) {
       log.warn("[tray] Tray icon files missing or corrupted, using fallback");
-      const size = TRAY_ICON_SIZE;
-      const fallback = nativeImage.createFromBuffer(
-        Buffer.from(
-          `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">` +
-            `<circle cx="${size / 2}" cy="${size / 2}" r="${size / 2 - 1}" fill="${
-              isDark ? TRAY_ICON_COLOR_ACTIVE : TRAY_ICON_COLOR_INACTIVE
-            }"/></svg>`,
-        ),
-      );
-      return fallback;
+      return isDark ? fallbackIconDark : fallbackIconLight;
     }
     const icon = nativeImage.createEmpty();
     icon.addRepresentation({ scaleFactor: 1.0, buffer: icon1x.toPNG() });
@@ -88,11 +98,15 @@ export function setupTray(deps: TrayDeps): () => void {
   tray = new Tray(buildIcon(nativeTheme.shouldUseDarkColors, initialPreventSleep));
   tray.setToolTip("Amphetamine");
 
-  // Update icon whenever the system theme changes or settings change
+  // Update icon whenever the system theme changes or settings change (debounced)
   const onThemeUpdated = (): void => {
+    if (themeDebounceTimer) clearTimeout(themeDebounceTimer);
+    themeDebounceTimer = setTimeout(() => {
+      themeDebounceTimer = null;
     refreshTrayIcon();
-  };
-  nativeTheme.on("updated", onThemeUpdated);
+    }, 50);
+};
+nativeTheme.on("updated", onThemeUpdated);
 
   // Store unsubscribe for cleanup robustness
   const unsubscribe = deps.onSettingsChanged(() => {
@@ -131,11 +145,15 @@ export function setupTray(deps: TrayDeps): () => void {
       tray.popUpContextMenu(cachedMenu);
     }
   });
-  return () => {
-    unsubscribe();
+return () => {
+unsubscribe();
     nativeTheme.removeListener("updated", onThemeUpdated);
-    tray = null;
-    cachedMenu = null;
-    iconCache.clear();
-  };
+    if (themeDebounceTimer) {
+      clearTimeout(themeDebounceTimer);
+      themeDebounceTimer = null;
+    }
+tray = null;
+cachedMenu = null;
+iconCache.clear();
+};
 }

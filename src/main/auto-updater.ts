@@ -2,11 +2,19 @@ import { autoUpdater, type UpdateInfo } from "electron-updater";
 import { app, shell, ipcMain } from "electron";
 import log from "electron-log";
 import { IPC_CHANNELS, type PushChannel, type IpcResponse } from "../shared/types.js";
-import { INITIAL_UPDATE_CHECK_DELAY_MS, PERIODIC_UPDATE_CHECK_INTERVAL_MS } from "./constants.js";
+import {
+  INITIAL_UPDATE_CHECK_DELAY_MS,
+  PERIODIC_UPDATE_CHECK_INTERVAL_MS,
+  MAX_UPDATE_CHECK_INTERVAL_MS,
+} from "./constants.js";
 
 let checkIntervalId: ReturnType<typeof setInterval> | null = null;
 
 let broadcastFn: (<K extends PushChannel>(channel: K, data: IpcResponse<K>) => void) | null = null;
+
+let lastNotifiedVersion: string | null = null;
+
+let consecutiveFailures = 0;
 
 /** Inject broadcast function (called from coordinator) */
 export function setBroadcastFn(fn: <K extends PushChannel>(channel: K, data: IpcResponse<K>) => void): void {
@@ -22,6 +30,8 @@ function onCheckingForUpdate(): void {
 /** Handle "update-available" event */
 function onUpdateAvailable(info: UpdateInfo): void {
   log.info("[auto-updater] Update available:", info.version);
+  consecutiveFailures = 0;
+  rescheduleCheckLoop();
   broadcastFn?.(IPC_CHANNELS.AUTO_UPDATER_STATUS, {
     status: "available",
     info: {
@@ -32,9 +42,12 @@ function onUpdateAvailable(info: UpdateInfo): void {
   });
   // Validate version is a semver-like string before constructing URL
   if (/^\d+\.\d+\.\d+/.test(info.version)) {
-    void shell.openExternal(
-      `https://github.com/CCWorkforce/OpenAmphetamine/releases/tag/v${info.version}`,
-    );
+    if (info.version !== lastNotifiedVersion) {
+      lastNotifiedVersion = info.version;
+      void shell.openExternal(
+        `https://github.com/CCWorkforce/OpenAmphetamine/releases/tag/v${info.version}`,
+      );
+    }
   } else {
     log.warn("[auto-updater] Skipping release URL \u2014 invalid version format:", info.version);
   }
@@ -43,6 +56,8 @@ function onUpdateAvailable(info: UpdateInfo): void {
 /** Handle "update-not-available" event */
 function onUpdateNotAvailable(info: UpdateInfo): void {
   log.info("[auto-updater] No update available. Current version:", info.version);
+  consecutiveFailures = 0;
+  rescheduleCheckLoop();
   broadcastFn?.(IPC_CHANNELS.AUTO_UPDATER_STATUS, {
     status: "not-available",
     info: { version: info.version, releaseDate: info.releaseDate ?? "" },
@@ -74,6 +89,8 @@ function onUpdateDownloaded(info: UpdateInfo): void {
 /** Handle "error" event */
 function onError(err: Error): void {
   log.error("[auto-updater] Error:", err.message);
+  consecutiveFailures += 1;
+  rescheduleCheckLoop();
   broadcastFn?.(IPC_CHANNELS.AUTO_UPDATER_STATUS, {
     status: "error",
     error: err.message,
@@ -90,15 +107,43 @@ function registerUpdateEventHandlers(): void {
   autoUpdater.on("error", onError);
 }
 
+/** Compute next interval with exponential backoff capped at MAX_UPDATE_CHECK_INTERVAL_MS */
+function computeNextInterval(): number {
+  return Math.min(
+    PERIODIC_UPDATE_CHECK_INTERVAL_MS * Math.pow(2, consecutiveFailures),
+    MAX_UPDATE_CHECK_INTERVAL_MS,
+  );
+}
+
+/** Reschedule the periodic check loop with the current backoff interval */
+function rescheduleCheckLoop(): void {
+  if (checkIntervalId === null) {
+    return;
+  }
+  clearInterval(checkIntervalId);
+  const nextInterval = computeNextInterval();
+  log.info(
+    "[auto-updater] Rescheduling periodic check; failures=",
+    consecutiveFailures,
+    "interval(ms)=",
+    nextInterval,
+  );
+  checkIntervalId = setInterval(() => {
+    log.info("[auto-updater] Running periodic update check...");
+    void autoUpdater.checkForUpdates();
+  }, nextInterval);
+  checkIntervalId?.unref();
+}
+
 /** Start initial delayed check and periodic update check loop */
 function startUpdateCheckLoop(): void {
-  // Initial check after 3-second delay (avoid startup slowdown)
+  // Initial check after 3-second delay (avoid startup slowdown) — not subject to backoff
   setTimeout(() => {
     log.info("[auto-updater] Running initial update check...");
     void autoUpdater.checkForUpdates();
   }, INITIAL_UPDATE_CHECK_DELAY_MS);
 
-  // Periodic check every 4 hours
+  // Periodic check (base 4 hours, exponential backoff on failures up to 24 hours)
   checkIntervalId = setInterval(
     () => {
       log.info("[auto-updater] Running periodic update check...");
@@ -119,6 +164,10 @@ export function initAutoUpdater(): void {
   }
 
   autoUpdater.logger = log;
+  // SECURITY: Keep auto-download disabled. We only notify the user and open the GitHub release page.
+  // Code-signature verification on macOS DMG/ZIP updates is performed by electron-updater internally
+  // (delegates to macOS code signing checks via Squirrel.Mac on the staged update bundle before swap).
+  // We never call autoUpdater.quitAndInstall() here, so no in-process update payload is executed.
   autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = false;
 
@@ -138,6 +187,8 @@ export function stopAutoUpdater(): void {
     checkIntervalId = null;
   }
   autoUpdater.removeAllListeners();
+  lastNotifiedVersion = null;
+  consecutiveFailures = 0;
   log.info("[auto-updater] Stopped");
 }
 
