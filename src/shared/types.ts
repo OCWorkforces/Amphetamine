@@ -156,7 +156,7 @@ export interface AppSettings {
 }
 
 /** Default settings values */
-export const DEFAULT_SETTINGS: AppSettings = {
+export const DEFAULT_SETTINGS: Readonly<AppSettings> = {
   launchAtLogin: false,
   preventSleep: false,
   sessionDuration: null,
