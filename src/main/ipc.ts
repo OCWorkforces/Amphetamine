@@ -1,4 +1,5 @@
-import { ipcMain, app, BrowserWindow, type IpcMainEvent } from "electron";
+import { ipcMain, app, type BrowserWindow, type IpcMainEvent } from "electron";
+import path from "node:path";
 import log from "electron-log";
 import {
   IPC_CHANNELS,
@@ -7,7 +8,7 @@ import {
   type IpcRequest,
   type IpcResponse,
 } from "../shared/types.js";
-import { MAIN_WINDOW_WIDTH, MIN_POPOVER_HEIGHT, MAX_POPOVER_HEIGHT, DEV_ORIGINS, MS_PER_SECOND } from "./constants.js";
+import { MAIN_WINDOW_WIDTH, MIN_POPOVER_HEIGHT, MAX_POPOVER_HEIGHT, DEV_ORIGINS } from "./constants.js";
 
 import { getSettings, updateSettings } from "./settings.js";
 import { createSettingsWindow } from "./settings-window.js";
@@ -31,11 +32,20 @@ function validateSenderUrl(senderUrl: string): boolean {
         ALLOWED_ORIGINS.has(`${url.protocol}//${url.host}`)
       );
     }
-    // file:// origin check (packaged app) - validate path is within app bundle
+    // file:// origin check (packaged app) - exact path match within app bundle
     if (url.protocol === "file:") {
-      const filePath = url.pathname;
-      // Accept if path is within the app bundle, or is empty (main window)
-      return filePath.startsWith(app.getAppPath()) || filePath.length === 0;
+      const appPath = path.resolve(app.getAppPath());
+      let urlPath: string;
+      try {
+        urlPath = path.resolve(decodeURIComponent(url.pathname));
+      } catch {
+        return false;
+      }
+      const allowedPaths = [
+        path.join(appPath, "index.html"),
+        path.join(appPath, "settings", "index.html"),
+      ];
+      return allowedPaths.includes(urlPath);
     }
     return false;
   } catch {
@@ -87,7 +97,7 @@ function registerAppIpc(): void {
       return app.getVersion();
     },
   );
-  typedHandle(IPC_CHANNELS.APP_QUIT, async (event) => {
+  typedHandle(IPC_CHANNELS.APP_QUIT, (event) => {
     if (!validateSender(event)) return;
     app.quit();
   });
@@ -125,11 +135,24 @@ function registerSessionIpc(): void {
     if (!validateSender(event)) {
       return { startedAt: 0, durationMinutes: null, expiresAt: null };
     }
+    if (request.durationMinutes !== null && request.durationMinutes !== undefined) {
+      if (
+        !Number.isFinite(request.durationMinutes) ||
+        request.durationMinutes <= 0 ||
+        !Number.isInteger(request.durationMinutes)
+      ) {
+        log.warn("[ipc] SESSION_START rejected invalid durationMinutes:", request.durationMinutes);
+        return { startedAt: 0, durationMinutes: null, expiresAt: null };
+      }
+    }
     const result = sessionTimer.startSession(request.durationMinutes);
-    // startSession always sets startedAt, but SessionState allows null for getStatus()
-    const startedAt = result.startedAt ?? Date.now();
+    // startSession() guarantees non-null startedAt; SessionState type is widened for getStatus() reuse.
+    if (result.startedAt === null) {
+      log.error("[ipc] SESSION_START: startSession returned null startedAt (invariant violation)");
+      return { startedAt: 0, durationMinutes: null, expiresAt: null };
+    }
     return {
-      startedAt,
+      startedAt: result.startedAt,
       durationMinutes: result.durationMinutes,
       expiresAt: result.expiresAt,
     };
@@ -139,23 +162,9 @@ function registerSessionIpc(): void {
     sessionTimer.cancelSession();
     return { cancelled: true };
   });
-  typedHandle(IPC_CHANNELS.SESSION_STATUS, async (event) => {
+  typedHandle(IPC_CHANNELS.SESSION_STATUS, (event) => {
     if (!validateSender(event)) return null;
-    const result = sessionTimer.getStatus();
-    if (!result.isRunning) {
-      return null;
-    }
-    const now = performance.now();
-    const remainingSeconds = result.expiresAt
-      ? Math.max(0, Math.round((result.expiresAt - now) / MS_PER_SECOND))
-      : null;
-    return {
-      isRunning: result.isRunning,
-      startedAt: result.startedAt,
-      expiresAt: result.expiresAt,
-      remainingSeconds,
-      durationMinutes: result.durationMinutes,
-    };
+    return sessionTimer.getStatus();
   });
 }
 
