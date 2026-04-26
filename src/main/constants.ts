@@ -4,7 +4,7 @@ import { app } from "electron";
 export const MAIN_WINDOW_WIDTH = 360;
 export const MAIN_WINDOW_HEIGHT = 480;
 export const SETTINGS_WINDOW_WIDTH = 520;
-export const SETTINGS_WINDOW_HEIGHT = 430;
+export const SETTINGS_WINDOW_HEIGHT = 540;
 
 // === IPC Popover Height Bounds ===
 export const MIN_POPOVER_HEIGHT = 220;
