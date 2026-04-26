@@ -11,6 +11,7 @@ import { unregisterGlobalShortcut } from "./global-shortcut.js";
 import { closeSettingsWindow } from "./settings-window.js";
 import { initAutoUpdater, stopAutoUpdater } from "./auto-updater.js";
 import { MAIN_WINDOW_WIDTH, MAIN_WINDOW_HEIGHT, HIDE_DELAY_MS, getDevServerUrl, isDev } from "./constants.js";
+import { hardenWebContents } from "./security.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -37,6 +38,7 @@ app.setAboutPanelOptions({
 let mainWindow: BrowserWindow | null = null;
 let isQuitting = false;
 let cleanupTray: (() => void) | null = null;
+
 function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
     width: MAIN_WINDOW_WIDTH,
@@ -60,11 +62,13 @@ function createWindow(): BrowserWindow {
       nodeIntegration: false,
     },
   });
+
+  hardenWebContents(win);
   if (isDev) {
     const devUrl = getDevServerUrl();
-    win.loadURL(devUrl);
+    void win.loadURL(devUrl);
   } else {
-    win.loadFile(path.join(__dirname, "..", "renderer", "index.html"));  }
+    void win.loadFile(path.join(__dirname, "..", "renderer", "index.html"));  }
   // Intercept close/minimize → hide to tray (unless quitting)
   win.on("close", (event) => {
     if (isQuitting) return;
@@ -83,7 +87,7 @@ function createWindow(): BrowserWindow {
   });
   // Hide when focus lost (popover behavior)
   win.on("blur", () => {
-    if (!isDev) {
+    if (!isDev && !isQuitting) {
       if (!win.isDestroyed()) {
         win.webContents.send("popover:hide");
         setTimeout(() => {
@@ -96,7 +100,7 @@ function createWindow(): BrowserWindow {
   });
   return win;
 }
-app.whenReady().then(() => {
+void app.whenReady().then(() => {
   // Register as accessory app — no Dock icon, no menu bar
   app.setActivationPolicy("accessory");
   mainWindow = createWindow();
