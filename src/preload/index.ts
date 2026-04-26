@@ -139,6 +139,5 @@ type _UnwiredChannels = Exclude<IpcChannel, WiredChannels>;
 type _ExhaustivenessCheck = [_UnwiredChannels] extends [never]
   ? true
   : ["unwired channels:", _UnwiredChannels];
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const _check: _ExhaustivenessCheck = true;
 void _check;

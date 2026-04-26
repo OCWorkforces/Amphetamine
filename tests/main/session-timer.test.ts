@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { SessionState } from "../../src/main/session-timer.js";
-import type { AppSettings } from "../../src/shared/types.js";
+import type { AppSettings, SessionStatusResponse } from "../../src/shared/types.js";
 import { DEFAULT_SETTINGS } from "../../src/shared/types.js";
 
 // Hoisted mock functions - evaluated before vi.mock calls
@@ -31,7 +31,7 @@ vi.mock("../../src/main/settings.js", () => ({
 describe("session-timer", () => {
   let startSession: (_durationMinutes: number | null) => SessionState;
   let cancelSession: () => SessionState;
-  let getStatus: () => import("../../src/shared/types.js").SessionStatusResponse;
+  let getStatus: () => SessionStatusResponse;
   let cleanup: () => void;
   let setOnSessionStateChange: (cb: (updates: Partial<typeof settingsState>) => void) => void;
   let setSettingsReader: (getSettings: () => typeof settingsState) => void;
@@ -521,7 +521,6 @@ describe("session-timer", () => {
       mockBroadcastToWindows.mockClear();
 
       vi.advanceTimersByTime(2000);
-      const callsBeforeStop = mockBroadcastToWindows.mock.calls.length;
 
       stopSessionBroadcast();
       mockBroadcastToWindows.mockClear();
@@ -539,7 +538,7 @@ describe("session-timer", () => {
 describe("session-timer additional edge cases", () => {
   let startSession: (_durationMinutes: number | null) => SessionState;
   let cancelSession: () => SessionState;
-  let getStatus: () => import("../../src/shared/types.js").SessionStatusResponse;
+  let getStatus: () => SessionStatusResponse;
   let setOnSessionStateChange: (cb: (updates: Partial<typeof settingsState>) => void) => void;
   let setSettingsReader: (getSettings: () => typeof settingsState) => void;
   let setBroadcastFn: (fn: (channel: string, data: unknown) => void) => void;

@@ -178,9 +178,7 @@ describe("ipc additional coverage", () => {
     vi.mocked(electron.ipcMain.handle).mockImplementation(
       ((channel: string, handler: (..._args: unknown[]) => unknown) => {
         registeredHandlers.set(channel, handler);
-      }) as Parameters<typeof electron.ipcMain.handle>[1] extends infer _
-        ? typeof electron.ipcMain.handle
-        : never,
+      }) as typeof electron.ipcMain.handle
     );
     vi.mocked(electron.ipcMain.on).mockImplementation(
       ((channel: string, handler: (..._args: unknown[]) => unknown) => {
