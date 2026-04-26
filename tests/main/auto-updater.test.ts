@@ -86,20 +86,26 @@ describe("auto-updater", () => {
       // Use resetModules + re-import with mutated app mock, then restore.
 
       const { app } = await import("electron");
-      const originalPackaged = app.isPackaged;
-      vi.mocked(app).isPackaged = false;
+      const originalDescriptor = Object.getOwnPropertyDescriptor(app, "isPackaged");
+      try {
+        Object.defineProperty(app, "isPackaged", { value: false, configurable: true, writable: true });
 
-      vi.resetModules();
-      const freshMod = await import("../../src/main/auto-updater.js");
-      freshMod.initAutoUpdater();
+        vi.resetModules();
+        const freshMod = await import("../../src/main/auto-updater.js");
+        freshMod.initAutoUpdater();
 
-      // Restore for subsequent tests
-      vi.mocked(app).isPackaged = originalPackaged;
-      vi.resetModules();
-      // Re-import to restore module state for next test's beforeEach
-      await import("../../src/main/auto-updater.js");
-
-      expect(mockOn).not.toHaveBeenCalled();
+        expect(mockOn).not.toHaveBeenCalled();
+      } finally {
+        // Restore for subsequent tests
+        if (originalDescriptor) {
+          Object.defineProperty(app, "isPackaged", originalDescriptor);
+        } else {
+          Object.defineProperty(app, "isPackaged", { value: true, configurable: true, writable: true });
+        }
+        vi.resetModules();
+        // Re-import to restore module state for next test's beforeEach
+        await import("../../src/main/auto-updater.js");
+      }
     });
 
     it("registers event handlers when app is packaged", () => {
@@ -444,23 +450,29 @@ describe("auto-updater", () => {
 
     it("IPC handler returns null when app is not packaged", async () => {
       const { app } = await import("electron");
-      const originalPackaged = app.isPackaged;
-      vi.mocked(app).isPackaged = false;
+      const originalDescriptor = Object.getOwnPropertyDescriptor(app, "isPackaged");
+      try {
+        Object.defineProperty(app, "isPackaged", { value: false, configurable: true, writable: true });
 
-      vi.resetModules();
-      const freshMod = await import("../../src/main/auto-updater.js");
-      freshMod.registerAutoUpdaterIpc();
+        vi.resetModules();
+        const freshMod = await import("../../src/main/auto-updater.js");
+        freshMod.registerAutoUpdaterIpc();
 
-      const handler = mockIpcMainHandle.mock.calls.find(
-        (call) => call[0] === "auto-updater:check",
-      )![1];
-      const result = await handler();
+        const handler = mockIpcMainHandle.mock.calls.find(
+          (call) => call[0] === "auto-updater:check",
+        )![1];
+        const result = await handler();
 
-      expect(result).toBeNull();
-
-      vi.mocked(app).isPackaged = originalPackaged;
-      vi.resetModules();
-      await import("../../src/main/auto-updater.js");
+        expect(result).toBeNull();
+      } finally {
+        if (originalDescriptor) {
+          Object.defineProperty(app, "isPackaged", originalDescriptor);
+        } else {
+          Object.defineProperty(app, "isPackaged", { value: true, configurable: true, writable: true });
+        }
+        vi.resetModules();
+        await import("../../src/main/auto-updater.js");
+      }
     });
 
     it("IPC handler returns version and releaseDate on successful update check", async () => {

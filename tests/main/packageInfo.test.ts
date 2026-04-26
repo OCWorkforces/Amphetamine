@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import type * as fs from "fs";
+import type { getPackageInfo as GetPackageInfoFn } from "../../src/main/utils/packageInfo.js";
 
 const mockReadFileSync = vi.hoisted(() => vi.fn());
 const mockLogDebug = vi.hoisted(() => vi.fn());
@@ -12,7 +14,7 @@ vi.mock("electron", () => ({
 }));
 
 vi.mock("fs", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("fs")>();
+  const actual = await importOriginal<typeof fs>();
   return {
     ...actual,
     readFileSync: mockReadFileSync,
@@ -38,7 +40,7 @@ const MOCK_PKG = {
 };
 
 describe("packageInfo", () => {
-  let getPackageInfo: typeof import("../../src/main/utils/packageInfo.js").getPackageInfo;
+  let getPackageInfo: typeof GetPackageInfoFn;
 
   beforeEach(async () => {
     vi.clearAllMocks();

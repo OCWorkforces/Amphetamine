@@ -53,7 +53,11 @@ vi.mock("electron", async (importOriginal) => {
       this.setAlwaysOnTop = vi.fn();
       this.on = vi.fn();
       this.removeListener = vi.fn();
-      this.webContents = { send: vi.fn() };
+      this.webContents = {
+        send: vi.fn(),
+        on: vi.fn(),
+        setWindowOpenHandler: vi.fn(),
+      };
     }),
     dialog: {
       showErrorBox: mockShowErrorBox,

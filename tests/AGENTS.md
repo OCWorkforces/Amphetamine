@@ -57,26 +57,26 @@ projects: [
 `tsconfig.tests.json` extends base tsconfig with `rootDir: "."`, includes `tests/**/*`, relaxes `noUnusedLocals` and `noUnusedParameters`. Run via `bun run typecheck:tests`.
 ```
 
-## TEST COUNTS (280 total)
+## TEST COUNTS (313 total)
 
-### Main Process (242 tests, 18 files)
+### Main Process (275 tests, 18 files)
 
 | File                           | Tests | Focus                                          |
 | ------------------------------ | ----- | ---------------------------------------------- |
-| `auto-updater.test.ts`         | 30    | Security: semver/URL validation, events, IPC   |
+| `auto-updater.test.ts`         | 30    | Security: semver/URL validation, dedup by version, exponential backoff, IPC   |
 | `tray.test.ts`                 | 20    | Menu, icon, theme, settings sync, about panel  |
-| `session-timer.test.ts`        | 23    | Lifecycle, concurrent starts, edge cases       |
-| `sleep-prevention.test.ts`     | 18    | start/stop/sync, idempotency, restart cycle    |
-| `battery-monitor.test.ts`      | 18    | pmset parsing, auto-stop, threshold boundaries |
+| `session-timer.test.ts`        | 29    | Lifecycle, concurrent starts (`isStarting`), edge cases, getStatus shape      |
+| `sleep-prevention.test.ts`     | 21    | start/stop/sync, idempotency, powerSaveBlocker returns -1 handled             |
+| `battery-monitor.test.ts`      | 18    | pmset parsing, auto-stop, threshold boundaries, `isCheckingBattery` guard     |
 | `ipc-handlers.test.ts`         | 19    | All 13 IPC channel handler registrations       |
 | `auto-launch.test.ts`          | 13    | Login item: get/set/sync, error handling       |
-| `settings-window.test.ts`      | 9     | Singleton: create/focus/close/destroy          |
-| `settings.test.ts`             | 10    | File I/O, validation, defaults, cache          |
-| `coordinator.test.ts`          | 8     | Coordinator: init, cleanup, settings dispatch  |
+| `settings-window.test.ts`      | 6     | Singleton: create/focus/close/destroy, fake timers                            |
+| `settings.test.ts`             | 14    | File I/O, validation, NaN/Infinity rejected, no-change dedup, concurrent saves |
+| `coordinator.test.ts`          | 19    | Coordinator: init, cleanup, settings dispatch, error boundary                 |
 | `shortcut.test.ts`             | 8     | Shortcut: registration, toggle, error handling |
 | `index.test.ts`                | 7     | createWindow: config, sandbox, preload         |
 | `settings-window-edge.test.ts` | 6     | Ready-to-show, constraints, close behavior     |
-| `ipc.test.ts`                  | ~5    | validateSender, allowed origins                |
+| `ipc.test.ts`                  | 24    | validateSender, path-traversal injection, APP_QUIT, SESSION_START validation   |
 | `packageInfo.test.ts`          | ~5    | Cached package.json reader                     |
 | `preload.test.ts`              | ~5    | Context bridge API exposure                    |
 
@@ -85,8 +85,9 @@ projects: [
 | File                 | Tests | Focus                                  |
 | -------------------- | ----- | -------------------------------------- |
 | `index.test.ts`      | 20    | Session display, push, countdown, blur |
-| `settings.test.ts`   | 18    | Form, toggle/select, save indicator    |
+| `settings.test.ts`   | 22    | Form, toggle/select, save indicator, error resilience, partial failure paths  |
 | `delegation.test.ts` | 3     | Event delegation on `#app`             |
+**Coverage config** (vitest.workspace.ts): `provider: "v8"`, `include: ["src/**/*.ts"]`, thresholds (`lines: 80`, `functions: 80`, `branches: 70`), reporters `["text", "html", "lcov"]`.
 
 ## MOCK PATTERNS
 
@@ -208,7 +209,7 @@ Renderer tests mock `window.api` globally via `vi.stubGlobal()`:
 const mockApi = {
   window: { setHeight: vi.fn() },
   app: { getVersion: vi.fn().mockResolvedValue("1.0.0") },
-  quit: vi.fn(),  // top-level, NOT under app namespace
+  quit: vi.fn(),  // under app namespace: window.api.app.quit()
   settings: { get: vi.fn(), set: vi.fn(), open: vi.fn() },
   session: { start: vi.fn(), cancel: vi.fn(), getStatus: vi.fn() },
   onSettingsChanged: vi.fn(() => vi.fn()),

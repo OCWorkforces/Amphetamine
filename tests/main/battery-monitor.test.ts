@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 // --- Hoisted mocks ---
 const mockPowerMonitor = vi.hoisted(() => ({
@@ -36,6 +36,9 @@ describe("battery-monitor", () => {
   let mockStopSleep: ReturnType<typeof vi.fn<() => void>>;
 
   beforeEach(async () => {
+    vi.useFakeTimers();
+    vi.clearAllMocks();
+    vi.resetModules();
     vi.clearAllMocks();
     vi.resetModules();
 
@@ -67,6 +70,10 @@ describe("battery-monitor", () => {
     getBatteryPercent = mod.getBatteryPercent;
     setSleepPreventionChecker(() => mockIsActive());
     setStopSleepPrevention(() => mockStopSleep());
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   describe("initBatteryMonitoring", () => {
@@ -158,7 +165,7 @@ describe("battery-monitor", () => {
       const onBatteryCallback = onBatteryCall![1] as () => void;
       onBatteryCallback();
 
-      await new Promise((r) => setTimeout(r, 50));
+      await vi.advanceTimersByTimeAsync(50);
     });
 
     it("calls auto-stop callback when battery below threshold", async () => {
@@ -190,7 +197,7 @@ describe("battery-monitor", () => {
       const onBatteryCallback = onBatteryCall![1] as () => void;
       onBatteryCallback();
 
-      await new Promise((r) => setTimeout(r, 50));
+      await vi.advanceTimersByTimeAsync(50);
 
       expect(mockStopSleep).toHaveBeenCalled();
       expect(mockAutoStopCb).toHaveBeenCalled();
@@ -210,7 +217,7 @@ describe("battery-monitor", () => {
       const onBatteryCallback = onBatteryCall![1] as () => void;
       onBatteryCallback();
 
-      await new Promise((r) => setTimeout(r, 50));
+      await vi.advanceTimersByTimeAsync(50);
 
       expect(mockStopSleep).not.toHaveBeenCalled();
       expect(mockAutoStopCb).not.toHaveBeenCalled();
@@ -230,7 +237,7 @@ describe("battery-monitor", () => {
       const onBatteryCallback = onBatteryCall![1] as () => void;
       onBatteryCallback();
 
-      await new Promise((r) => setTimeout(r, 50));
+      await vi.advanceTimersByTimeAsync(50);
 
       expect(mockStopSleep).not.toHaveBeenCalled();
       expect(mockAutoStopCb).not.toHaveBeenCalled();
@@ -251,7 +258,7 @@ describe("battery-monitor", () => {
       const onBatteryCallback = onBatteryCall![1] as () => void;
       onBatteryCallback();
 
-      await new Promise((r) => setTimeout(r, 50));
+      await vi.advanceTimersByTimeAsync(50);
 
       expect(mockStopSleep).not.toHaveBeenCalled();
       expect(mockAutoStopCb).not.toHaveBeenCalled();

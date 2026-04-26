@@ -70,6 +70,7 @@ vi.mock("../../src/main/battery-monitor.js", () => ({
 
 vi.mock("../../src/main/session-timer.js", () => ({
   cancelSession: mockCancelSession,
+  reconcileSessionState: vi.fn(),
   setOnSessionStateChange: mockSetOnSessionStateChange,
   setSettingsReader: mockSetSettingsReader,
   setBroadcastFn: vi.fn(),

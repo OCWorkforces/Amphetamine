@@ -1,4 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import type { BrowserWindow } from "electron";
 
 const {
   mockFocus,
@@ -20,6 +21,7 @@ vi.mock("electron", () => ({
   app: {
     isPackaged: false,
     setActivationPolicy: mockSetActivationPolicy,
+    getAppPath: vi.fn().mockReturnValue("/test/app"),
     dock: {
       setIcon: mockSetDockIcon,
     },
@@ -36,6 +38,7 @@ vi.mock("electron", () => ({
       }
     });
     this.on = vi.fn();
+    this.webContents = { on: vi.fn(), setWindowOpenHandler: vi.fn(), send: vi.fn() };
     this.loadURL = vi.fn();
     this.loadFile = vi.fn();
   }),
@@ -47,10 +50,14 @@ vi.mock("electron", () => ({
 }));
 
 describe("settings-window", () => {
-  let createSettingsWindow: () => import("../../src/main/settings-window.js").BrowserWindow;
+  let createSettingsWindow: () => BrowserWindow;
   let closeSettingsWindow: () => void;
 
   beforeEach(async () => {
+    vi.useFakeTimers();
+    vi.resetModules();
+    vi.clearAllMocks();
+    mockIsDestroyed.mockReturnValue(false);
     vi.resetModules();
     vi.clearAllMocks();
     mockIsDestroyed.mockReturnValue(false);
@@ -58,6 +65,10 @@ describe("settings-window", () => {
     const mod = await import("../../src/main/settings-window.js");
     createSettingsWindow = mod.createSettingsWindow;
     closeSettingsWindow = mod.closeSettingsWindow;
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   describe("createSettingsWindow", () => {
@@ -77,7 +88,7 @@ describe("settings-window", () => {
     it("sets activation policy to regular when shown", async () => {
       createSettingsWindow();
       // Wait for ready-to-show handler
-      await new Promise((r) => setTimeout(r, 10));
+      await vi.advanceTimersByTimeAsync(10);
       expect(mockSetActivationPolicy).toHaveBeenCalledWith("regular");
     });
   });
@@ -85,7 +96,7 @@ describe("settings-window", () => {
   describe("closeSettingsWindow", () => {
     it("closes the settings window if open", async () => {
       createSettingsWindow();
-      await new Promise((r) => setTimeout(r, 10));
+      await vi.advanceTimersByTimeAsync(10);
       closeSettingsWindow();
       expect(mockClose).toHaveBeenCalled();
     });
@@ -96,7 +107,7 @@ describe("settings-window", () => {
 
     it("is safe to call when window is destroyed", async () => {
       const win = createSettingsWindow();
-      await new Promise((r) => setTimeout(r, 10));
+      await vi.advanceTimersByTimeAsync(10);
       mockIsDestroyed.mockReturnValue(true);
       win.isDestroyed = mockIsDestroyed;
       expect(() => closeSettingsWindow()).not.toThrow();

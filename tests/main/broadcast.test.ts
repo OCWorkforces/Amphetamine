@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import type { PushChannel, IpcResponse } from "../../src/shared/types.js";
 import { IPC_CHANNELS } from "../../src/shared/types.js";
 
 const { mockGetAllWindows } = vi.hoisted(() => ({
@@ -10,9 +11,9 @@ vi.mock("electron", () => ({
 }));
 
 describe("broadcastToWindows", () => {
-  let broadcastToWindows: <K extends import("../../src/shared/types.js").PushChannel>(
+  let broadcastToWindows: <K extends PushChannel>(
     channel: K,
-    data: import("../../src/shared/types.js").IpcResponse<K>,
+    data: IpcResponse<K>,
   ) => void;
 
   beforeEach(async () => {
