@@ -42,8 +42,8 @@ function validateSenderUrl(senderUrl: string): boolean {
         return false;
       }
       const allowedPaths = [
-        path.join(appPath, "index.html"),
-        path.join(appPath, "settings", "index.html"),
+        path.join(appPath, "lib", "renderer", "index.html"),
+        path.join(appPath, "lib", "renderer", "settings.html"),
       ];
       return allowedPaths.includes(urlPath);
     }

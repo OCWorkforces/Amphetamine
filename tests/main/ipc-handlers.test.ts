@@ -116,7 +116,7 @@ describe("ipc-handlers", () => {
       expect(handler).toBeDefined();
 
       const mockEvent = {
-        senderFrame: { url: "file:///mock/app/index.html" },
+        senderFrame: { url: "file:///mock/app/lib/renderer/index.html" },
       };
 
       // Height below minimum (220)
@@ -131,7 +131,7 @@ describe("ipc-handlers", () => {
 
       const handler = registeredHandlers.get(IPC_CHANNELS.WINDOW_SET_HEIGHT);
       const mockEvent = {
-        senderFrame: { url: "file:///mock/app/index.html" },
+        senderFrame: { url: "file:///mock/app/lib/renderer/index.html" },
       };
 
       // Height above maximum (480)
@@ -146,7 +146,7 @@ describe("ipc-handlers", () => {
 
       const handler = registeredHandlers.get(IPC_CHANNELS.WINDOW_SET_HEIGHT);
       const mockEvent = {
-        senderFrame: { url: "file:///mock/app/index.html" },
+        senderFrame: { url: "file:///mock/app/lib/renderer/index.html" },
       };
 
       handler!(mockEvent, 350);
@@ -160,7 +160,7 @@ describe("ipc-handlers", () => {
 
       const handler = registeredHandlers.get(IPC_CHANNELS.WINDOW_SET_HEIGHT);
       const mockEvent = {
-        senderFrame: { url: "file:///mock/app/index.html" },
+        senderFrame: { url: "file:///mock/app/lib/renderer/index.html" },
       };
 
       handler!(mockEvent, -50);
@@ -179,7 +179,7 @@ describe("ipc-handlers", () => {
       expect(handler).toBeDefined();
 
       const mockEvent = {
-        senderFrame: { url: "file:///mock/app/index.html" },
+        senderFrame: { url: "file:///mock/app/lib/renderer/index.html" },
       };
 
       const result = await handler!(mockEvent);
@@ -197,7 +197,7 @@ describe("ipc-handlers", () => {
 
       const handler = registeredHandlers.get(IPC_CHANNELS.SETTINGS_GET);
       const mockEvent = {
-        senderFrame: { url: "file:///mock/app/index.html" },
+        senderFrame: { url: "file:///mock/app/lib/renderer/index.html" },
       };
 
       const result = await handler!(mockEvent);
@@ -212,7 +212,7 @@ describe("ipc-handlers", () => {
 
       const handler = registeredHandlers.get(IPC_CHANNELS.SETTINGS_SET);
       const mockEvent = {
-        senderFrame: { url: "file:///mock/app/index.html" },
+        senderFrame: { url: "file:///mock/app/lib/renderer/index.html" },
       };
 
       mockUpdateSettings.mockReturnValue({ ...DEFAULT_SETTINGS, preventSleep: true });
@@ -230,7 +230,7 @@ describe("ipc-handlers", () => {
 
       const handler = registeredHandlers.get(IPC_CHANNELS.SETTINGS_OPEN);
       const mockEvent = {
-        senderFrame: { url: "file:///mock/app/index.html" },
+        senderFrame: { url: "file:///mock/app/lib/renderer/index.html" },
       };
 
       await handler!(mockEvent);
@@ -241,7 +241,7 @@ describe("ipc-handlers", () => {
 
   describe("session handlers", () => {
     const validEvent = {
-      senderFrame: { url: "file:///mock/app/index.html" },
+      senderFrame: { url: "file:///mock/app/lib/renderer/index.html" },
     };
 
     it("SESSION_START calls startSession", async () => {

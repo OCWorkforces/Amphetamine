@@ -6,14 +6,14 @@ import { validateSender } from "../../src/main/ipc.js";
 describe("validateSender", () => {
   it("accepts file:// origin for app index.html (exact match)", () => {
     const event = {
-      senderFrame: { url: "file:///path/to/app.asar/index.html" },
+      senderFrame: { url: "file:///path/to/app.asar/lib/renderer/index.html" },
     } as unknown as IpcMainEvent;
     expect(validateSender(event)).toBe(true);
   });
 
-  it("accepts file:// origin for settings/index.html (exact match)", () => {
+  it("accepts file:// origin for settings.html (exact match)", () => {
     const event = {
-      senderFrame: { url: "file:///path/to/app.asar/settings/index.html" },
+      senderFrame: { url: "file:///path/to/app.asar/lib/renderer/settings.html" },
     } as unknown as IpcMainEvent;
     expect(validateSender(event)).toBe(true);
   });
@@ -140,7 +140,7 @@ describe("ipc additional coverage", () => {
   let appQuitMock: ReturnType<typeof vi.fn>;
 
   const validEvent = {
-    senderFrame: { url: "file:///path/to/app.asar/index.html" },
+      senderFrame: { url: "file:///path/to/app.asar/lib/renderer/index.html" },
   } as unknown as IpcMainInvokeEvent;
   const invalidEvent = {
     senderFrame: { url: "https://evil.com/" },
