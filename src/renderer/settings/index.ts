@@ -13,7 +13,6 @@ let saveTimer: ReturnType<typeof setTimeout> | null = null;
 let errorMessage: string | null = null;
 let isSaving = false;
 const saveIndicatorTimers = new Map<string, ReturnType<typeof setTimeout>>();
-let lastValidBatteryThreshold: number = DEFAULT_SETTINGS.batteryThreshold;
 let isRecordingShortcut = false;
 let shortcutKeydownHandler: ((e: KeyboardEvent) => void) | null = null;
 
@@ -138,19 +137,22 @@ function buildSettingsForm(): string {
           </select>
         </div>
       </div>
-      <div class="setting-row setting-row--number">
+      <div class="setting-row setting-row--select">
         <div class="setting-row-inner">
-          <label class="setting-label" for="battery-threshold-input">
+          <label class="setting-label" for="battery-threshold-select">
             🪫 Auto-disable Battery Threshold
           </label>
           <span class="setting-description">Automatically disable sleep prevention when battery drops below this level</span>
         </div>
         <div class="setting-control">
           <span class="save-indicator" id="battery-save-indicator"></span>
-          <div class="number-input-wrap">
-            <input type="number" id="battery-threshold-input" class="setting-number" min="0" max="100" step="1" value="${settings.batteryThreshold}" />
-            <span class="number-input-suffix">%</span>
-          </div>
+          <select id="battery-threshold-select" class="setting-select">
+            <option value="0"${settings.batteryThreshold === 0 ? " selected" : ""}>0% – Disabled</option>
+            <option value="5"${settings.batteryThreshold === 5 ? " selected" : ""}>5%</option>
+            <option value="10"${settings.batteryThreshold === 10 ? " selected" : ""}>10%</option>
+            <option value="15"${settings.batteryThreshold === 15 ? " selected" : ""}>15%</option>
+            <option value="20"${settings.batteryThreshold === 20 ? " selected" : ""}>20%</option>
+          </select>
         </div>
       </div>
       <div class="setting-row setting-row--shortcut">
@@ -170,10 +172,6 @@ function buildSettingsForm(): string {
       <span class="settings-footer-text">Amphetamine &middot; &copy; ${new Date().getFullYear()}</span>
     </div>
   `;
-}
-
-function isFocused(el: HTMLElement): boolean {
-  return document.activeElement === el;
 }
 
 function startRecordingShortcut(): void {
@@ -260,20 +258,12 @@ function attachFormListeners(): void {
     });
   }
 
-  const batteryInput = document.getElementById(
-    "battery-threshold-input",
-  ) as HTMLInputElement | null;
-  if (batteryInput) {
-    lastValidBatteryThreshold = settings.batteryThreshold;
-    batteryInput.addEventListener("change", () => {
-      const raw = batteryInput.value.trim();
-      const parsed = Number(raw);
-      if (raw === "" || !Number.isFinite(parsed) || !Number.isInteger(parsed) || parsed < 0 || parsed > 100) {
-        // Invalid input: revert to last valid value
-        batteryInput.value = String(lastValidBatteryThreshold);
-        return;
-      }
-      lastValidBatteryThreshold = parsed;
+  const batterySelect = document.getElementById(
+    "battery-threshold-select",
+  ) as HTMLSelectElement | null;
+  if (batterySelect) {
+    batterySelect.addEventListener("change", () => {
+      const parsed = parseInt(batterySelect.value, 10);
       void saveSettings({ batteryThreshold: parsed }, "battery-save-indicator");
     });
   }
@@ -329,12 +319,11 @@ function updateSettingsUI(s: AppSettings): void {
     durationSelect.value = s.sessionDuration === null ? "" : String(s.sessionDuration);
   }
 
-  const batteryInput = document.getElementById(
-    "battery-threshold-input",
-  ) as HTMLInputElement | null;
-  if (batteryInput && !isFocused(batteryInput)) {
-    batteryInput.value = String(s.batteryThreshold);
-    lastValidBatteryThreshold = s.batteryThreshold;
+  const batterySelect = document.getElementById(
+    "battery-threshold-select",
+  ) as HTMLSelectElement | null;
+  if (batterySelect) {
+    batterySelect.value = String(s.batteryThreshold);
   }
 
   const shortcutBtn = document.getElementById("shortcut-input") as HTMLButtonElement | null;
