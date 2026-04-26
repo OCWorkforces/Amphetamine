@@ -21,7 +21,6 @@ flipFuses(appPath, {
   [FuseV1Options.OnlyLoadAppFromAsar]: true,
   [FuseV1Options.EnableEmbeddedAsarIntegrityValidation]: true,
   [FuseV1Options.EnableCookieEncryption]: true,
-  [FuseV1Options.EnableNodeOptionsEnvironmentVariable]: false,
   [FuseV1Options.EnableFuses]: true,
 });
 
