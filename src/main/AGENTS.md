@@ -17,10 +17,11 @@ Electron main process (Node.js). App lifecycle, system tray, IPC, session timer,
 | `settings.ts`          | Persistent app settings (JSON in userData, EventEmitter) |
 | `session-timer.ts`     | Session timer state machine (start/cancel/expiry)        |
 | `settings-window.ts`   | Settings BrowserWindow singleton (shows in Dock)         |
-| `auto-updater.ts`      | Auto-updater (decomposed event handlers + check loop)     |
+| `auto-updater.ts`      | Auto-updater (decomposed event handlers + check loop + exponential backoff)   |
 | `constants.ts`         | Window dims, timeouts, colors, dev URL, DEV_ORIGINS      |
 | `utils/packageInfo.ts` | Cached package.json reader (uses electron-log)           |
 | `utils/broadcast.ts`   | `broadcastToWindows<T>()` (generic, isDestroyed guard)   |
+| `security.ts`          | Web content hardening — `hardenWebContents()`, navigation allowlist           |
 
 ## ENTRY POINT
 
@@ -76,13 +77,14 @@ Electron main process (Node.js). App lifecycle, system tray, IPC, session timer,
 
 ## CONSTANTS
 
-`constants.ts` extracts all magic numbers: window dimensions (360×480, 520×430), popover height bounds (220–480), timeouts (hide delay 160ms, battery check 5s, update check 3s/4h), `MS_PER_SECOND`, `MS_PER_MINUTE`, `SESSION_BROADCAST_INTERVAL_MS`, `TRAY_ICON_SIZE`, `TRAY_ICON_COLOR_ACTIVE/INACTIVE`, `DEV_ORIGINS`, `getDevServerUrl()`, `isDev`.
+`constants.ts` extracts all magic numbers: window dimensions (360×480, 520×430), popover height bounds (220–480), timeouts (hide delay 160ms, battery check 5s, update check 3s/4h), `MS_PER_SECOND`, `MS_PER_MINUTE`, `SESSION_BROADCAST_INTERVAL_MS`, `MAX_UPDATE_CHECK_INTERVAL_MS` (24h), `TRAY_ICON_SIZE`, `TRAY_ICON_COLOR_ACTIVE/INACTIVE`, `DEV_ORIGINS`, `getDevServerUrl()`, `isDev`.
 
 ## SESSION TIMER
 
-- `startSession(durationMinutes)` — starts timer with `performance.now()` (monotonic clock), syncs `preventSleep: true`, calls `broadcastSessionUpdate()` after starting, calls `startSessionBroadcast()` for timed sessions
+- `startSession(durationMinutes)` — validates input (positive finite integer); starts timer with `performance.now()` (monotonic clock), syncs `preventSleep: true`, calls `broadcastSessionUpdate()` after starting, calls `startSessionBroadcast()` for timed sessions. Protected by `isStarting` concurrency flag.
 - `cancelSession()` — clears timer, syncs `preventSleep: false`, calls `stopSessionBroadcast()` + `broadcastSessionUpdate()`
-- `getStatus(settings?)` — returns `SessionState` (isRunning, startedAt, expiresAt, durationMinutes). Accepts optional `AppSettings` parameter
+- `getStatus(settings?)` — returns `SessionStatusResponse` (isRunning, startedAt, expiresAt, remainingSeconds, durationMinutes). **Pure** — calls `reconcileSessionState()` to reset stale fields. Never re-entrant.
+- `reconcileSessionState(state, settings?)` — pure helper that zeroes stale session fields (startedAt, expiresAt, sessionDuration) when session is not running
 - `cleanup()` — clears timer and calls `stopSessionBroadcast()` without syncing sleep (for app teardown)
 - `broadcastSessionUpdate()` — computes and broadcasts session status to all windows
 - `startSessionBroadcast()` / `stopSessionBroadcast()` — manages interval-based push of session status
@@ -98,9 +100,9 @@ Electron main process (Node.js). App lifecycle, system tray, IPC, session timer,
 
 ## BATTERY MONITORING (battery-monitor.ts)
 
-- `initBatteryMonitoring()`: Listens to powerMonitor AC/battery events
+- `initBatteryMonitoring()`: Listens to powerMonitor AC/battery events. Uses `isCheckingBattery` flag to prevent concurrent checks. Per-listener `off()` refs for clean removal.
 - `getBatteryPercent()`: Parses `pmset -g batt` output (macOS-native)
-- `checkBatteryAndStop()`: Auto-cancels session when below threshold
+- `checkBatteryAndStop()`: Auto-cancels session when below threshold. Called with `.catch(log.error)` chain.
 - `cleanupBatteryMonitoring()`: Removes powerMonitor listeners
 
 ## AUTO-LAUNCH (auto-launch.ts)
@@ -111,7 +113,7 @@ Electron main process (Node.js). App lifecycle, system tray, IPC, session timer,
 
 ## GLOBAL SHORTCUT (global-shortcut.ts)
 
-- `registerGlobalShortcut(deps: ShortcutDeps)`: Register Cmd+Shift+A
+- `registerGlobalShortcut(deps: ShortcutDeps)`: Register Cmd+Shift+A. Logs `log.error` if `globalShortcut.register()` returns false.
 - `unregisterGlobalShortcut()`: Unregister hotkey
 - `ShortcutDeps` interface: `{ getShortcut, getPreventSleep, togglePreventSleep }` — dependency injection
 
@@ -119,9 +121,9 @@ Electron main process (Node.js). App lifecycle, system tray, IPC, session timer,
 
 - JSON file in `app.getPath('userData')/settings.json`
 - Loaded on module import (`loadSettings()` at bottom of settings.ts)
-- Validated: each field checked against `typeof`, falls back to `DEFAULT_SETTINGS`. All fields required (loader always merges defaults).
+- Validated: each field checked with `validatePositiveNumber`/`validateClampedNumber`/`validateBoolean`. **Exported** from settings.ts for reuse in IPC handlers and tests.
 - `saveSettings()`: Async — uses `writeFile`/`rename` from `node:fs/promises` + `randomUUID()` from `node:crypto` for unique temp files
-- `updateSettings(partial)`: Async — has no-change dedup (skips save if nothing changed), updates cache BEFORE disk write, persists asynchronously with error logging, notifies listeners, returns copy
+- `updateSettings(partial)`: Async — has no-change dedup, updates cache BEFORE disk write, persists asynchronously, notifies listeners, returns copy.
 - `getSettings()`: Returns shallow copy of cache (never expose mutable ref)
 - `onSettingsChanged(callback)`: Subscribe to settings changes, returns unsubscribe function
 
@@ -129,12 +131,12 @@ Electron main process (Node.js). App lifecycle, system tray, IPC, session timer,
 
 - `close` event → `preventDefault()` + hide + dock hide
 - `minimize` event → hide + dock hide
-- `blur` event → hide + dock hide (dev mode exempt)
+- `blur` event → hide + dock hide (dev mode exempt, `isQuitting` guard prevents hide during quit)
 - `before-quit` → `cleanupCoordinator()` (stops sleep, unregisters shortcut/shortcut, unsubscribes settings)
 
 ## ANTI-PATTERNS (THIS PROCESS)
 
-- `validateSender()` / `validateOnSender()` — never skip sender origin validation in IPC handlers
+- `validateSender()` / `validateOnSender()` — never skip; uses exact path allowlist via `path.resolve()` (not `startsWith` — path-traversal attack)
 - `getSettings()` — never return mutable `settingsCache` reference, always spread copy
 - `startPreventingSleep()` / `stopPreventingSleep()` — idempotent, never call raw powerSaveBlocker directly
 - `nativeImage.createFromPath()` — must use for tray icons; `fs.readFileSync()` does NOT resolve asar paths
@@ -145,5 +147,7 @@ Electron main process (Node.js). App lifecycle, system tray, IPC, session timer,
 - `updateSettings()` is async — always use `void` prefix or `await`, never fire-and-forget silently
 
 ## STALE / CLEANUP
+
+- `build/notarize.cjs`: Wired via `afterSign` but `@electron/notarize` not installed — non-functional
 
 - `utils/packageInfo.ts:52`: Fallback description mentions "Google Meet meetings" — pre-v1.0 artifact

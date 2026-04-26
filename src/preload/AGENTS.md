@@ -17,7 +17,7 @@ Electron preload script running in sandboxed renderer context. Exposes typed IPC
 | ----------------------------- | ------------------------ | --------------------------------------- |
 | `window.setHeight`            | `setHeight(n)`           | `ipcRenderer.send` (fire-and-forget)    |
 | `app.getVersion`              | `getVersion()`           | `ipcRenderer.invoke` (request/response) |
-| `quit`                        | `quit()`                 | `ipcRenderer.invoke`                    |
+| `app.quit`                    | `quit()`                 | `ipcRenderer.invoke`                    |
 | `settings.get`                | `get()`                  | `ipcRenderer.invoke`                    |
 | `settings.set`                | `set(partial)`           | `ipcRenderer.invoke`                    |
 | `settings.open`               | `open()`                 | `ipcRenderer.invoke`                    |

@@ -1,7 +1,7 @@
 # Amphetamine — Project Knowledge Base
 
-**Generated:** 2026-04-17
-**Commit:** f72a93e
+**Generated:** 2026-04-26
+**Commit:** 5587778
 **Branch:** develop
 
 ## OVERVIEW
@@ -14,8 +14,8 @@ macOS tray-only Electron app that prevents the system from sleeping. Session tim
 | Framework | Electron 41                               |
 | Build     | Rslib (main/preload) + Rsbuild (renderer) |
 | Package   | Bun                                       |
-| Test      | Vitest 4 (workspace, 280 tests)           |
-| Linter   | ESLint 9 flat config, @typescript-eslint/no-explicit-any: error |
+| Test      | Vitest 4 (workspace, 313 tests)           |
+| Linter   | ESLint 10 flat config, @typescript-eslint/no-explicit-any: error, no-floating-promises, no-eval |
 
 ## STRUCTURE
 
@@ -29,11 +29,12 @@ src/
 │   ├── global-shortcut.ts   # Global hotkey (Cmd+Shift+A)
 │   ├── tray.ts           # System tray icon + context menu
 │   ├── ipc.ts            # IPC handlers (13 channels, typed, decomposed by domain)
-│   ├── settings.ts       # Persistent app settings (async JSON, EventEmitter)
+│   ├── settings.ts       # Persistent app settings (async JSON, EventEmitter, exported validators)
 │   ├── session-timer.ts  # Session timer state machine
 │   ├── settings-window.ts # Settings BrowserWindow singleton
-│   ├── auto-updater.ts   # Auto-updater (decomposed event handlers)
+│   ├── auto-updater.ts   # Auto-updater (decomposed, exponential backoff, dedup by version)
 │   ├── constants.ts      # Window dims, timeouts, colors, dev URL
+│   ├── security.ts       # Web content hardening (hardenWebContents, navigation allowlist)
 │   └── utils/
 │       ├── packageInfo.ts # Cached package.json reader
 │       └── broadcast.ts   # broadcastToWindows<T>() (generic, isDestroyed guard)
@@ -43,7 +44,7 @@ src/
 │   ├── env.d.ts          # Window.api type (derived from preload Api export)
 │   ├── css.d.ts          # CSS module declarations
 │   ├── settings/         # Settings window (separate entry)
-│   │   ├── index.ts      # Settings form logic, save indicator
+│   │   ├── index.ts      # Settings form logic, save indicator (5 controls)
 │   │   ├── index.html    # Settings HTML template
 │   │   └── styles.css    # Settings-specific styles (iOS-style toggles + dropdown)
 │   └── styles/
@@ -70,12 +71,13 @@ src/
 | Launch at login       | `src/main/auto-launch.ts`              | getAutoLaunchStatus/setAutoLaunch/syncAutoLaunch |
 | User settings         | `src/main/settings.ts`                 | JSON in userData, validated, EventEmitter       |
 | Settings window       | `src/main/settings-window.ts`          | Singleton, shows in Dock                        |
-| Auto-updater logic    | `src/main/auto-updater.ts`             | Decomposed: registerUpdateEventHandlers + startUpdateCheckLoop |
+| Auto-updater logic    | `src/main/auto-updater.ts`             | Decomposed: registerUpdateEventHandlers + startUpdateCheckLoop + exponential backoff |
 | Window config         | `src/main/index.ts`                    | `createWindow()`                                |
 | Tray behavior         | `src/main/tray.ts`                     | Menu, positioning, theming                      |
-| Constants / dev URL   | `src/main/constants.ts`                | Dimensions, timeouts, colors, DEV_ORIGINS, isDev |
+| Constants / dev URL   | `src/main/constants.ts`                | Dimensions, timeouts, colors, DEV_ORIGINS, isDev, MAX_UPDATE_CHECK_INTERVAL_MS |
 | Broadcast utility     | `src/main/utils/broadcast.ts`          | `broadcastToWindows<T>(channel, data)`           |
 | Build config          | `rslib.config.ts`, `rsbuild.config.ts` | Separate for each process                       |
+| Web content security  | `src/main/security.ts`                 | `hardenWebContents(win)` — navigation allowlist + window.open deny |
 
 ## CODE MAP
 
@@ -99,6 +101,7 @@ src/
 | `startSession`               | fn    | src/main/session-timer.ts       | Start timed/indefinite session (performance.now()) |
 | `cancelSession`              | fn    | src/main/session-timer.ts       | Cancel active session                                                          |
 | `resetSessionState`          | fn    | src/main/session-timer.ts:40    | Helper: onSessionStateChange + broadcastSessionUpdate                          |
+| `reconcileSessionState`      | fn    | src/main/session-timer.ts       | Pure: resets stale session fields (startedAt, expiresAt, sessionDuration)      |
 | `syncPreventSleep`           | fn    | src/main/sleep-prevention.ts    | Sync sleep blocker from settings                                               |
 | `startPreventingSleep`       | fn    | src/main/sleep-prevention.ts    | Activate powerSaveBlocker                                                      |
 | `stopPreventingSleep`        | fn    | src/main/sleep-prevention.ts    | Deactivate powerSaveBlocker                                                    |
@@ -108,9 +111,10 @@ src/
 | `syncAutoLaunch`             | fn    | src/main/auto-launch.ts         | Sync login item with setting                                                   |
 | `getAutoLaunchStatus`        | fn    | src/main/auto-launch.ts         | Get current auto-launch status                                                 |
 | `setAutoLaunch`              | fn    | src/main/auto-launch.ts         | Enable/disable auto-launch                                                     |
-| `initAutoUpdater`            | fn    | src/main/auto-updater.ts        | Orchestrator: registerUpdateEventHandlers + startUpdateCheckLoop                |
+| `initAutoUpdater`            | fn    | src/main/auto-updater.ts        | Orchestrator: registerUpdateEventHandlers + startUpdateCheckLoop + exponential backoff |
 | `stopAutoUpdater`            | fn    | src/main/auto-updater.ts        | Stop auto-updater + clear interval                                             |
 | `broadcastToWindows`         | fn    | src/main/utils/broadcast.ts     | Generic send to all non-destroyed BrowserWindows                                |
+| `hardenWebContents`          | fn    | src/main/security.ts            | Navigation allowlist + setWindowOpenHandler deny on BrowserWindow              |
 | `IPC_CHANNELS`               | const | src/shared/types.ts:2           | 13 channel names                                                               |
 | `IpcChannelMap`              | type  | src/shared/types.ts:18          | Request/response type map                                                      |
 | `AppSettings`                | iface | src/shared/types.ts:110         | Settings interface (all fields required, no optionals)                    |
@@ -126,7 +130,7 @@ src/
 - **Import paths**: Always `.js` extension (`from './types.js'`) even for `.ts` source
 - **IPC channels**: Define in `src/shared/types.ts` → `IpcChannelMap` for type safety
 - **Type-safe IPC**: Use `typedHandle()` in main, `IpcRequest<T>`/`IpcResponse<T>` in preload
-- **Dependency injection**: `system-integrations.ts` and `tray.ts` receive deps via `ShortcutDeps`/`TrayDeps` interfaces — no direct settings imports
+- **Dependency injection**: `global-shortcut.ts` and `tray.ts` receive deps via `ShortcutDeps`/`TrayDeps` interfaces — no direct settings imports
 - **No UI framework**: Vanilla TS with `innerHTML` string templates
 - **macOS only**: Dock hiding, entitlements — no cross-platform
 - **Settings persistence**: JSON file in Electron userData directory
@@ -136,8 +140,9 @@ src/
 - **`__dirname` polyfill**: ESM main process uses `path.dirname(fileURLToPath(import.meta.url))`
 - **Double quotes, semicolons, 2-space indent**: Enforced by Prettier + ESLint
 - **Formatting**: Prettier (printWidth: 100, trailingComma: all, semi: true)
-- **Linting**: ESLint flat config with `@typescript-eslint/no-explicit-any: error`
+- **Linting**: ESLint flat config with `@typescript-eslint/no-explicit-any: error`, `@typescript-eslint/no-floating-promises`, `no-eval`, `no-new-func`, `@typescript-eslint/consistent-type-imports`
 - **Constants**: All magic numbers extracted to `src/main/constants.ts`
+- **Settings validators exported**: `validatePositiveNumber`, `validateClampedNumber`, `validateBoolean` — use in tests and IPC handlers
 - **Monotonic timing**: Use `performance.now()` for session timing, not `Date.now()` (immune to system clock changes)
 
 ## ANTI-PATTERNS (THIS PROJECT)
@@ -162,11 +167,13 @@ src/
 - Session handlers MUST have `validateSender()` — no exceptions
 - Orchestration logic belongs in `coordinator.ts` — modules should NOT import each other directly
 - Never use `Date.now()` for session timing — use `performance.now()` for monotonic clock
+- IPC origin validation uses exact path allowlist via `path.resolve()` — `startsWith` is insufficient (path-traversal attack)
+- Auto-updater URL: open at most once per discovered version (`lastNotifiedVersion` tracking)
 
 ## COMMANDS
 
 ```bash
-bun run test           # Run Vitest tests (280 tests, 21 files)
+bun run test           # Run Vitest tests (313 tests, 21 files)
 bun run build          # Build all (main + preload + renderer)
 bun run package        # Build + DMG/ZIP + flip fuses (macOS arm64)
 bun run package:x64    # Build + DMG/ZIP + flip fuses (macOS x64)
@@ -209,10 +216,10 @@ Runtime deps (`electron-log`, `electron-updater`) are externalized in rslib conf
 
 | Project  | Env   | Tests | Focus                                                                                           |
 | -------- | ----- | ----- | ----------------------------------------------------------------------------------------------- |
-| main     | node  | 242   | Coordinator, session timer, IPC, power-saver, battery-monitor, settings, tray, shortcut, auto-launch, auto-updater |
-| renderer | jsdom | 38    | Popover UI, settings UI, event delegation, push subscriptions                                  |
+| main     | node  | 275   | Coordinator, session timer, IPC, power-saver, battery-monitor, settings, tray, shortcut, auto-launch, auto-updater |
+| renderer | jsdom | 38    | Popover UI, settings UI, event delegation, push subscriptions, error paths                                        |
 
-**Setup**: `tests/setup.main.ts` mocks full Electron API (app, BrowserWindow, ipcMain, Tray, Menu, etc.)
+**Setup**: `tests/setup.main.ts` mocks full Electron API (app, BrowserWindow, ipcMain, Tray, Menu, webContents.{on,setWindowOpenHandler}, app.getAppPath, etc.)
 
 **Mock pattern**: `vi.hoisted()` + `vi.mock("electron")`, `vi.resetModules()` + dynamic import for fresh state per test.
 
@@ -227,24 +234,24 @@ Runtime deps (`electron-log`, `electron-updater`) are externalized in rslib conf
 - **Global shortcut**: `Cmd+Shift+A` toggles preventSleep. `global-shortcut.ts` receives deps via `ShortcutDeps`.
 - **Auto-launch**: `auto-launch.ts` manages macOS login items via `app.setLoginItemSettings()`.
 - **Popover UI**: Read-only status display with session timer. Receives push updates via `SESSION_STATUS_UPDATE` (no polling).
-- **Settings UI**: Three controls — Launch at Login (toggle), Prevent Sleep (toggle), Activate For (dropdown with durations)
+- **Settings UI**: Five controls — Launch at Login (toggle), Prevent Sleep (toggle), Activate For (dropdown), Battery Threshold (number input, 0-100), Keyboard Shortcut (recorder)
 - **Settings push**: Changes broadcast to all windows via `broadcastToWindows()` utility
-- **Auto-updater**: Checks for updates 3s after startup, every 4 hours. Opens GitHub release URL on semver-validated version.
+- **Auto-updater**: Checks for updates 3s after startup, every 4 hours (exponential backoff on failure up to 24h). Opens GitHub release URL once per version (`lastNotifiedVersion` guard).
 - **Power-saver**: Uses `electron.powerSaveBlocker.start('prevent-display-sleep')`. No macOS permission required
 - **Launch at login**: Uses `app.setLoginItemSettings()`
 - **Window hide on blur**: Popover behavior — hides when focus lost (dev mode exempt)
-- **CI**: GitHub Actions (ci.yml: lint+test+build, cd.yml: tag+release from CI artifacts)
+- **CI**: GitHub Actions (ci.yml: lint+test+build on Bun ≥1.3.13, cd.yml: tag+release from CI artifacts)
 - **Dependencies**: Runtime deps are `electron-log` and `electron-updater`
 - **Settings persistence**: Async atomic writes with `randomUUID()` temp files. No-change dedup skips disk write + event cascade when nothing changed.
 - **Coordinator fix**: `prevPreventSleep` updated before `cancelSession()` call to prevent infinite recursion (cancelSession → updateSettings → subscriber → cancelSession).
-- **Tray menu**: Cached in `cachedMenu` variable, rebuilt only on settings change. `setupTray()` returns cleanup function (unsubscribe + clear cache).
+- **Tray menu**: Cached in `cachedMenu` variable, rebuilt only on settings change. `setupTray()` returns cleanup function (unsubscribe + clear cache). SVG fallback buffer hoisted to module scope. Theme updates debounced 50ms.
 
 ## STALE / CLEANUP
 
 - `build/notarize.cjs`: Wired via `afterSign` but `@electron/notarize` not installed — non-functional
 - `build/flip-fuses.cjs`: Flips Electron fuses (RunAsNode disabled, EnableCookieEncryption, EnableFuses, OnlyLoadAppFromAsar)
 - `DEV_SERVER_URL`: Used in 3 files — correct name (previously VITE_DEV_SERVER_URL from Vite era)
-- `utils/packageInfo.ts:52`: Fallback description mentions "Google Meet meetings" — pre-v1.0 artifact
+- `utils/packageInfo.ts:52`: Fallback description stale string — **FIXED** (removed Google Meet reference)
 
 ## SCRIPTS
 
