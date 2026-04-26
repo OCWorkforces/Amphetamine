@@ -114,9 +114,9 @@ describe("settings-window — edge cases", () => {
     const callArgs = vi.mocked((await import("electron")).BrowserWindow).mock.calls[0][0];
 
     expect(callArgs.width).toBe(520);
-    expect(callArgs.height).toBe(430);
+    expect(callArgs.height).toBe(540);
     expect(callArgs.minWidth).toBe(520);
-    expect(callArgs.minHeight).toBe(430);
+    expect(callArgs.minHeight).toBe(540);
     expect(callArgs.resizable).toBe(false);
     expect(callArgs.minimizable).toBe(false);
     expect(callArgs.maximizable).toBe(false);
