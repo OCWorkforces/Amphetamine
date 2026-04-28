@@ -1,7 +1,12 @@
 import { app, BrowserWindow, nativeImage } from "electron";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { SETTINGS_WINDOW_WIDTH, SETTINGS_WINDOW_HEIGHT, getDevServerUrl, isDev } from "./constants.js";
+import {
+  SETTINGS_WINDOW_WIDTH,
+  SETTINGS_WINDOW_HEIGHT,
+  getDevServerUrl,
+  isDev,
+} from "./constants.js";
 import { hardenWebContents } from "./security.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));

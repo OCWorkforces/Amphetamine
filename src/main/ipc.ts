@@ -8,29 +8,30 @@ import {
   type IpcRequest,
   type IpcResponse,
 } from "../shared/types.js";
-import { MAIN_WINDOW_WIDTH, MIN_POPOVER_HEIGHT, MAX_POPOVER_HEIGHT, DEV_ORIGINS } from "./constants.js";
+import {
+  MAIN_WINDOW_WIDTH,
+  MIN_POPOVER_HEIGHT,
+  MAX_POPOVER_HEIGHT,
+  DEV_ORIGINS,
+} from "./constants.js";
 
 import { getSettings, updateSettings } from "./settings.js";
 import { createSettingsWindow } from "./settings-window.js";
 import { registerAutoUpdaterIpc } from "./auto-updater.js";
 import * as sessionTimer from "./session-timer.js";
 
-
 const ALLOWED_ORIGINS: ReadonlySet<string> = new Set(DEV_ORIGINS);
 /** Returns true if the sender's origin is the app's own renderer */
 export function validateSender(event: IpcMainEvent): boolean {
   const senderUrl = event.senderFrame?.url ?? "";
   return validateSenderUrl(senderUrl);
- }
+}
 function validateSenderUrl(senderUrl: string): boolean {
   try {
     const url = new URL(senderUrl);
     // Dev server origins - use URL origin for proper comparison
     if (url.protocol === "http:") {
-      return (
-        ALLOWED_ORIGINS.has(url.origin) ||
-        ALLOWED_ORIGINS.has(`${url.protocol}//${url.host}`)
-      );
+      return ALLOWED_ORIGINS.has(url.origin) || ALLOWED_ORIGINS.has(`${url.protocol}//${url.host}`);
     }
     // file:// origin check (packaged app) - exact path match within app bundle
     if (url.protocol === "file:") {
@@ -105,13 +106,10 @@ function registerAppIpc(): void {
 
 /** Settings IPC handlers */
 function registerSettingsIpc(): void {
-  typedHandle(
-    IPC_CHANNELS.SETTINGS_GET,
-    (event): IpcResponse<typeof IPC_CHANNELS.SETTINGS_GET> => {
-      if (!validateSender(event)) return { ...DEFAULT_SETTINGS };
-      return getSettings();
-    },
-  );
+  typedHandle(IPC_CHANNELS.SETTINGS_GET, (event): IpcResponse<typeof IPC_CHANNELS.SETTINGS_GET> => {
+    if (!validateSender(event)) return { ...DEFAULT_SETTINGS };
+    return getSettings();
+  });
   typedHandle(
     IPC_CHANNELS.SETTINGS_SET,
     async (

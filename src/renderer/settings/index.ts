@@ -254,7 +254,10 @@ function attachFormListeners(): void {
           setErrorMessage("Failed to start session");
         }
       })();
-      void saveSettings({ sessionDuration: duration, preventSleep: true }, "duration-save-indicator");
+      void saveSettings(
+        { sessionDuration: duration, preventSleep: true },
+        "duration-save-indicator",
+      );
     });
   }
 
@@ -352,7 +355,6 @@ function showSaveIndicator(id: string, text: string): void {
   }, 1500);
   saveIndicatorTimers.set(id, timer);
 }
-
 
 async function saveSettings(
   partial: Partial<AppSettings>,

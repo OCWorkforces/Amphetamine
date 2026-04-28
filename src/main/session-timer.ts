@@ -1,4 +1,9 @@
-import type { AppSettings, IpcResponse, PushChannel, SessionStatusResponse } from "../shared/types.js";
+import type {
+  AppSettings,
+  IpcResponse,
+  PushChannel,
+  SessionStatusResponse,
+} from "../shared/types.js";
 import { DEFAULT_SETTINGS, IPC_CHANNELS } from "../shared/types.js";
 import log from "electron-log";
 import { MS_PER_MINUTE } from "./constants.js";
@@ -28,7 +33,9 @@ let broadcastFn: (<K extends PushChannel>(channel: K, data: IpcResponse<K>) => v
  * Inject a broadcast function for session status updates.
  * Called by coordinator on init. Replaces direct broadcastToWindows() import.
  */
-export function setBroadcastFn(fn: <K extends PushChannel>(channel: K, data: IpcResponse<K>) => void): void {
+export function setBroadcastFn(
+  fn: <K extends PushChannel>(channel: K, data: IpcResponse<K>) => void,
+): void {
   broadcastFn = fn;
 }
 
@@ -98,19 +105,16 @@ export function startSession(durationMinutes: number | null): SessionState {
   const startedAt = performance.now();
   const expiresAt = startedAt + durationMinutes * MS_PER_MINUTE;
 
-  const expiryTimer = setTimeout(
-    () => {
-      try {
-        state = { kind: "idle" };
-        // Session expired — coordinator will sync power-saver via settings change
-        onSessionStateChange?.({ sessionDuration: null, preventSleep: false });
-        broadcastSessionUpdate();
-      } catch (err) {
-        log.error("[session-timer] Error in session expiry callback:", err);
-      }
-    },
-    durationMinutes * MS_PER_MINUTE,
-  );
+  const expiryTimer = setTimeout(() => {
+    try {
+      state = { kind: "idle" };
+      // Session expired — coordinator will sync power-saver via settings change
+      onSessionStateChange?.({ sessionDuration: null, preventSleep: false });
+      broadcastSessionUpdate();
+    } catch (err) {
+      log.error("[session-timer] Error in session expiry callback:", err);
+    }
+  }, durationMinutes * MS_PER_MINUTE);
   // Don't pin the event loop — node timer ref guard for tests/cleanup safety
   if (typeof expiryTimer === "object" && expiryTimer !== null && "unref" in expiryTimer) {
     (expiryTimer as { unref: () => void }).unref();
