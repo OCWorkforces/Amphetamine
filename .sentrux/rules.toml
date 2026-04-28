@@ -24,11 +24,15 @@ deny = ["src.preload -> src.renderer"]
 
 [[rules]]
 name = "settings-limited-fan-in"
-description = "settings.ts should only be imported by coordinator, ipc, session-timer — not by tray, shortcut, or power-saver (use DI instead)"
+description = "settings.ts should only be imported by coordinator and ipc — not by tray, shortcut, sleep-prevention, battery-monitor, or auto-launch (use DI instead)"
 deny = [
   "src.main.tray -> src.main.settings",
   "src.main.shortcut -> src.main.settings",
-  "src.main.power-saver -> src.main.settings",
+  "src.main.global-shortcut -> src.main.settings",
+  "src.main.sleep-prevention -> src.main.settings",
+  "src.main.battery-monitor -> src.main.settings",
+  "src.main.auto-launch -> src.main.settings",
+  "src.main.auto-updater -> src.main.settings",
 ]
 
 [[rules]]
@@ -46,7 +50,10 @@ deny = [
   "src.main.constants -> src.main.coordinator",
   "src.main.constants -> src.main.settings",
   "src.main.constants -> src.main.session-timer",
-  "src.main.constants -> src.main.power-saver",
+  "src.main.constants -> src.main.sleep-prevention",
+  "src.main.constants -> src.main.battery-monitor",
+  "src.main.constants -> src.main.settings-window",
+  "src.main.constants -> src.main.security",
   "src.main.constants -> src.main.shortcut",
   "src.main.constants -> src.main.tray",
   "src.main.constants -> src.main.ipc",
