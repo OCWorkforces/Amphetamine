@@ -122,6 +122,8 @@ export default [
       "@typescript-eslint": tseslint,
     },
     rules: {
+      // NOTE: template-literal innerHTML is used intentionally in renderer/index.ts and settings/index.ts
+      // for app-controlled state (not user input). XSS risk is low but consider textContent for new code.
       "no-unused-vars": "off",
       "@typescript-eslint/no-unused-vars": [
         "warn",
