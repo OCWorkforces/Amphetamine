@@ -4,32 +4,40 @@ A macOS menu bar app that keeps your Mac awake. Runs in the system tray and prev
 
 ## Features
 
-- **Sleep Prevention** — Keep your Mac awake while Amphetamine is running
+- **Sleep Prevention** — Keep your Mac awake using `powerSaveBlocker` (prevent-display-sleep)
+- **Session Timer** — Start timed or indefinite sessions with configurable duration
+- **Battery-Aware Auto-Disable** — Automatically stop sleep prevention when battery drops below a configurable threshold
+- **Global Shortcut** — Toggle sleep prevention with a keyboard shortcut (default: Cmd+Shift+A)
+- **Auto-Updater** — Periodically checks for updates with exponential backoff on failure
 - **Tray-native** — Lives in the menu bar, no Dock icon
 - **Launch at Login** — Optionally start Amphetamine automatically when you log in to macOS
-- **Settings UI** — Configure sleep prevention and login preferences via a native macOS settings window
+- **Settings UI** — Configure launch-at-login, sleep prevention, session duration, battery threshold, and keyboard shortcut
 
 ## Screenshots
 
 ![Settings](assets/setting-page.png)
 
-_Configure sleep prevention and login preferences_
+_Configure launch-at-login, sleep prevention, session duration, battery threshold, and keyboard shortcut_
 
 ## Requirements
 
-- macOS (Apple Silicon)
-- Bun 1.3.10+ or Node.js 24.14.0+
+- macOS (Apple Silicon arm64 or Intel x64)
+- Bun ≥1.3.13 or Node.js ≥22.0.0
 
 ## Development
 
 ```bash
 bun install
-bun run dev          # Start dev server + Electron
-bun run build        # Build all processes (main + preload + renderer)
-bun run test         # Run test suite
-bun run test:watch   # Run tests in watch mode
-bun run typecheck    # TypeScript check
-bun run clean        # Remove lib/ and dist/
+bun run dev             # Start dev server + Electron
+bun run build           # Build all processes (main + preload + renderer)
+bun run test            # Run test suite (339 tests)
+bun run test:watch      # Run tests in watch mode
+bun run test:coverage   # Run tests with v8 coverage
+bun run typecheck       # TypeScript check (tsc -b)
+bun run typecheck:tests # TypeScript check for tests
+bun run lint            # ESLint check (src/ tests/)
+bun run format          # Prettier format
+bun run clean           # Remove lib/ and dist/
 ```
 
 ## Build & Installation
@@ -58,8 +66,8 @@ The script will:
 
 Output examples:
 
-- With `--environment stable`: `dist/Amphetamine-1.0.1-arm64-stable.dmg`
-- Without flag: `dist/Amphetamine-1.0.1-arm64.dmg`
+- With `--environment stable`: `dist/Amphetamine-1.5.6-arm64-stable.dmg`
+- Without flag: `dist/Amphetamine-1.5.6-arm64.dmg`
 
 ### Install to Applications
 
@@ -121,12 +129,14 @@ If the app crashes or won't start:
 
 ## Tech Stack
 
-| Layer    | Tech            |
-| -------- | --------------- |
-| Runtime  | Electron 41     |
-| Language | TypeScript 5.9  |
-| Build    | Rslib + Rsbuild |
-| Test     | Vitest 4        |
+| Layer          | Tech                 |
+| -------------- | -------------------- |
+| Runtime        | Electron 41          |
+| Language       | TypeScript 6.0       |
+| Build          | Rslib + Rsbuild      |
+| Package Mgr    | Bun                  |
+| Test           | Vitest 4 (339 tests) |
+| Lint           | ESLint 10 + Prettier |
 
 ## Contact
 

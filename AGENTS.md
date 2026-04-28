@@ -1,7 +1,7 @@
 # Amphetamine — Project Knowledge Base
 
-**Generated:** 2026-04-26
-**Commit:** 64c35c4
+**Generated:** 2026-04-28
+**Commit:** 7590054
 **Branch:** develop
 
 ## OVERVIEW
@@ -14,7 +14,7 @@ macOS tray-only Electron app that prevents the system from sleeping. Session tim
 | Framework | Electron 41                               |
 | Build     | Rslib (main/preload) + Rsbuild (renderer) |
 | Package   | Bun                                       |
-| Test      | Vitest 4 (workspace, 338 tests)           |
+| Test      | Vitest 4 (workspace, 339 tests)           |
 | Linter   | ESLint 10 flat config, @typescript-eslint/no-explicit-any: error, no-floating-promises, no-eval |
 
 ## STRUCTURE
@@ -64,7 +64,7 @@ src/
 | Expose to renderer    | `src/preload/index.ts`                 | Add to `api` object                             |
 | Use in UI             | `src/renderer/`                        | Call via `window.api.*`                         |
 | `Orchestration logic` | `src/main/coordinator.ts` | Settings→system sync hub, imports extracted modules |
-| Session timer logic   | `src/main/session-timer.ts`            | start/cancel/getStatus/cleanup, resetSessionState helper |
+| Session timer logic   | `src/main/session-timer.ts`            | start/cancel/getStatus/cleanup, discriminated InternalSessionState, event-driven broadcasts |
 | Sleep prevention      | `src/main/sleep-prevention.ts`         | start/stop/syncPreventSleep |
 | Battery monitoring    | `src/main/battery-monitor.ts`          | initBatteryMonitoring, getBatteryPercent, checkBatteryAndStop |
 | Global shortcut       | `src/main/global-shortcut.ts`          | registerGlobalShortcut/unregisterGlobalShortcut, ShortcutDeps |
@@ -102,8 +102,7 @@ src/
 | `SessionState`               | iface | src/main/session-timer.ts:8     | Session state shape                             |
 | `startSession`               | fn    | src/main/session-timer.ts       | Start timed/indefinite session (performance.now()) |
 | `cancelSession`              | fn    | src/main/session-timer.ts       | Cancel active session                                                          |
-| `resetSessionState`          | fn    | src/main/session-timer.ts:40    | Helper: onSessionStateChange + broadcastSessionUpdate                          |
-| `reconcileSessionState`      | fn    | src/main/session-timer.ts       | Pure: resets stale session fields (startedAt, expiresAt, sessionDuration)      |
+| `reconcileSessionState`      | fn    | src/main/session-timer.ts       | Exported no-op safety shim; discriminated union handles reconciliation internally |
 | `syncPreventSleep`           | fn    | src/main/sleep-prevention.ts    | Sync sleep blocker from settings                                               |
 | `startPreventingSleep`       | fn    | src/main/sleep-prevention.ts    | Activate powerSaveBlocker                                                      |
 | `stopPreventingSleep`        | fn    | src/main/sleep-prevention.ts    | Deactivate powerSaveBlocker                                                    |
@@ -202,7 +201,7 @@ src/
 ## COMMANDS
 
 ```bash
-bun run test           # Run Vitest tests (338 tests, 21 files)
+bun run test           # Run Vitest tests (339 tests, 21 files)
 bun run build          # Build all (main + preload + renderer)
 bun run package        # Build + DMG/ZIP + flip fuses (macOS arm64)
 bun run package:x64    # Build + DMG/ZIP + flip fuses (macOS x64)
@@ -256,8 +255,8 @@ Runtime deps (`electron-log`, `electron-updater`) are externalized in rslib conf
 
 ## NOTES
 
-- **Coordinator**: `coordinator.ts` centralizes all settings→system sync. Subscribes to `onSettingsChanged` and dispatches to sleep-prevention, battery-monitor, auto-launch, session cancel, broadcast, and shortcut modules.
-- **Session timer**: State machine in `session-timer.ts` — uses `performance.now()` monotonic clock. `resetSessionState()` helper. Broadcasts push every 1s.
+- **Coordinator**: `coordinator.ts` centralizes all settings→system sync. Subscribes to `onSettingsChanged`, diffs against `prevSettings` snapshot, and selectively dispatches to sleep-prevention, battery-monitor, auto-launch, session cancel, broadcast, and shortcut modules.
+- **Session timer**: State machine in `session-timer.ts` — uses `performance.now()` monotonic clock. Discriminated `InternalSessionState` union. Push-on-state-change broadcasts (no interval).
 - **Sleep prevention**: `sleep-prevention.ts` manages `powerSaveBlocker`. `syncPreventSleep()` starts/stops based on settings.
 - **Battery monitoring**: `battery-monitor.ts` monitors via `pmset`, auto-cancels session below threshold.
 - **Global shortcut**: `Cmd+Shift+A` toggles preventSleep. `global-shortcut.ts` receives deps via `ShortcutDeps`.
@@ -271,7 +270,7 @@ Runtime deps (`electron-log`, `electron-updater`) are externalized in rslib conf
 - **Window hide on blur**: Popover behavior — hides when focus lost (dev mode exempt)
 - **CI**: GitHub Actions (ci.yml: lint+test+build on Bun ≥1.3.13, cd.yml: tag+release from CI artifacts)
 - **Dependencies**: Runtime deps are `electron-log` and `electron-updater`
-- **Settings persistence**: Async atomic writes with `randomUUID()` temp files. No-change dedup skips disk write + event cascade when nothing changed.
+- **Settings persistence**: Async atomic writes with `randomUUID()` temp files. `writeChain` promise mutex serializes concurrent `updateSettings()` calls. No-change dedup skips disk write + event cascade when nothing changed.
 - **Coordinator fix**: `prevPreventSleep` updated before `cancelSession()` call to prevent infinite recursion (cancelSession → updateSettings → subscriber → cancelSession).
 - **Tray menu**: Cached in `cachedMenu` variable, rebuilt only on settings change. `setupTray()` returns cleanup function (unsubscribe + clear cache). SVG fallback buffer hoisted to module scope. Theme updates debounced 50ms.
 

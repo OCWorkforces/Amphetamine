@@ -34,10 +34,12 @@ Electron main process (Node.js). App lifecycle, system tray, IPC, session timer,
 1. Syncs initial state: `syncAutoLaunch()` (auto-launch.ts), `syncPreventSleep()` (sleep-prevention.ts)
 2. Wires battery: `setBatteryThresholdGetter()` + `setBatteryAutoStopCallback(cancelSession)` (battery-monitor.ts)
 3. Registers shortcut via `ShortcutDeps` (injected, no direct settings import)
-4. Subscribes to `onSettingsChanged` → dispatches to all sync modules
-5. Tracks `prevPreventSleep` — cancels session on true→false transition. Updated BEFORE `cancelSession()` call to prevent infinite recursion from re-triggering the subscriber
-6. Broadcasts settings to all windows via `broadcastToWindows()`
-7. `togglePreventSleep` uses `void updateSettings(...)` prefix for the async call
+4. Subscribes to `onSettingsChanged` → dispatches to all sync modules using `prevSettings` diff (only calls `syncPreventSleep`/`syncAutoLaunch`/`registerGlobalShortcut` when relevant field actually changed)
+5. Tracks `prevPreventSleep` — cancels session on true→false transition. Updated BEFORE `cancelSession()` call to prevent infinite recursion
+6. Tracks `prevSettings: AppSettings | null` — module-level snapshot for diff-based selective sync
+7. Caches `shortcutDeps: ShortcutDeps | null` at module level so toggle closures remain valid after init
+8. Broadcasts settings to all windows via `broadcastToWindows()`
+9. `togglePreventSleep` uses `void updateSettings(...)` prefix for the async call
 
 `getTrayDeps()` returns `TrayDeps` wired to settings (dependency injection for tray). The `onSettingsChanged` callback is bridged: `(cb: () => void) => onSettingsChanged((_settings) => { cb(); })` — tray uses `() => void` signature, coordinator wraps to accept and discard the `AppSettings` param.
 
@@ -77,19 +79,20 @@ Electron main process (Node.js). App lifecycle, system tray, IPC, session timer,
 
 ## CONSTANTS
 
-`constants.ts` extracts all magic numbers: window dimensions (360×480, 520×540), popover height bounds (220–480), timeouts (hide delay 160ms, battery check 5s, update check 3s/4h), `MS_PER_SECOND`, `MS_PER_MINUTE`, `SESSION_BROADCAST_INTERVAL_MS`, `MAX_UPDATE_CHECK_INTERVAL_MS` (24h), `TRAY_ICON_SIZE`, `TRAY_ICON_COLOR_ACTIVE/INACTIVE`, `DEV_ORIGINS`, `getDevServerUrl()`, `isDev`. Tray menu strings: `MENU_PREVENT_SLEEP` ("Prevent Sleep"), `MENU_SETTINGS` ("Settings..."), `MENU_ABOUT` ("About Amphetamine"), `MENU_QUIT` ("Quit"), `ACCELERATOR_QUIT` ("Cmd+Q").
+`constants.ts` extracts all magic numbers: window dimensions (360×480, 520×540), popover height bounds (220–480), timeouts (hide delay 160ms, battery check 5s, update check 3s/4h), `MS_PER_SECOND`, `MS_PER_MINUTE`, `MAX_UPDATE_CHECK_INTERVAL_MS` (24h), `TRAY_ICON_SIZE`, `TRAY_ICON_COLOR_ACTIVE/INACTIVE`, `DEV_ORIGINS`, `getDevServerUrl()`, `isDev`. Tray menu strings: `MENU_PREVENT_SLEEP` ("Prevent Sleep"), `MENU_SETTINGS` ("Settings..."), `MENU_ABOUT` ("About Amphetamine"), `MENU_QUIT` ("Quit"), `ACCELERATOR_QUIT` ("Cmd+Q").
 
 ## SESSION TIMER
 
-- `startSession(durationMinutes)` — validates input (positive finite integer); starts timer with `performance.now()` (monotonic clock), syncs `preventSleep: true`, calls `broadcastSessionUpdate()` after starting, calls `startSessionBroadcast()` for timed sessions. Protected by `isStarting` concurrency flag.
-- `cancelSession()` — clears timer, syncs `preventSleep: false`, calls `stopSessionBroadcast()` + `broadcastSessionUpdate()`
-- `getStatus(settings?)` — returns `SessionStatusResponse` (isRunning, startedAt, expiresAt, remainingSeconds, durationMinutes). **Pure** — calls `reconcileSessionState()` to reset stale fields. Never re-entrant.
-- `reconcileSessionState(state, settings?)` — pure helper that zeroes stale session fields (startedAt, expiresAt, sessionDuration) when session is not running
-- `cleanup()` — clears timer and calls `stopSessionBroadcast()` without syncing sleep (for app teardown)
-- `broadcastSessionUpdate()` — computes and broadcasts session status to all windows
-- `startSessionBroadcast()` / `stopSessionBroadcast()` — manages interval-based push of session status
-- Timer expiry calls `stopSessionBroadcast()` + `broadcastSessionUpdate()`, then syncs sleep off and clears settings
+- `startSession(durationMinutes)` — validates input (positive finite integer); starts timer with `performance.now()` (monotonic clock), syncs `preventSleep: true`, triggers event-driven `broadcastSessionUpdate()`. Protected by `isStarting` concurrency flag.
+- `cancelSession()` — clears expiry timer, syncs `preventSleep: false`, triggers event-driven `broadcastSessionUpdate()`
+- `getStatus()` — returns `SessionStatusResponse` (isRunning, startedAt, expiresAt, remainingSeconds, sessionDuration). **Pure** — no side effects. Never re-entrant.
+- `reconcileSessionState()` — exported no-op safety shim (union branch logic handles reconciliation internally)
+- `cleanup()` — clears expiry timer without syncing sleep (for app teardown)
+- `broadcastSessionUpdate()` — push-on-state-change only; no interval timer; computes and broadcasts current status to all windows
+- Internal `InternalSessionState` discriminated union (NOT exported): `{ kind: "idle" } | { kind: "indefinite"; startedAt: number } | { kind: "timed"; startedAt: number; expiresAt: number; durationMinutes: number; expiryTimer }`
+- All deps injected via setters: `setOnSessionStateChange`, `setSettingsReader`, `setBroadcastFn` — no direct module imports inside session-timer
 - Expiry callback wrapped in try/catch with `log.error` for safety
+- Timers use `.unref()` so they don’t block process exit
 
 ## SLEEP PREVENTION (sleep-prevention.ts)
 
@@ -122,11 +125,12 @@ Electron main process (Node.js). App lifecycle, system tray, IPC, session timer,
 - JSON file in `app.getPath('userData')/settings.json`
 - Loaded on module import (`loadSettings()` at bottom of settings.ts)
 - Validated via type-guard predicates (exported): `isBoolean`, `isPositiveNumber` (finite > 0), `isClamped0to100` (0 ≤ n ≤ 100), `isNonEmptyString`. Wrapper validators: `validateBoolean`, `validatePositiveNumber`, `validateClampedNumber` — exported from settings.ts for reuse in IPC handlers and tests.
-- `VALIDATORS: { [K in keyof AppSettings]: SettingsValidator<K> }` — per-field dispatch table consumed by `mergeValidatedPartial`. Mapped type ensures every AppSettings field has an entry (compile error if missing). Add new fields here — no per-field if/else.
+- `VALIDATORS: { [K in keyof AppSettings]: SettingsValidator<K> }` — per-field dispatch table consumed by `mergeValidatedPartial`. Mapped type ensures every AppSettings field has an entry (compile error if missing). Add new fields here — no per-field if/else. `mergeValidatedPartial` accepts `Partial<AppSettings>` (tightened input type).
 - `saveSettings()`: Async — uses `writeFile`/`rename` from `node:fs/promises` + `randomUUID()` from `node:crypto` for unique temp files
-- `updateSettings(partial)`: Async — has no-change dedup, updates cache BEFORE disk write, persists asynchronously, notifies listeners, returns copy.
+- `updateSettings(partial)`: Async — has no-change dedup, updates cache BEFORE disk write, serialized via `writeChain` promise mutex (prevents concurrent write races), notifies listeners, returns copy.
 - `getSettings()`: Returns shallow copy of cache (never expose mutable ref)
 - `onSettingsChanged(callback)`: Subscribe to settings changes, returns unsubscribe function
+- `writeChain: Promise<unknown>` — module-level mutex; every `updateSettings()` call chains `.then()` onto it to serialize concurrent writes atomically
 
 ## LIFECYCLE
 

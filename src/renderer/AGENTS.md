@@ -26,9 +26,14 @@ Interactive session status display. Shows prevent-sleep state, session timer cou
 - `unsubscribeSessionStatus` variable holds the cleanup function for the push subscription
 - DOM refs cached after first render: `statusDotEl`, `statusTextEl`, `timerTextEl`
 - `updateStatusUI()` batches DOM writes inside `requestAnimationFrame`
-- Timer formatting: `formatTimerLabel()` uses `performance.now()` for precision
+- Timer formatting: `formatTimerLabel()` uses locally-computed `computeRemainingSeconds()` via `sessionExpiresAtPerf` anchor (renderer-side `performance.now()` clock), NOT the push value from `sessionStatus.remainingSeconds`
 - Init order: `refreshSessionStatus()` runs BEFORE `render(version)` to avoid flash of stale state
 - Resizes window via `window.api.window.setHeight()` after render
+- `sessionExpiresAtPerf: number | null` — module-level anchor; stores `performance.now() + remainingMs` when a timed session status arrives
+- `updateSessionAnchors(status)` — maps main-process `expiresAt` to renderer clock via wall-clock delta; called on every push/IPC status update
+- `computeRemainingSeconds()` — `Math.floor((sessionExpiresAtPerf - performance.now()) / 1000)` — purely renderer-side, no IPC
+- `startCountdownTicker()` / `stopCountdownTicker()` — setInterval/clearInterval every 1000ms; fires `updateStatusUI()` only when `sessionExpiresAtPerf !== null`
+- `COUNTDOWN_TICK_MS = 1000` constant; no IPC call per tick — renderer owns countdown using its own monotonic clock domain
 - Popover visibility tracked via `isPopoverVisible` flag + `visible` CSS class
 
 ## SETTINGS WINDOW

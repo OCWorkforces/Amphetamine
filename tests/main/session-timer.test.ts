@@ -472,10 +472,7 @@ describe("session-timer", () => {
     });
   });
 
-  describe("startSessionBroadcast / stopSessionBroadcast", () => {
-    let startSessionBroadcast: () => void;
-    let stopSessionBroadcast: () => void;
-
+  describe("event-driven broadcasts (push-on-state-change)", () => {
     beforeEach(async () => {
       vi.useFakeTimers();
       vi.resetModules();
@@ -489,12 +486,11 @@ describe("session-timer", () => {
 
       const mod = await import("../../src/main/session-timer.js");
       startSession = mod.startSession;
+      cancelSession = mod.cancelSession;
       getStatus = mod.getStatus;
       setOnSessionStateChange = mod.setOnSessionStateChange;
       setSettingsReader = mod.setSettingsReader;
       setBroadcastFn = mod.setBroadcastFn;
-      startSessionBroadcast = mod.startSessionBroadcast;
-      stopSessionBroadcast = mod.stopSessionBroadcast;
 
       setOnSessionStateChange(mockOnSessionStateChange);
       setSettingsReader(mockGetSettings);
@@ -505,32 +501,47 @@ describe("session-timer", () => {
       vi.useRealTimers();
     });
 
-    it("broadcasts session status every 1 second", () => {
+    it("startSession triggers exactly one broadcast and no further automatic broadcasts", () => {
+      mockBroadcastToWindows.mockClear();
       startSession(30);
+
+      // Exactly one broadcast on state transition
+      expect(mockBroadcastToWindows).toHaveBeenCalledTimes(1);
+
       mockBroadcastToWindows.mockClear();
-
-      // startSession already calls startSessionBroadcast for timed sessions
-      vi.advanceTimersByTime(3000);
-
-      // Should have 3 broadcasts (at 1s, 2s, 3s)
-      expect(mockBroadcastToWindows.mock.calls.length).toBeGreaterThanOrEqual(3);
-    });
-
-    it("stopSessionBroadcast stops the periodic broadcasts", () => {
-      startSessionBroadcast();
-      mockBroadcastToWindows.mockClear();
-
-      vi.advanceTimersByTime(2000);
-
-      stopSessionBroadcast();
-      mockBroadcastToWindows.mockClear();
-
-      vi.advanceTimersByTime(3000);
+      // No further broadcasts fire automatically over time
+      vi.advanceTimersByTime(5000);
       expect(mockBroadcastToWindows).not.toHaveBeenCalled();
     });
 
-    it("stopSessionBroadcast is safe to call when not broadcasting", () => {
-      expect(() => stopSessionBroadcast()).not.toThrow();
+    it("cancelSession triggers exactly one broadcast", () => {
+      startSession(30);
+      mockBroadcastToWindows.mockClear();
+
+      cancelSession();
+      expect(mockBroadcastToWindows).toHaveBeenCalledTimes(1);
+
+      mockBroadcastToWindows.mockClear();
+      vi.advanceTimersByTime(5000);
+      expect(mockBroadcastToWindows).not.toHaveBeenCalled();
+    });
+
+    it("timer expiry triggers exactly one broadcast", () => {
+      startSession(1);
+      mockBroadcastToWindows.mockClear();
+
+      vi.advanceTimersByTime(60_000);
+      expect(mockBroadcastToWindows).toHaveBeenCalledTimes(1);
+    });
+
+    it("indefinite startSession triggers exactly one broadcast", () => {
+      mockBroadcastToWindows.mockClear();
+      startSession(null);
+      expect(mockBroadcastToWindows).toHaveBeenCalledTimes(1);
+
+      mockBroadcastToWindows.mockClear();
+      vi.advanceTimersByTime(5000);
+      expect(mockBroadcastToWindows).not.toHaveBeenCalled();
     });
   });
 });

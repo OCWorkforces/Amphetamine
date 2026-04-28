@@ -23,6 +23,9 @@ export function onSettingsChanged(callback: SettingsChangeCallback): () => void 
 }
 let settingsCache: AppSettings = { ...DEFAULT_SETTINGS };
 
+/** Promise chain for serializing concurrent updateSettings() calls */
+let writeChain: Promise<unknown> = Promise.resolve();
+
 /** Type-guard predicates — single source of truth for validity semantics */
 
 export const isBoolean = (v: unknown): v is boolean => typeof v === "boolean";
@@ -99,7 +102,7 @@ function applyValidator<K extends keyof AppSettings>(
 /** Merge validated partial settings into a base settings object — dispatches via VALIDATORS */
 export function mergeValidatedPartial(
   base: AppSettings,
-  partial: Partial<Record<keyof AppSettings, unknown>>,
+  partial: Partial<AppSettings>,
 ): AppSettings {
   const merged: AppSettings = { ...base };
   for (const key of Object.keys(partial) as (keyof AppSettings)[]) {
@@ -165,29 +168,31 @@ export function getSettings(): AppSettings {
 }
 
 export async function updateSettings(partial: Partial<AppSettings>): Promise<AppSettings> {
-  const merged = mergeValidatedPartial(settingsCache, partial);
+  const result = writeChain.then(async () => {
+    const merged = mergeValidatedPartial(settingsCache, partial);
 
-  // Skip if nothing actually changed — prevents unnecessary cascade of events
-  const changed = (Object.keys(merged) as (keyof AppSettings)[]).some(
-    (key) => merged[key] !== settingsCache[key],
-  );
-  if (!changed) {
-    return getSettings();
-  }
+    const changed = (Object.keys(merged) as (keyof AppSettings)[]).some(
+      (key) => merged[key] !== settingsCache[key],
+    );
+    if (!changed) {
+      return getSettings();
+    }
 
-  // Update cache and notify BEFORE disk write
-  settingsCache = { ...merged };
-  const snapshot = getSettings();
-  settingsEmitter.emit("change", snapshot);
+    settingsCache = { ...merged };
+    const snapshot = getSettings();
+    settingsEmitter.emit("change", snapshot);
 
-  // Persist to disk asynchronously
-  try {
-    await saveSettings(merged);
-  } catch (err) {
-    log.error("[settings] Failed to save settings:", err);
-  }
+    try {
+      await saveSettings(merged);
+    } catch (err) {
+      log.error("[settings] Failed to save settings:", err);
+    }
 
-  return snapshot;
+    return snapshot;
+  });
+  // writeChain always resolves (never rejects) — catch prevents unhandled rejection
+  writeChain = result.catch(() => {});
+  return result;
 }
 
 // Initialize on module load
