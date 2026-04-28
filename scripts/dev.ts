@@ -16,11 +16,7 @@ const DEV_SERVER_PORT = 5173;
 const MAX_WAIT_MS = 30000; // Maximum time to wait for dev server
 const POLL_INTERVAL_MS = 500;
 
-function run(
-  cmd: string,
-  args: string[],
-  env?: Record<string, string>,
-): ChildProcess {
+function run(cmd: string, args: string[], env?: Record<string, string>): ChildProcess {
   const proc = spawn(cmd, args, {
     stdio: "inherit",
     env: { ...process.env, ...env },
@@ -71,10 +67,7 @@ async function isDevServerReady(port: number): Promise<boolean> {
 /**
  * Wait for the dev server to be ready, with timeout.
  */
-async function waitForDevServer(
-  port: number,
-  maxWaitMs: number,
-): Promise<boolean> {
+async function waitForDevServer(port: number, maxWaitMs: number): Promise<boolean> {
   const startTime = Date.now();
 
   while (Date.now() - startTime < maxWaitMs) {
@@ -112,14 +105,7 @@ async function main() {
   });
 
   console.log("[dev] Starting rslib watch for preload...");
-  run("bun", [
-    "x",
-    "rslib",
-    "build",
-    "--watch",
-    "-c",
-    "rslib.config.preload.ts",
-  ], {
+  run("bun", ["x", "rslib", "build", "--watch", "-c", "rslib.config.preload.ts"], {
     NODE_ENV: "development",
   });
   console.log("[dev] Starting rsbuild dev server for renderer...");

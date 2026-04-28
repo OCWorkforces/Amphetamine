@@ -104,7 +104,8 @@ Electron main process (Node.js). App lifecycle, system tray, IPC, session timer,
 ## BATTERY MONITORING (battery-monitor.ts)
 
 - `initBatteryMonitoring()`: Listens to powerMonitor AC/battery events. Uses `isCheckingBattery` flag to prevent concurrent checks. Per-listener `off()` refs for clean removal.
-- `getBatteryPercent()`: Parses `pmset -g batt` output (macOS-native)
+- `getBatteryPercent()`: Calls `pmset -g batt` and delegates parsing to `parsePmsetOutput`
+- `parsePmsetOutput(stdout: string): number | null`: Pure fn — parses raw `pmset -g batt` stdout → battery % or null. Exported, unit-tested independently.
 - `checkBatteryAndStop()`: Auto-cancels session when below threshold. Called with `.catch(log.error)` chain.
 - `cleanupBatteryMonitoring()`: Removes powerMonitor listeners
 
@@ -126,7 +127,7 @@ Electron main process (Node.js). App lifecycle, system tray, IPC, session timer,
 - Loaded on module import (`loadSettings()` at bottom of settings.ts)
 - Validated via type-guard predicates (exported): `isBoolean`, `isPositiveNumber` (finite > 0), `isClamped0to100` (0 ≤ n ≤ 100), `isNonEmptyString`. Wrapper validators: `validateBoolean`, `validatePositiveNumber`, `validateClampedNumber` — exported from settings.ts for reuse in IPC handlers and tests.
 - `VALIDATORS: { [K in keyof AppSettings]: SettingsValidator<K> }` — per-field dispatch table consumed by `mergeValidatedPartial`. Mapped type ensures every AppSettings field has an entry (compile error if missing). Add new fields here — no per-field if/else. `mergeValidatedPartial` accepts `Partial<AppSettings>` (tightened input type).
-- `saveSettings()`: Async — uses `writeFile`/`rename` from `node:fs/promises` + `randomUUID()` from `node:crypto` for unique temp files
+- `saveSettings()`: Async — uses `writeFile`/`rename` from `node:fs/promises` + `randomUUID()` for unique temp files. On JSON parse error during `loadSettings()`, backs up corrupt file to `settings.corrupt-{ISO-timestamp}.json` via `renameSync` + `log.error`, then falls back to `DEFAULT_SETTINGS`.
 - `updateSettings(partial)`: Async — has no-change dedup, updates cache BEFORE disk write, serialized via `writeChain` promise mutex (prevents concurrent write races), notifies listeners, returns copy.
 - `getSettings()`: Returns shallow copy of cache (never expose mutable ref)
 - `onSettingsChanged(callback)`: Subscribe to settings changes, returns unsubscribe function
@@ -156,6 +157,6 @@ Electron main process (Node.js). App lifecycle, system tray, IPC, session timer,
 
 ## STALE / CLEANUP
 
-- `build/notarize.cjs`: Wired via `afterSign` but `@electron/notarize` not installed — non-functional
+- `build/notarize.cjs`: **DELETED** — `@electron/notarize` not installed, was non-functional
 
 - `utils/packageInfo.ts:52`: Fallback description mentions "Google Meet meetings" — pre-v1.0 artifact

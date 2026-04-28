@@ -60,20 +60,20 @@ projects: [
 `tsconfig.tests.json` extends base tsconfig with `rootDir: "."`, includes `tests/**/*`, relaxes `noUnusedLocals` and `noUnusedParameters`. Run via `bun run typecheck:tests`.
 ```
 
-## TEST COUNTS (339 total, 22 files)
+## TEST COUNTS (350 total, 22 files)
 
-### Main Process (293 tests, 19 files)
+### Main Process (304 tests, 19 files)
 
 | File                              | Tests | Focus                                          |
 | --------------------------------- | ----- | ---------------------------------------------- |
-| `auto-updater.test.ts`            | 30    | Security: semver/URL validation, dedup by version, exponential backoff, IPC   |
+| `auto-updater.test.ts`            | 34    | Security: semver/URL validation, dedup by version (lastNotifiedVersion guard), exponential backoff, IPC   |
 | `session-timer.test.ts`           | 30    | Lifecycle, event-driven broadcasts, `broadcastSessionUpdate`, discriminated union state, concurrent start guard |
 | `ipc.test.ts`                     | 27    | validateSender, path-traversal injection, APP_QUIT, SESSION_START validation  |
 | `tray.test.ts`                    | 22    | Menu, icon, theme, settings sync, about panel  |
 | `sleep-prevention.test.ts`        | 21    | start/stop/sync, idempotency, powerSaveBlocker returns -1 handled             |
 | `packageInfo.test.ts`             | 20    | isPackageInfo runtime guard + cached package.json reader                      |
 | `coordinator.test.ts`             | 19    | Coordinator: init, cleanup, settings dispatch, error boundary                 |
-| `battery-monitor.test.ts`         | 17    | pmset parsing, auto-stop, threshold boundaries, `isCheckingBattery` guard     |
+| `battery-monitor.test.ts`         | 24    | pmset parsing (`parsePmsetOutput` pure fn), auto-stop, threshold boundaries, `isCheckingBattery` guard    |
 | `constants.test.ts`               | 16    | Extracted constants: window dims, timeouts, colors, accelerators              |
 | `preload.test.ts`                 | 15    | Context bridge API exposure, exhaustiveness                                   |
 | `settings.test.ts`                | 14    | File I/O, validation, NaN/Infinity rejected, no-change dedup, concurrent saves|
