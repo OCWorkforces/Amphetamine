@@ -60,14 +60,14 @@ projects: [
 `tsconfig.tests.json` extends base tsconfig with `rootDir: "."`, includes `tests/**/*`, relaxes `noUnusedLocals` and `noUnusedParameters`. Run via `bun run typecheck:tests`.
 ```
 
-## TEST COUNTS (338 total, 22 files)
+## TEST COUNTS (339 total, 22 files)
 
-### Main Process (292 tests, 19 files)
+### Main Process (293 tests, 19 files)
 
 | File                              | Tests | Focus                                          |
 | --------------------------------- | ----- | ---------------------------------------------- |
 | `auto-updater.test.ts`            | 30    | Security: semver/URL validation, dedup by version, exponential backoff, IPC   |
-| `session-timer.test.ts`           | 29    | Lifecycle, concurrent starts (`isStarting`), edge cases, getStatus shape      |
+| `session-timer.test.ts`           | 30    | Lifecycle, event-driven broadcasts, `broadcastSessionUpdate`, discriminated union state, concurrent start guard |
 | `ipc.test.ts`                     | 27    | validateSender, path-traversal injection, APP_QUIT, SESSION_START validation  |
 | `tray.test.ts`                    | 22    | Menu, icon, theme, settings sync, about panel  |
 | `sleep-prevention.test.ts`        | 21    | start/stop/sync, idempotency, powerSaveBlocker returns -1 handled             |
@@ -278,20 +278,14 @@ Renderer tests mock `window.api` globally via `vi.stubGlobal()`:
 ```typescript
 const mockApi = {
   window: { setHeight: vi.fn() },
-  app: { getVersion: vi.fn().mockResolvedValue("1.0.0") },
-  quit: vi.fn(),  // under app namespace: window.api.app.quit()
+  app: { getVersion: vi.fn().mockResolvedValue("1.0.0"), quit: vi.fn() },
   settings: { get: vi.fn(), set: vi.fn(), open: vi.fn() },
   session: { start: vi.fn(), cancel: vi.fn(), getStatus: vi.fn() },
   onSettingsChanged: vi.fn(() => vi.fn()),
   onSessionStatusUpdate: vi.fn(() => vi.fn()),
   autoUpdater: { checkForUpdates: vi.fn(), onStatus: vi.fn(() => vi.fn()) },
 };
-  settings: { get: vi.fn(), set: vi.fn(), open: vi.fn() },
-  session: { start: vi.fn(), cancel: vi.fn(), getStatus: vi.fn() },
-  onSettingsChanged: vi.fn(() => vi.fn()),
-  onSessionStatusUpdate: vi.fn(() => vi.fn()),
-  autoUpdater: { checkForUpdates: vi.fn(), onStatus: vi.fn(() => vi.fn()) },
-};
+
 
 beforeEach(() => {
   vi.stubGlobal("api", mockApi);
