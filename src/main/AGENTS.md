@@ -105,7 +105,7 @@ Electron main process (Node.js). App lifecycle, system tray, IPC, session timer,
 
 - `initBatteryMonitoring()`: Listens to powerMonitor AC/battery events. Uses `isCheckingBattery` flag to prevent concurrent checks. Per-listener `off()` refs for clean removal.
 - `getBatteryPercent()`: Calls `pmset -g batt` and delegates parsing to `parsePmsetOutput`
-- `parsePmsetOutput(stdout: string): number | null`: Pure fn — parses raw `pmset -g batt` stdout → battery % or null. Exported, unit-tested independently.
+- `parsePmsetOutput(stdout: string): number | null`: Pure fn — parses raw `pmset -g batt` stdout → battery % or null. Checks for `InternalBattery` presence first (returns null on desktop Macs). Exported, unit-tested independently.
 - `checkBatteryAndStop()`: Auto-cancels session when below threshold. Called with `.catch(log.error)` chain.
 - `cleanupBatteryMonitoring()`: Removes powerMonitor listeners
 
@@ -157,6 +157,6 @@ Electron main process (Node.js). App lifecycle, system tray, IPC, session timer,
 
 ## STALE / CLEANUP
 
-- `build/notarize.cjs`: Wired via `afterSign` but `@electron/notarize` not installed — non-functional
+- `build/notarize.cjs`: Functional with `@electron/notarize` installed — requires `APPLE_ID`, `APPLE_TEAM_ID`, `APPLE_APP_PASSWORD` env vars
 
 - `utils/packageInfo.ts:52`: Fallback description mentions "Google Meet meetings" — pre-v1.0 artifact

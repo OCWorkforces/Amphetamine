@@ -1,7 +1,7 @@
 # Amphetamine — Project Knowledge Base
 
 **Generated:** 2026-04-28
-**Commit:** 423423d
+**Commit:** b8dfec3
 **Branch:** develop
 
 ## OVERVIEW
@@ -66,7 +66,7 @@ src/
 | `Orchestration logic` | `src/main/coordinator.ts` | Settings→system sync hub, imports extracted modules |
 | Session timer logic   | `src/main/session-timer.ts`            | start/cancel/getStatus/cleanup, discriminated InternalSessionState, event-driven broadcasts |
 | Sleep prevention      | `src/main/sleep-prevention.ts`         | start/stop/syncPreventSleep |
-| Battery monitoring    | `src/main/battery-monitor.ts`          | initBatteryMonitoring, getBatteryPercent, parsePmsetOutput, checkBatteryAndStop |
+| Battery monitoring | `src/main/battery-monitor.ts`          | initBatteryMonitoring, getBatteryPercent, parsePmsetOutput (checks InternalBattery first), checkBatteryAndStop |
 | Global shortcut       | `src/main/global-shortcut.ts`          | registerGlobalShortcut/unregisterGlobalShortcut, ShortcutDeps |
 | Launch at login       | `src/main/auto-launch.ts`              | getAutoLaunchStatus/setAutoLaunch/syncAutoLaunch |
 | User settings         | `src/main/settings.ts`                 | JSON in userData, validated, EventEmitter       |
@@ -109,7 +109,7 @@ src/
 | `initBatteryMonitoring`      | fn    | src/main/battery-monitor.ts     | Battery drain auto-disable (powerMonitor)                                      |
 | `getBatteryPercent`          | fn    | src/main/battery-monitor.ts     | Calls pmset + delegates parsing to `parsePmsetOutput`                          |
 | `cleanupBatteryMonitoring`   | fn    | src/main/battery-monitor.ts     | Remove powerMonitor listeners                                                  |
-| `parsePmsetOutput`          | fn    | src/main/battery-monitor.ts     | Pure fn: parses `pmset -g batt` stdout → `number \| null` (exported, tested) |
+| `parsePmsetOutput`          | fn    | src/main/battery-monitor.ts     | Pure fn: parses `pmset -g batt` stdout → `number \| null`; checks for InternalBattery first (exported, tested) |
 | `syncAutoLaunch`             | fn    | src/main/auto-launch.ts         | Sync login item with setting                                                   |
 | `getAutoLaunchStatus`        | fn    | src/main/auto-launch.ts         | Get current auto-launch status                                                 |
 | `setAutoLaunch`              | fn    | src/main/auto-launch.ts         | Enable/disable auto-launch                                                     |
@@ -235,8 +235,8 @@ Runtime deps (`electron-log`, `electron-updater`) are externalized in rslib conf
 ## PACKAGING
 
 - `electron-builder` for macOS arm64 + x64 (DMG + ZIP)
-- Hardened runtime disabled, Gatekeeper disabled, notarization disabled
-- Notarization: `build/notarize.cjs` deleted (non-functional, `@electron/notarize` not installed)
+- Notarization: `build/notarize.cjs` with `@electron/notarize` (credentials-dependent, disabled by default)
+- Hardened runtime disabled, Gatekeeper disabled
 - Entitlements in `build/entitlements.mac*.plist` (JIT + unsigned executable memory)
 - `LSUIElement: true` — app runs as agent (no Dock icon by default)
 - `afterPack` hook (`build/after-pack.cjs`): strips debug symbols, removes non-English locales
@@ -259,7 +259,7 @@ Runtime deps (`electron-log`, `electron-updater`) are externalized in rslib conf
 - **Coordinator**: `coordinator.ts` centralizes all settings→system sync. Subscribes to `onSettingsChanged`, diffs against `prevSettings` snapshot, and selectively dispatches to sleep-prevention, battery-monitor, auto-launch, session cancel, broadcast, and shortcut modules.
 - **Session timer**: State machine in `session-timer.ts` — uses `performance.now()` monotonic clock. Discriminated `InternalSessionState` union. Push-on-state-change broadcasts (no interval).
 - **Sleep prevention**: `sleep-prevention.ts` manages `powerSaveBlocker`. `syncPreventSleep()` starts/stops based on settings.
-- **Battery monitoring**: `battery-monitor.ts` monitors via `pmset`, auto-cancels session below threshold. `parsePmsetOutput(stdout)` extracted as pure fn (exported, testable).
+- **Battery monitoring**: `battery-monitor.ts` monitors via `pmset`, auto-cancels session below threshold. `parsePmsetOutput(stdout)` extracted as pure fn (exported, testable). Checks for `InternalBattery` presence before parsing (returns null on desktop Macs).
 - **Global shortcut**: `Cmd+Shift+A` toggles preventSleep. `global-shortcut.ts` receives deps via `ShortcutDeps`.
 - **Auto-launch**: `auto-launch.ts` manages macOS login items via `app.setLoginItemSettings()`.
 - **Popover UI**: Read-only status display with session timer. Receives push updates via `SESSION_STATUS_UPDATE` (no polling).
@@ -277,7 +277,7 @@ Runtime deps (`electron-log`, `electron-updater`) are externalized in rslib conf
 
 ## STALE / CLEANUP
 
-- `build/notarize.cjs`: **DELETED** — `@electron/notarize` not installed, was non-functional
+- `build/notarize.cjs`: Functional with `@electron/notarize` installed — requires `APPLE_ID`, `APPLE_TEAM_ID`, `APPLE_APP_PASSWORD` env vars
 - `build/flip-fuses.cjs`: Flips Electron fuses (RunAsNode disabled, EnableCookieEncryption, EnableFuses, OnlyLoadAppFromAsar)
 - `DEV_SERVER_URL`: Used in 3 files — correct name (previously VITE_DEV_SERVER_URL from Vite era)
 

@@ -1,6 +1,6 @@
 # Build — Packaging & Signing Scripts
 
-macOS build pipeline: post-pack optimizations, fuse flipping, entitlements, and (non-functional) notarization.
+macOS build pipeline: post-pack optimizations, fuse flipping, entitlements, and credentials-dependent notarization.
 
 ## FILES
 
@@ -8,7 +8,7 @@ macOS build pipeline: post-pack optimizations, fuse flipping, entitlements, and 
 | -------------------------------- | ---------------------------------------------------------------------------- |
 | `after-pack.cjs`                 | ARM64-only binary stripping + locale removal                                 |
 | `flip-fuses.cjs`                 | Electron fuse configuration post-build                                       |
-| `notarize.cjs`                   | Apple notarization (**non-functional** — `@electron/notarize` not installed) |
+| `notarize.cjs`                   | Apple notarization (credentials-dependent, `@electron/notarize` installed)   |
 | `entitlements.mac.plist`         | Main process entitlements (JIT + unsigned executable memory)                 |
 | `entitlements.mac.inherit.plist` | Helper/renderer process entitlements (identical to main)                     |
 | `icon.icns`                      | App icon for packaging                                                       |
@@ -49,24 +49,21 @@ Both plist files grant the same two entitlements:
 - `com.apple.security.cs.allow-jit` — required for V8 JIT compilation
 - `com.apple.security.cs.allow-unsigned-executable-memory` — required for Electron renderer
 
-Hardened runtime is **disabled** in electron-builder config. Gatekeeper is disabled. Notarization is disabled.
+- Notarization is disabled by default (no hardened runtime). Only activates when Apple credentials env vars are set.
 
-## NOTARIZATION (NON-FUNCTIONAL)
-
-`notarize.cjs` is wired via `afterSign` in electron-builder config but `@electron/notarize` is not in `package.json`. If Apple credentials are provided (`APPLE_ID`, `APPLE_TEAM_ID`, `APPLE_APP_PASSWORD`), the script would notarize via `notarytool`. Currently always skips with a warning.
+`notarize.cjs` is wired via `afterSign` in electron-builder config. If Apple credentials are provided (`APPLE_ID`, `APPLE_TEAM_ID`, `APPLE_APP_PASSWORD`), the script notarizes via `notarytool`. Without credentials, it skips with a warning. `@electron/notarize` is now installed in devDependencies.
 
 ## PACKAGING FLOW
 
 ```
 electron-builder (CLI-only, no config block)
   → afterPack: build/after-pack.cjs (strip binaries + locales)
-  → afterSign: build/notarize.cjs (skipped)
+  → afterSign: build/notarize.cjs (runs with Apple credentials, skips without)
   → DMG: build-macOS-dmg.sh (custom script, ad-hoc signing fallback)
   → flip-fuses: build/flip-fuses.cjs (post-build fuse flipping)
 ```
 
 ## ANTI-PATTERNS
 
-- Never install `@electron/notarize` without updating `package.json` — the hook will fail silently
-- Never modify entitlements without understanding hardened runtime implications for Electron
+- `@electron/notarize` is installed — notarization runs when `APPLE_ID`, `APPLE_TEAM_ID`, `APPLE_APP_PASSWORD` env vars are set
 - `after-pack.cjs` only runs for ARM64 — x64 builds skip all optimizations
