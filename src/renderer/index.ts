@@ -1,20 +1,24 @@
 import "./styles/main.css";
-import type { AppSettings } from "../shared/types.js";
+import type { AppSettings, SessionStatusResponse } from "../shared/types.js";
 import { DEFAULT_SETTINGS } from "../shared/types.js";
 import { STATUS_PREVENTING_SLEEP, STATUS_SLEEP_PREVENTION_OFF } from "./constants.js";
 
-type SessionStatus = Awaited<ReturnType<typeof window.api.session.getStatus>> | null;
+type SessionStatus = SessionStatusResponse | null;
 
 const MIN_H = 180;
 const MAX_H = 420;
+const COUNTDOWN_TICK_MS = 1000;
 
 let settings: AppSettings = { ...DEFAULT_SETTINGS };
 let sessionStatus: SessionStatus = null;
+/** Anchor (in renderer's performance.now() domain) when the active session expires. */
+let sessionExpiresAtPerf: number | null = null;
 let statusError: string | null = null;
 let unsubscribeSettings: (() => void) | null = null;
 let unsubscribeSessionStatus: (() => void) | null = null;
 let isPopoverVisible = false;
 let isLoading = true;
+let countdownIntervalId: ReturnType<typeof setInterval> | null = null;
 
 const TIMER_ICON_SVG = `<svg class="popover-timer-icon" aria-hidden="true" width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="6" cy="6" r="5"/><path d="M6 3v3l2 2"/></svg><span class="visually-hidden">Timer</span>`;
 
@@ -31,6 +35,27 @@ function getApp(): HTMLElement | null {
   return document.getElementById("app");
 }
 
+/**
+ * Capture countdown anchors from a freshly received status snapshot.
+ * Maps main-process performance.now() expiresAt onto renderer's perf clock
+ * via wall-clock delta (Date.now() approximates the moment of receipt).
+ */
+function updateSessionAnchors(status: SessionStatus): void {
+  if (status?.isRunning && status.expiresAt !== null && status.remainingSeconds !== null) {
+    const remainingMs = status.remainingSeconds * 1000;
+    sessionExpiresAtPerf = performance.now() + remainingMs;
+  } else {
+    sessionExpiresAtPerf = null;
+  }
+}
+
+/** Compute remaining seconds locally from anchors — no IPC. */
+function computeRemainingSeconds(): number | null {
+  if (sessionExpiresAtPerf === null) return null;
+  const remainingMs = Math.max(0, sessionExpiresAtPerf - performance.now());
+  return Math.floor(remainingMs / 1000);
+}
+
 function formatTimerLabel(): string {
   if (!settings.preventSleep) {
     return `${TIMER_ICON_SVG} Indefinitely`;
@@ -40,7 +65,9 @@ function formatTimerLabel(): string {
     return `${TIMER_ICON_SVG} Indefinitely`;
   }
 
-  const computedRemaining = sessionStatus.remainingSeconds;
+  // Prefer locally-computed value (no IPC, no 1s-push dependency).
+  const localRemaining = computeRemainingSeconds();
+  const computedRemaining = localRemaining ?? sessionStatus.remainingSeconds;
 
   const totalSeconds = Math.max(0, Math.ceil(computedRemaining));
   const hours = Math.floor(totalSeconds / 3600);
@@ -52,6 +79,22 @@ function formatTimerLabel(): string {
 
   const minuteValue = Math.max(0, Math.ceil(totalSeconds / 60));
   return `${TIMER_ICON_SVG} ${minuteValue}m remaining`;
+}
+
+function startCountdownTicker(): void {
+  if (countdownIntervalId !== null) return;
+  countdownIntervalId = setInterval(() => {
+    // Only refresh display when a timed session is active locally.
+    if (sessionExpiresAtPerf === null) return;
+    updateStatusUI();
+  }, COUNTDOWN_TICK_MS);
+}
+
+function stopCountdownTicker(): void {
+  if (countdownIntervalId !== null) {
+    clearInterval(countdownIntervalId);
+    countdownIntervalId = null;
+  }
 }
 
 function resizeToContent(): void {
@@ -88,6 +131,7 @@ function updateStatusUI(): void {
 async function refreshSessionStatus(): Promise<void> {
   if (!settings.preventSleep) {
     sessionStatus = null;
+    updateSessionAnchors(null);
     statusError = null;
     updateStatusUI();
     return;
@@ -95,10 +139,12 @@ async function refreshSessionStatus(): Promise<void> {
 
   try {
     sessionStatus = await window.api.session.getStatus();
+    updateSessionAnchors(sessionStatus);
     statusError = null;
   } catch {
     console.warn("[renderer] Failed to get session status");
     sessionStatus = null;
+    updateSessionAnchors(null);
     statusError = "Status unavailable";
   }
 
@@ -219,15 +265,17 @@ async function loadInitialData(): Promise<{ settings: AppSettings; version: stri
 function setupPushSubscriptions(): void {
   unsubscribeSettings = window.api.onSettingsChanged((next) => {
     settings = next;
-    updateStatusUI();
 
     if (!settings.preventSleep) {
       sessionStatus = null;
+      updateSessionAnchors(null);
     }
+    updateStatusUI();
   });
 
   unsubscribeSessionStatus = window.api.onSessionStatusUpdate((status) => {
     sessionStatus = status;
+    updateSessionAnchors(status);
     updateStatusUI();
   });
 }
@@ -246,6 +294,7 @@ function attachWindowEvents(): void {
       cancelAnimationFrame(rafId);
       rafId = null;
     }
+    stopCountdownTicker();
     statusDotEl = null;
     statusTextEl = null;
     timerTextEl = null;
@@ -266,7 +315,7 @@ function attachWindowEvents(): void {
   });
 }
 
-async function init() {
+async function init(): Promise<void> {
   isLoading = true;
   isPopoverVisible = true;
   renderLoading();
@@ -281,6 +330,7 @@ async function init() {
 
     setupPushSubscriptions();
     attachWindowEvents();
+    startCountdownTicker();
   } catch {
     // Render fallback UI on init failure
     isLoading = false;

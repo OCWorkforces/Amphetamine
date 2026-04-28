@@ -31,11 +31,15 @@ import { setBroadcastFn as setUpdaterBroadcastFn } from "./auto-updater.js";
 import type { TrayDeps } from "./tray.js";
 import { createSettingsWindow } from "./settings-window.js";
 
-let prevPreventSleep: boolean;
+let prevPreventSleep = false;
+let prevSettings: AppSettings | null = null;
+let shortcutDeps: ShortcutDeps | null = null;
 let unsubscribeSettings: (() => void) | null = null;
 
 function togglePreventSleep(): void {
-  void updateSettings({ preventSleep: !getSettings().preventSleep });
+  updateSettings({ preventSleep: !getSettings().preventSleep }).catch((err) =>
+    log.error("[coordinator] togglePreventSleep failed:", err),
+  );
 }
 /**
  * Initialize the coordinator.
@@ -44,6 +48,7 @@ function togglePreventSleep(): void {
 export function initCoordinator(): void {
   const settings = getSettings();
   prevPreventSleep = settings.preventSleep;
+  prevSettings = { ...settings };
 
 
   // Sync system state with current settings
@@ -59,7 +64,9 @@ export function initCoordinator(): void {
 
   // Wire session state change callback (replaces direct updateSettings in session-timer)
   setOnSessionStateChange((updates) => {
-    void updateSettings(updates);
+    updateSettings(updates).catch((err) =>
+      log.error("[coordinator] Session state update failed:", err),
+    );
   });
 
   // Wire settings reader (replaces direct getSettings import in session-timer)
@@ -72,7 +79,7 @@ export function initCoordinator(): void {
   setUpdaterBroadcastFn(broadcastToWindows);
 
   // Register global shortcut with injected deps
-  const shortcutDeps: ShortcutDeps = {
+  shortcutDeps = {
     getShortcut: () => getSettings().shortcut,
     getPreventSleep: () => getSettings().preventSleep,
     togglePreventSleep,
@@ -86,16 +93,19 @@ export function initCoordinator(): void {
       // effect formerly hidden inside getStatus()).
       reconcileSessionState();
 
-      // Sync power-saver state with settings
-      syncPreventSleep(settings.preventSleep);
-
-      // Sync auto-launch state with settings
-      syncAutoLaunch(settings.launchAtLogin);
+      // Sync only what changed
+      if (!prevSettings || settings.preventSleep !== prevSettings.preventSleep) {
+        syncPreventSleep(settings.preventSleep);
+      }
+      if (!prevSettings || settings.launchAtLogin !== prevSettings.launchAtLogin) {
+        syncAutoLaunch(settings.launchAtLogin);
+      }
 
       // Update prevPreventSleep BEFORE cancelSession() to prevent infinite recursion.
       // cancelSession() calls updateSettings() which re-triggers this subscriber synchronously.
       const wasPreventingSleep = prevPreventSleep;
       prevPreventSleep = settings.preventSleep;
+      prevSettings = { ...settings };
 
       // Cancel active session when preventSleep transitions true → false
       if (wasPreventingSleep && !settings.preventSleep) {
