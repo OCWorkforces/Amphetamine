@@ -17,7 +17,9 @@ let lastNotifiedVersion: string | null = null;
 let consecutiveFailures = 0;
 
 /** Inject broadcast function (called from coordinator) */
-export function setBroadcastFn(fn: <K extends PushChannel>(channel: K, data: IpcResponse<K>) => void): void {
+export function setBroadcastFn(
+  fn: <K extends PushChannel>(channel: K, data: IpcResponse<K>) => void,
+): void {
   broadcastFn = fn;
 }
 
@@ -65,7 +67,11 @@ function onUpdateNotAvailable(info: UpdateInfo): void {
 }
 
 /** Handle "download-progress" event */
-function onDownloadProgress(progress: { percent: number; transferred: number; total: number }): void {
+function onDownloadProgress(progress: {
+  percent: number;
+  transferred: number;
+  total: number;
+}): void {
   log.info("[auto-updater] Download progress:", Math.round(progress.percent), "%");
   broadcastFn?.(IPC_CHANNELS.AUTO_UPDATER_STATUS, {
     status: "downloading",
@@ -144,13 +150,10 @@ function startUpdateCheckLoop(): void {
   }, INITIAL_UPDATE_CHECK_DELAY_MS);
 
   // Periodic check (base 4 hours, exponential backoff on failures up to 24 hours)
-  checkIntervalId = setInterval(
-    () => {
-      log.info("[auto-updater] Running periodic update check...");
-      void autoUpdater.checkForUpdates();
-    },
-    PERIODIC_UPDATE_CHECK_INTERVAL_MS,
-  );
+  checkIntervalId = setInterval(() => {
+    log.info("[auto-updater] Running periodic update check...");
+    void autoUpdater.checkForUpdates();
+  }, PERIODIC_UPDATE_CHECK_INTERVAL_MS);
   checkIntervalId?.unref();
 }
 /**

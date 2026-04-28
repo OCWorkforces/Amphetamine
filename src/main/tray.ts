@@ -112,10 +112,10 @@ export function setupTray(deps: TrayDeps): () => void {
     if (themeDebounceTimer) clearTimeout(themeDebounceTimer);
     themeDebounceTimer = setTimeout(() => {
       themeDebounceTimer = null;
-    refreshTrayIcon();
+      refreshTrayIcon();
     }, 50);
-};
-nativeTheme.on("updated", onThemeUpdated);
+  };
+  nativeTheme.on("updated", onThemeUpdated);
 
   // Store unsubscribe for cleanup robustness
   const unsubscribe = deps.onSettingsChanged(() => {
@@ -154,15 +154,15 @@ nativeTheme.on("updated", onThemeUpdated);
       tray.popUpContextMenu(cachedMenu);
     }
   });
-return () => {
-unsubscribe();
+  return () => {
+    unsubscribe();
     nativeTheme.removeListener("updated", onThemeUpdated);
     if (themeDebounceTimer) {
       clearTimeout(themeDebounceTimer);
       themeDebounceTimer = null;
     }
-tray = null;
-cachedMenu = null;
-iconCache.clear();
-};
+    tray = null;
+    cachedMenu = null;
+    iconCache.clear();
+  };
 }

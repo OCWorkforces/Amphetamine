@@ -10,7 +10,13 @@ import { initCoordinator, cleanupCoordinator, getTrayDeps } from "./coordinator.
 import { unregisterGlobalShortcut } from "./global-shortcut.js";
 import { closeSettingsWindow } from "./settings-window.js";
 import { initAutoUpdater, stopAutoUpdater } from "./auto-updater.js";
-import { MAIN_WINDOW_WIDTH, MAIN_WINDOW_HEIGHT, HIDE_DELAY_MS, getDevServerUrl, isDev } from "./constants.js";
+import {
+  MAIN_WINDOW_WIDTH,
+  MAIN_WINDOW_HEIGHT,
+  HIDE_DELAY_MS,
+  getDevServerUrl,
+  isDev,
+} from "./constants.js";
 import { hardenWebContents } from "./security.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -68,7 +74,8 @@ function createWindow(): BrowserWindow {
     const devUrl = getDevServerUrl();
     void win.loadURL(devUrl);
   } else {
-    void win.loadFile(path.join(__dirname, "..", "renderer", "index.html"));  }
+    void win.loadFile(path.join(__dirname, "..", "renderer", "index.html"));
+  }
   // Intercept close/minimize → hide to tray (unless quitting)
   win.on("close", (event) => {
     if (isQuitting) return;

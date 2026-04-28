@@ -36,8 +36,7 @@ export const isPositiveNumber = (v: unknown): v is number =>
 export const isClamped0to100 = (v: unknown): v is number =>
   typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= 100;
 
-export const isNonEmptyString = (v: unknown): v is string =>
-  typeof v === "string" && v.length > 0;
+export const isNonEmptyString = (v: unknown): v is string => typeof v === "string" && v.length > 0;
 
 /** Validate a boolean field, returning the default if invalid */
 export const validateBoolean = (value: unknown, defaultValue: boolean): boolean =>
@@ -64,7 +63,10 @@ function validateRawSettings(raw: Record<string, unknown>): AppSettings {
     launchAtLogin: validateBoolean(raw.launchAtLogin, DEFAULT_SETTINGS.launchAtLogin),
     preventSleep: validateBoolean(raw.preventSleep, DEFAULT_SETTINGS.preventSleep),
     sessionDuration: validatePositiveNumber(raw.sessionDuration, DEFAULT_SETTINGS.sessionDuration),
-    batteryThreshold: validateClampedNumber(raw.batteryThreshold, DEFAULT_SETTINGS.batteryThreshold),
+    batteryThreshold: validateClampedNumber(
+      raw.batteryThreshold,
+      DEFAULT_SETTINGS.batteryThreshold,
+    ),
     shortcut: validateNonEmptyString(raw.shortcut, DEFAULT_SETTINGS.shortcut),
   };
 }

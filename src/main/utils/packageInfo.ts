@@ -22,7 +22,7 @@ export interface PackageInfo {
   author: string;
   license?: string;
   main?: string;
-  [key: string]: unknown; // Allow access to other fields
+  [key: string]: unknown;
 }
 
 /**
@@ -34,6 +34,7 @@ let packageInfo: PackageInfo | null = null;
  * Runtime type guard for PackageInfo.
  * Verifies all required fields are present and have correct types.
  * Optional fields are validated only when present.
+ * @returns True if the value is a valid PackageInfo object
  */
 function isPackageInfo(value: unknown): value is PackageInfo {
   if (typeof value !== "object" || value === null) return false;

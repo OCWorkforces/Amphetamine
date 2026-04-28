@@ -20,25 +20,21 @@ import type {
  */
 function invoke<K extends IpcChannel>(
   channel: K,
-  ...args: IpcChannelMap[K]["request"] extends void | undefined
-    ? []
-    : [IpcChannelMap[K]["request"]]
+  ...args: IpcChannelMap[K]["request"] extends void | undefined ? [] : [IpcChannelMap[K]["request"]]
 ): Promise<IpcChannelMap[K]["response"]> {
   return ipcRenderer.invoke(channel, ...args) as Promise<IpcChannelMap[K]["response"]>;
 }
 
 const api = {
   window: {
-    setHeight: (
-      height: IpcRequest<typeof IPC_CHANNELS.WINDOW_SET_HEIGHT>,
-    ): void => ipcRenderer.send(IPC_CHANNELS.WINDOW_SET_HEIGHT, height),
+    setHeight: (height: IpcRequest<typeof IPC_CHANNELS.WINDOW_SET_HEIGHT>): void =>
+      ipcRenderer.send(IPC_CHANNELS.WINDOW_SET_HEIGHT, height),
   },
 
   app: {
     getVersion: (): Promise<IpcResponse<typeof IPC_CHANNELS.APP_GET_VERSION>> =>
       invoke(IPC_CHANNELS.APP_GET_VERSION),
-    quit: (): Promise<IpcResponse<typeof IPC_CHANNELS.APP_QUIT>> =>
-      invoke(IPC_CHANNELS.APP_QUIT),
+    quit: (): Promise<IpcResponse<typeof IPC_CHANNELS.APP_QUIT>> => invoke(IPC_CHANNELS.APP_QUIT),
   },
 
   settings: {
@@ -94,7 +90,10 @@ const api = {
     checkForUpdates: (): Promise<IpcResponse<typeof IPC_CHANNELS.AUTO_UPDATER_CHECK>> =>
       invoke(IPC_CHANNELS.AUTO_UPDATER_CHECK),
     onStatus: (callback: (_data: IpcResponse<typeof IPC_CHANNELS.AUTO_UPDATER_STATUS>) => void) => {
-      const listener = (_event: IpcRendererEvent, data: IpcResponse<typeof IPC_CHANNELS.AUTO_UPDATER_STATUS>) => {
+      const listener = (
+        _event: IpcRendererEvent,
+        data: IpcResponse<typeof IPC_CHANNELS.AUTO_UPDATER_STATUS>,
+      ) => {
         callback(data);
       };
       ipcRenderer.on(IPC_CHANNELS.AUTO_UPDATER_STATUS, listener);
@@ -104,7 +103,6 @@ const api = {
     },
   },
 };
-
 
 contextBridge.exposeInMainWorld("api", api);
 

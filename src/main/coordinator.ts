@@ -26,7 +26,13 @@ import {
   initBatteryMonitoring,
   cleanupBatteryMonitoring,
 } from "./battery-monitor.js";
-import { cancelSession, reconcileSessionState, setOnSessionStateChange, setSettingsReader, setBroadcastFn as setSessionBroadcastFn } from "./session-timer.js";
+import {
+  cancelSession,
+  reconcileSessionState,
+  setOnSessionStateChange,
+  setSettingsReader,
+  setBroadcastFn as setSessionBroadcastFn,
+} from "./session-timer.js";
 import { setBroadcastFn as setUpdaterBroadcastFn } from "./auto-updater.js";
 import type { TrayDeps } from "./tray.js";
 import { createSettingsWindow } from "./settings-window.js";
@@ -49,7 +55,6 @@ export function initCoordinator(): void {
   const settings = getSettings();
   prevPreventSleep = settings.preventSleep;
   prevSettings = { ...settings };
-
 
   // Sync system state with current settings
   syncAutoLaunch(settings.launchAtLogin);
@@ -141,7 +146,10 @@ export function getTrayDeps(): TrayDeps {
   return {
     getPreventSleep: () => getSettings().preventSleep,
     togglePreventSleep,
-    onSettingsChanged: (cb: () => void) => onSettingsChanged((_settings) => { cb(); }),
+    onSettingsChanged: (cb: () => void) =>
+      onSettingsChanged((_settings) => {
+        cb();
+      }),
     openSettings: () => createSettingsWindow(),
   };
 }
