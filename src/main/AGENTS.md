@@ -157,6 +157,6 @@ Electron main process (Node.js). App lifecycle, system tray, IPC, session timer,
 
 ## STALE / CLEANUP
 
-- `build/notarize.cjs`: **DELETED** — `@electron/notarize` not installed, was non-functional
+- `build/notarize.cjs`: Wired via `afterSign` but `@electron/notarize` not installed — non-functional
 
 - `utils/packageInfo.ts:52`: Fallback description mentions "Google Meet meetings" — pre-v1.0 artifact
