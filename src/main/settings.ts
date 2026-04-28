@@ -1,6 +1,6 @@
 import { app } from "electron";
 import log from "electron-log";
-import { existsSync, readFileSync, mkdirSync } from "node:fs";
+import { existsSync, readFileSync, mkdirSync, renameSync } from "node:fs";
 import { writeFile, rename } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { join } from "path";
@@ -148,7 +148,14 @@ export function loadSettings(): AppSettings {
     settingsCache = validateRawSettings(parsed);
     return settingsCache;
   } catch (err) {
-    log.warn("[settings] Corrupted settings file, using defaults:", err);
+    const backupPath =
+      settingsPath + ".corrupt-" + new Date().toISOString().replace(/:/g, "-") + ".json";
+    try {
+      renameSync(settingsPath, backupPath);
+      log.error(`[settings] Corrupted settings file backed up to: ${backupPath}`, err);
+    } catch (backupErr) {
+      log.error("[settings] Failed to back up corrupted settings file:", backupErr);
+    }
     settingsCache = { ...DEFAULT_SETTINGS };
     return settingsCache;
   }
