@@ -20,7 +20,6 @@ export const MAX_UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours (ma
 // === Time Conversion ===
 export const MS_PER_MINUTE = 60 * 1000;
 export const MS_PER_SECOND = 1000;
-export const SESSION_BROADCAST_INTERVAL_MS = 1000;
 export const TRAY_ICON_SIZE = 16;
 export const TRAY_ICON_COLOR_ACTIVE = "#007AFF";
 export const TRAY_ICON_COLOR_INACTIVE = "#FF9500";

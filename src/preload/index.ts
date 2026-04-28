@@ -110,13 +110,18 @@ export type Api = typeof api;
 
 /**
  * Compile-time exhaustiveness check: every channel in `IPC_CHANNELS` must be
- * wired through `window.api`. If a new channel is added to `IpcChannelMap`
- * but not listed in `WiredChannels` below, `_UnwiredChannels` becomes a
- * non-`never` union and `_ExhaustivenessCheck` resolves to a tuple type that
- * cannot be assigned `true`, failing the build.
+ * wired through `window.api`. `WiredChannels` lists all 13 channel literals
+ * explicitly — if a new channel is added to `IpcChannelMap` but not to this
+ * union, `_ExhaustivenessCheck` resolves to a tuple that cannot be assigned
+ * `true`, breaking the build.
  *
- * The `[_UnwiredChannels] extends [never]` tuple wrapper is required to
- * suppress distributive-conditional behavior over union members.
+ * NOTE: Deriving `WiredChannels` automatically from `typeof api` is not
+ * feasible because `IpcRequest<K>` and `IpcResponse<K>` evaluate eagerly —
+ * the channel literal `K` does not survive in the resolved structural type.
+ * The explicit union is intentional and correct.
+ *
+ * The `[_UnwiredChannels] extends [never]` tuple wrapper suppresses
+ * distributive-conditional behavior over union members.
  */
 type WiredChannels =
   | typeof IPC_CHANNELS.WINDOW_SET_HEIGHT
@@ -125,11 +130,11 @@ type WiredChannels =
   | typeof IPC_CHANNELS.SETTINGS_GET
   | typeof IPC_CHANNELS.SETTINGS_SET
   | typeof IPC_CHANNELS.SETTINGS_OPEN
+  | typeof IPC_CHANNELS.SETTINGS_CHANGED
   | typeof IPC_CHANNELS.SESSION_START
   | typeof IPC_CHANNELS.SESSION_CANCEL
   | typeof IPC_CHANNELS.SESSION_STATUS
   | typeof IPC_CHANNELS.SESSION_STATUS_UPDATE
-  | typeof IPC_CHANNELS.SETTINGS_CHANGED
   | typeof IPC_CHANNELS.AUTO_UPDATER_CHECK
   | typeof IPC_CHANNELS.AUTO_UPDATER_STATUS;
 

@@ -520,4 +520,71 @@ describe("auto-updater", () => {
       expect(mockLogWarn).toHaveBeenCalled();
     });
   });
+
+  describe("dedup guard (lastNotifiedVersion)", () => {
+    it("opens release URL once for the same version", () => {
+      initAutoUpdater();
+      const updateAvailableCall = mockOn.mock.calls.find((call) => call[0] === "update-available");
+      const handler = updateAvailableCall![1];
+
+      handler({ version: "2.0.0", releaseDate: "2025-01-01" });
+      handler({ version: "2.0.0", releaseDate: "2025-01-01" });
+
+      expect(mockShellOpenExternal).toHaveBeenCalledTimes(1);
+      expect(mockShellOpenExternal).toHaveBeenCalledWith(
+        "https://github.com/CCWorkforce/OpenAmphetamine/releases/tag/v2.0.0",
+      );
+    });
+
+    it("opens release URL again for a new version", () => {
+      initAutoUpdater();
+      const updateAvailableCall = mockOn.mock.calls.find((call) => call[0] === "update-available");
+      const handler = updateAvailableCall![1];
+
+      handler({ version: "2.0.0", releaseDate: "2025-01-01" });
+      handler({ version: "2.1.0", releaseDate: "2025-02-01" });
+
+      expect(mockShellOpenExternal).toHaveBeenCalledTimes(2);
+    });
+
+    it("opens URL for each distinct version in sequence", () => {
+      initAutoUpdater();
+      const updateAvailableCall = mockOn.mock.calls.find((call) => call[0] === "update-available");
+      const handler = updateAvailableCall![1];
+
+      handler({ version: "1.0.0", releaseDate: "2025-01-01" });
+      handler({ version: "2.0.0", releaseDate: "2025-02-01" });
+      handler({ version: "3.0.0", releaseDate: "2025-03-01" });
+
+      expect(mockShellOpenExternal).toHaveBeenCalledTimes(3);
+    });
+
+    it("resets lastNotifiedVersion on stopAutoUpdater", async () => {
+      initAutoUpdater();
+      const firstCall = mockOn.mock.calls.find((call) => call[0] === "update-available");
+      const firstHandler = firstCall![1];
+
+      firstHandler({ version: "2.0.0", releaseDate: "2025-01-01" });
+      expect(mockShellOpenExternal).toHaveBeenCalledTimes(1);
+
+      stopAutoUpdater();
+
+      // Re-initialize and fire again with the same version
+      vi.resetModules();
+      const mod = await import("../../src/main/auto-updater.js");
+      initAutoUpdater = mod.initAutoUpdater;
+      stopAutoUpdater = mod.stopAutoUpdater;
+      const { broadcastToWindows } = await import("../../src/main/utils/broadcast.js");
+      mod.setBroadcastFn(broadcastToWindows);
+
+      initAutoUpdater();
+      const secondCall = mockOn.mock.calls.find(
+        (call, idx) => call[0] === "update-available" && idx > mockOn.mock.calls.indexOf(firstCall!),
+      );
+      const secondHandler = secondCall![1];
+      secondHandler({ version: "2.0.0", releaseDate: "2025-01-01" });
+
+      expect(mockShellOpenExternal).toHaveBeenCalledTimes(2);
+    });
+  });
 });

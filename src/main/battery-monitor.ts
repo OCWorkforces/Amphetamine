@@ -85,6 +85,24 @@ async function checkBatteryAndStop(): Promise<void> {
   }
 }
 
+/**
+ * Parse battery percentage from `pmset -g batt` stdout.
+ * Returns the integer percentage (0-100), or null if:
+ * - No "InternalBattery" found in output (desktop Mac)
+ * - No percentage pattern matched
+ * - Output is empty or malformed
+ */
+export function parsePmsetOutput(stdout: string): number | null {
+  if (!stdout.includes("InternalBattery")) {
+    return null;
+  }
+  const match = stdout.match(/(\d+)%/);
+  if (match && match[1] !== undefined) {
+    return parseInt(match[1], 10);
+  }
+  return null;
+}
+
 export async function getBatteryPercent(): Promise<number | null> {
   try {
     const { stdout } = await execFileAsync("pmset", ["-g", "batt"], {
@@ -94,11 +112,7 @@ export async function getBatteryPercent(): Promise<number | null> {
       log.warn("[battery-monitor] No InternalBattery found in pmset output (desktop Mac?)");
       return null;
     }
-    const match = stdout.match(/(\d+)%/);
-    if (match && match[1] !== undefined) {
-      return parseInt(match[1], 10);
-    }
-    return null;
+    return parsePmsetOutput(stdout);
   } catch (err) {
     log.warn("[battery-monitor] Failed to get battery percentage:", err);
     return null;

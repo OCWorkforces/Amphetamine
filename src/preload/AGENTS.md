@@ -84,6 +84,7 @@ const _check: _ExhaustivenessCheck = true; // fails compile if any channel is un
 ```
 
 - `WiredChannels` is a union of all **13** wired channel literals — single source of truth for what the preload exposes.
+- **Why manual union, not derived**: `IpcRequest<K>`/`IpcResponse<K>` evaluate eagerly, erasing channel literal types. A derived union (e.g. `keyof IpcChannelMap`) would collapse to `string`, defeating the exhaustiveness check. The manual union of `typeof IPC_CHANNELS.X` literals is intentional and must stay manual.
 - `[_UnwiredChannels] extends [never]` tuple-wrap suppresses distributive conditionals over union members.
 - If a new channel is added to `IPC_CHANNELS` but not to `WiredChannels`, `_check = true` fails to typecheck (assigned a tuple instead of `true`), breaking the build.
 

@@ -365,4 +365,47 @@ describe("battery-monitor", () => {
       expect(mockLogInfo).toHaveBeenCalled();
     });
   });
+
+  describe("parsePmsetOutput", () => {
+    let parsePmsetOutput: (stdout: string) => number | null;
+
+    beforeEach(async () => {
+      const mod = await import("../../src/main/battery-monitor.js");
+      parsePmsetOutput = mod.parsePmsetOutput;
+    });
+
+    it("parses normal output with 75%", () => {
+      const stdout =
+        "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=1234)\t75%; discharging";
+      expect(parsePmsetOutput(stdout)).toBe(75);
+    });
+
+    it("parses 0% battery", () => {
+      const stdout =
+        "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=1234)\t0%; discharging";
+      expect(parsePmsetOutput(stdout)).toBe(0);
+    });
+
+    it("parses 100% battery", () => {
+      const stdout =
+        "Now drawing from 'AC Power'\n -InternalBattery-0 (id=1234)\t100%; charged";
+      expect(parsePmsetOutput(stdout)).toBe(100);
+    });
+
+    it("returns null when no InternalBattery (desktop Mac)", () => {
+      expect(parsePmsetOutput("Now drawing from 'AC Power'\n")).toBeNull();
+    });
+
+    it("returns null for empty string", () => {
+      expect(parsePmsetOutput("")).toBeNull();
+    });
+
+    it("returns null for malformed output with no %", () => {
+      expect(parsePmsetOutput("garbage output")).toBeNull();
+    });
+
+    it("returns null for missing battery format", () => {
+      expect(parsePmsetOutput("-InternalBattery-0 (id=1234)\t<missing>")).toBeNull();
+    });
+  });
 });
