@@ -124,12 +124,12 @@ Electron main process (Node.js). App lifecycle, system tray, IPC, session timer,
 ## SETTINGS
 
 - JSON file in `app.getPath('userData')/settings.json`
-- Loaded on module import (`loadSettings()` at bottom of settings.ts)
+- Async init via `initSettings()` (called from `initCoordinator()` before `getSettings()`). No longer loaded at module scope.
 - Validated via type-guard predicates (exported): `isBoolean`, `isPositiveNumber` (finite > 0), `isClamped0to100` (0 ≤ n ≤ 100), `isNonEmptyString`. Wrapper validators: `validateBoolean`, `validatePositiveNumber`, `validateClampedNumber` — exported from settings.ts for reuse in IPC handlers and tests.
 - `VALIDATORS: { [K in keyof AppSettings]: SettingsValidator<K> }` — per-field dispatch table consumed by `mergeValidatedPartial`. Mapped type ensures every AppSettings field has an entry (compile error if missing). Add new fields here — no per-field if/else. `mergeValidatedPartial` accepts `Partial<AppSettings>` (tightened input type).
-- `saveSettings()`: Async — uses `writeFile`/`rename` from `node:fs/promises` + `randomUUID()` for unique temp files. On JSON parse error during `loadSettings()`, backs up corrupt file to `settings.corrupt-{ISO-timestamp}.json` via `renameSync` + `log.error`, then falls back to `DEFAULT_SETTINGS`.
-- `updateSettings(partial)`: Async — has no-change dedup, updates cache BEFORE disk write, serialized via `writeChain` promise mutex (prevents concurrent write races), notifies listeners, returns copy.
-- `getSettings()`: Returns shallow copy of cache (never expose mutable ref)
+- `initSettings()`: Async — reads settings.json, populates cache, handles corrupt files (backup + fallback). Must be called before `getSettings()`. Called from `initCoordinator()`.
+- `saveSettings()`: Async — uses `writeFile`/`rename` from `node:fs/promises` + `randomUUID()` for unique temp files. On JSON parse error during `initSettings()`, backs up corrupt file to `settings.corrupt-{ISO-timestamp}.json` via `rename` + `log.error`, then falls back to `DEFAULT_SETTINGS`.
+- `getSettings()`: Returns shallow copy of cache (never expose mutable ref). Throws if called before `initSettings()`.
 - `onSettingsChanged(callback)`: Subscribe to settings changes, returns unsubscribe function
 - `writeChain: Promise<unknown>` — module-level mutex; every `updateSettings()` call chains `.then()` onto it to serialize concurrent writes atomically
 
