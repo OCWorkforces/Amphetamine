@@ -248,8 +248,15 @@ function handleVisibilityChange(): void {
   if (document.visibilityState === "visible") {
     isPopoverVisible = true;
     app.classList.add("visible");
+    // Resume countdown ticker when popover becomes visible and session is active
+    if (sessionExpiresAtPerf !== null) {
+      startCountdownTicker();
+    }
     return;
   }
+
+  // Pause countdown ticker when popover is hidden to avoid unnecessary work
+  stopCountdownTicker();
 }
 
 /** Load settings and version from main process */

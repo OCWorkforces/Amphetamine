@@ -14,7 +14,7 @@ import log from "electron-log";
 import { IPC_CHANNELS } from "../shared/types.js";
 import { broadcastToWindows } from "./utils/broadcast.js";
 import type { AppSettings } from "../shared/types.js";
-import { getSettings, onSettingsChanged, updateSettings } from "./settings.js";
+import { initSettings, getSettings, onSettingsChanged, updateSettings } from "./settings.js";
 import { syncAutoLaunch } from "./auto-launch.js";
 import { registerGlobalShortcut, type ShortcutDeps } from "./global-shortcut.js";
 import { isPreventingSleep, syncPreventSleep, stopPreventingSleep } from "./sleep-prevention.js";
@@ -51,7 +51,8 @@ function togglePreventSleep(): void {
  * Initialize the coordinator.
  * Syncs system state on startup and subscribes to settings changes.
  */
-export function initCoordinator(): void {
+export async function initCoordinator(): Promise<void> {
+  await initSettings();
   const settings = getSettings();
   prevPreventSleep = settings.preventSleep;
   prevSettings = { ...settings };

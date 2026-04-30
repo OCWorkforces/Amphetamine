@@ -20,6 +20,8 @@
     "outDir": "./lib",
     "pretty": true,
     "sourceMap": false,
+    "incremental": true,
+    "tsBuildInfoFile": "./.tsbuildinfo",
     "typeRoots": ["node_modules/@types"]
   },
   "include": ["./src/**/*"],

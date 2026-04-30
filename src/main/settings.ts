@@ -1,7 +1,7 @@
 import { app } from "electron";
 import log from "electron-log";
-import { existsSync, readFileSync, mkdirSync, renameSync } from "node:fs";
-import { writeFile, rename } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { readFile, writeFile, rename, mkdir } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { join } from "path";
 import { EventEmitter } from "node:events";
@@ -21,6 +21,7 @@ export function onSettingsChanged(callback: SettingsChangeCallback): () => void 
     settingsEmitter.off("change", callback);
   };
 }
+let initialized = false;
 let settingsCache: AppSettings = { ...DEFAULT_SETTINGS };
 
 /** Promise chain for serializing concurrent updateSettings() calls */
@@ -128,41 +129,40 @@ function getSettingsPath(): string {
   return join(userDataPath, "settings.json");
 }
 
-function ensureUserDataDir(): void {
+async function ensureUserDataDir(): Promise<void> {
   const userDataPath = app.getPath("userData");
-  mkdirSync(userDataPath, { recursive: true });
+  await mkdir(userDataPath, { recursive: true });
 }
-export function loadSettings(): AppSettings {
+export async function initSettings(): Promise<void> {
   const settingsPath = getSettingsPath();
 
   if (!existsSync(settingsPath)) {
     settingsCache = { ...DEFAULT_SETTINGS };
-    return settingsCache;
+    initialized = true;
+    return;
   }
 
   try {
-    const raw = readFileSync(settingsPath, "utf-8");
+    const raw = await readFile(settingsPath, "utf-8");
     const parsed = JSON.parse(raw);
-
-    // Validate and construct settings object
     settingsCache = validateRawSettings(parsed);
-    return settingsCache;
   } catch (err) {
     const backupPath =
       settingsPath + ".corrupt-" + new Date().toISOString().replace(/:/g, "-") + ".json";
     try {
-      renameSync(settingsPath, backupPath);
+      await rename(settingsPath, backupPath);
       log.error(`[settings] Corrupted settings file backed up to: ${backupPath}`, err);
     } catch (backupErr) {
       log.error("[settings] Failed to back up corrupted settings file:", backupErr);
     }
     settingsCache = { ...DEFAULT_SETTINGS };
-    return settingsCache;
   }
+
+  initialized = true;
 }
 
 export async function saveSettings(settings: AppSettings): Promise<void> {
-  ensureUserDataDir();
+  await ensureUserDataDir();
   const settingsPath = getSettingsPath();
   // Use unique tmp file per write to avoid concurrent rename races
   const tmpPath = settingsPath + `.tmp-${randomUUID()}`;
@@ -173,6 +173,9 @@ export async function saveSettings(settings: AppSettings): Promise<void> {
 }
 
 export function getSettings(): AppSettings {
+  if (!initialized) {
+    throw new Error("[settings] getSettings() called before initSettings(). Ensure initSettings() is awaited first.");
+  }
   return { ...settingsCache };
 }
 
@@ -204,5 +207,4 @@ export async function updateSettings(partial: Partial<AppSettings>): Promise<App
   return result;
 }
 
-// Initialize on module load
-loadSettings();
+
