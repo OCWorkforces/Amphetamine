@@ -40,6 +40,7 @@ vi.mock("electron-log", () => ({
 }));
 
 vi.mock("../../src/main/settings.js", () => ({
+  initSettings: vi.fn().mockResolvedValue(undefined),
   getSettings: mockGetSettings,
   onSettingsChanged: mockOnSettingsChanged,
   updateSettings: mockUpdateSettings,
@@ -81,7 +82,7 @@ vi.mock("../../src/main/settings-window.js", () => ({
 }));
 
 describe("coordinator", () => {
-  let initCoordinator: () => void;
+  let initCoordinator: () => Promise<void>;
   let cleanupCoordinator: () => void;
   let settingsCallback: (_settings: Record<string, unknown>) => void;
 
@@ -110,164 +111,126 @@ describe("coordinator", () => {
   });
 
   describe("initCoordinator", () => {
-    it("syncs auto-launch state on init", () => {
-      mockGetSettings.mockReturnValue({ ...defaultSettings, launchAtLogin: true });
-      initCoordinator();
+    it("syncs auto-launch state on init", async () => { mockGetSettings.mockReturnValue({ ...defaultSettings, launchAtLogin: true });
+    await initCoordinator();
+    
+    expect(mockSyncAutoLaunch).toHaveBeenCalledWith(true); });
 
-      expect(mockSyncAutoLaunch).toHaveBeenCalledWith(true);
-    });
+    it("syncs preventSleep state on init", async () => { mockGetSettings.mockReturnValue({ ...defaultSettings, preventSleep: true });
+    await initCoordinator();
+    
+    expect(mockSyncPreventSleep).toHaveBeenCalledWith(true); });
 
-    it("syncs preventSleep state on init", () => {
-      mockGetSettings.mockReturnValue({ ...defaultSettings, preventSleep: true });
-      initCoordinator();
+    it("wires battery auto-stop callback to cancelSession", async () => { await initCoordinator();
+    
+    expect(mockSetBatteryAutoStopCallback).toHaveBeenCalledWith(mockCancelSession); });
 
-      expect(mockSyncPreventSleep).toHaveBeenCalledWith(true);
-    });
+    it("wires battery threshold getter", async () => { await initCoordinator();
+    
+    expect(mockSetBatteryThresholdGetter).toHaveBeenCalledWith(expect.any(Function)); });
 
-    it("wires battery auto-stop callback to cancelSession", () => {
-      initCoordinator();
+    it("initializes battery monitoring", async () => { await initCoordinator();
+    
+    expect(mockInitBatteryMonitoring).toHaveBeenCalled(); });
 
-      expect(mockSetBatteryAutoStopCallback).toHaveBeenCalledWith(mockCancelSession);
-    });
+    it("subscribes to settings changes", async () => { await initCoordinator();
+    
+    expect(mockOnSettingsChanged).toHaveBeenCalledWith(expect.any(Function)); });
 
-    it("wires battery threshold getter", () => {
-      initCoordinator();
+    it("registers global shortcut with deps", async () => { await initCoordinator();
+    
+    expect(mockRegisterGlobalShortcut).toHaveBeenCalledWith(
+      expect.objectContaining({
+        getShortcut: expect.any(Function),
+        getPreventSleep: expect.any(Function),
+        togglePreventSleep: expect.any(Function),
+      }),
+    ); });
 
-      expect(mockSetBatteryThresholdGetter).toHaveBeenCalledWith(expect.any(Function));
-    });
+    it("syncs preventSleep on settings change", async () => { await initCoordinator();
+    
+    settingsCallback({ ...defaultSettings, preventSleep: true });
+    
+    expect(mockSyncPreventSleep).toHaveBeenCalledWith(true); });
 
-    it("initializes battery monitoring", () => {
-      initCoordinator();
+    it("syncs autoLaunch on settings change", async () => { await initCoordinator();
+    
+    settingsCallback({ ...defaultSettings, launchAtLogin: true });
+    
+    expect(mockSyncAutoLaunch).toHaveBeenCalledWith(true); });
 
-      expect(mockInitBatteryMonitoring).toHaveBeenCalled();
-    });
+    it("cancels session when preventSleep transitions true to false", async () => { mockGetSettings.mockReturnValue({ ...defaultSettings, preventSleep: true });
+    await initCoordinator();
+    
+    settingsCallback({ ...defaultSettings, preventSleep: false });
+    
+    expect(mockCancelSession).toHaveBeenCalledTimes(1); });
 
-    it("subscribes to settings changes", () => {
-      initCoordinator();
+    it("does not cancel session when preventSleep stays false", async () => { mockGetSettings.mockReturnValue({ ...defaultSettings, preventSleep: false });
+    await initCoordinator();
+    
+    settingsCallback({ ...defaultSettings, preventSleep: false });
+    
+    expect(mockCancelSession).not.toHaveBeenCalled(); });
 
-      expect(mockOnSettingsChanged).toHaveBeenCalledWith(expect.any(Function));
-    });
+    it("does not cancel session when preventSleep transitions false to true", async () => { mockGetSettings.mockReturnValue({ ...defaultSettings, preventSleep: false });
+    await initCoordinator();
+    
+    settingsCallback({ ...defaultSettings, preventSleep: true });
+    
+    expect(mockCancelSession).not.toHaveBeenCalled(); });
 
-    it("registers global shortcut with deps", () => {
-      initCoordinator();
+    it("broadcasts settings to all renderer windows", async () => { const mockSend = vi.fn();
+    mockGetAllWindows.mockReturnValue([{ isDestroyed: () => false, webContents: { send: mockSend } }]);
+    
+    await initCoordinator();
+    
+    const newSettings = { ...defaultSettings, preventSleep: true };
+    settingsCallback(newSettings);
+    
+    expect(mockSend).toHaveBeenCalledWith("settings:changed", newSettings); });
 
-      expect(mockRegisterGlobalShortcut).toHaveBeenCalledWith(
-        expect.objectContaining({
-          getShortcut: expect.any(Function),
-          getPreventSleep: expect.any(Function),
-          togglePreventSleep: expect.any(Function),
-        }),
-      );
-    });
+    it("broadcasts to multiple windows", async () => { const mockSend1 = vi.fn();
+    const mockSend2 = vi.fn();
+    mockGetAllWindows.mockReturnValue([
+      { isDestroyed: () => false, webContents: { send: mockSend1 } },
+      { isDestroyed: () => false, webContents: { send: mockSend2 } },
+    ]);
+    
+    await initCoordinator();
+    
+    const newSettings = { ...defaultSettings, preventSleep: true };
+    settingsCallback(newSettings);
+    
+    expect(mockSend1).toHaveBeenCalledWith("settings:changed", newSettings);
+    expect(mockSend2).toHaveBeenCalledWith("settings:changed", newSettings); });
 
-    it("syncs preventSleep on settings change", () => {
-      initCoordinator();
-
-      settingsCallback({ ...defaultSettings, preventSleep: true });
-
-      expect(mockSyncPreventSleep).toHaveBeenCalledWith(true);
-    });
-
-    it("syncs autoLaunch on settings change", () => {
-      initCoordinator();
-
-      settingsCallback({ ...defaultSettings, launchAtLogin: true });
-
-      expect(mockSyncAutoLaunch).toHaveBeenCalledWith(true);
-    });
-
-    it("cancels session when preventSleep transitions true to false", () => {
-      mockGetSettings.mockReturnValue({ ...defaultSettings, preventSleep: true });
-      initCoordinator();
-
-      settingsCallback({ ...defaultSettings, preventSleep: false });
-
-      expect(mockCancelSession).toHaveBeenCalledTimes(1);
-    });
-
-    it("does not cancel session when preventSleep stays false", () => {
-      mockGetSettings.mockReturnValue({ ...defaultSettings, preventSleep: false });
-      initCoordinator();
-
-      settingsCallback({ ...defaultSettings, preventSleep: false });
-
-      expect(mockCancelSession).not.toHaveBeenCalled();
-    });
-
-    it("does not cancel session when preventSleep transitions false to true", () => {
-      mockGetSettings.mockReturnValue({ ...defaultSettings, preventSleep: false });
-      initCoordinator();
-
-      settingsCallback({ ...defaultSettings, preventSleep: true });
-
-      expect(mockCancelSession).not.toHaveBeenCalled();
-    });
-
-    it("broadcasts settings to all renderer windows", () => {
-      const mockSend = vi.fn();
-      mockGetAllWindows.mockReturnValue([{ isDestroyed: () => false, webContents: { send: mockSend } }]);
-
-      initCoordinator();
-
-      const newSettings = { ...defaultSettings, preventSleep: true };
-      settingsCallback(newSettings);
-
-      expect(mockSend).toHaveBeenCalledWith("settings:changed", newSettings);
-    });
-
-    it("broadcasts to multiple windows", () => {
-      const mockSend1 = vi.fn();
-      const mockSend2 = vi.fn();
-      mockGetAllWindows.mockReturnValue([
-        { isDestroyed: () => false, webContents: { send: mockSend1 } },
-        { isDestroyed: () => false, webContents: { send: mockSend2 } },
-      ]);
-
-      initCoordinator();
-
-      const newSettings = { ...defaultSettings, preventSleep: true };
-      settingsCallback(newSettings);
-
-      expect(mockSend1).toHaveBeenCalledWith("settings:changed", newSettings);
-      expect(mockSend2).toHaveBeenCalledWith("settings:changed", newSettings);
-    });
-
-    it("logs initialization", () => {
-      initCoordinator();
-
-      expect(mockLogInfo).toHaveBeenCalledWith("[coordinator] Initialized");
-    });
+    it("logs initialization", async () => { await initCoordinator();
+    
+    expect(mockLogInfo).toHaveBeenCalledWith("[coordinator] Initialized"); });
   });
 
   describe("cleanupCoordinator", () => {
-    it("unsubscribes from settings changes", () => {
-      const mockUnsubscribe = vi.fn();
-      mockOnSettingsChanged.mockReturnValue(mockUnsubscribe);
-      initCoordinator();
+    it("unsubscribes from settings changes", async () => { const mockUnsubscribe = vi.fn();
+    mockOnSettingsChanged.mockReturnValue(mockUnsubscribe);
+    await initCoordinator();
+    
+    cleanupCoordinator();
+    
+    expect(mockUnsubscribe).toHaveBeenCalledTimes(1); });
 
-      cleanupCoordinator();
+    it("stops preventing sleep", async () => { mockGetSettings.mockReturnValue({ ...defaultSettings, preventSleep: true });
+    await initCoordinator();
+    cleanupCoordinator();
+    
+    expect(mockStopPreventingSleep).toHaveBeenCalledTimes(1); });
 
-      expect(mockUnsubscribe).toHaveBeenCalledTimes(1);
-    });
+    it("logs cleanup", async () => { await initCoordinator();
+    cleanupCoordinator();
+    
+    expect(mockLogInfo).toHaveBeenCalledWith("[coordinator] Cleaned up"); });
 
-    it("stops preventing sleep", () => {
-      mockGetSettings.mockReturnValue({ ...defaultSettings, preventSleep: true });
-      initCoordinator();
-      cleanupCoordinator();
-
-      expect(mockStopPreventingSleep).toHaveBeenCalledTimes(1);
-    });
-
-    it("logs cleanup", () => {
-      initCoordinator();
-      cleanupCoordinator();
-
-      expect(mockLogInfo).toHaveBeenCalledWith("[coordinator] Cleaned up");
-    });
-
-    it("handles cleanup when not initialized", () => {
-      // cleanupCoordinator without initCoordinator — should not throw
-      expect(() => cleanupCoordinator()).not.toThrow();
-    });
+    it("handles cleanup when not initialized", async () => { // cleanupCoordinator without initCoordinator — should not throw
+    expect(() => cleanupCoordinator()).not.toThrow(); });
   });
 });

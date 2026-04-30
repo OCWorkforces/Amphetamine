@@ -1,7 +1,7 @@
 # Amphetamine — Project Knowledge Base
 
-**Generated:** 2026-04-28
-**Commit:** b8dfec3
+**Generated:** 2026-04-30
+**Commit:** 9ab053f
 **Branch:** develop
 
 ## OVERVIEW
@@ -88,7 +88,7 @@ src/
 | `createWindow`               | fn    | src/main/index.ts:40            | BrowserWindow factory                                                          |
 | `setupTray`                  | fn    | src/main/tray.ts:38             | System tray init + cached menu + Prevent Sleep checkbox                        |
 | `showAbout`                  | fn    | src/main/tray.ts:20             | Native About panel (singleton)                                                 |
-| `initCoordinator`            | fn    | src/main/coordinator.ts:37      | Central orchestrator: settings→power/auto-launch/session/shortcut/broadcast    |
+| `initCoordinator`            | async fn | src/main/coordinator.ts:54      | Central orchestrator: async initSettings→settings→power/auto-launch/session/shortcut/broadcast |
 | `cleanupCoordinator`         | fn    | src/main/coordinator.ts:87      | Unsubscribe + stop sleep prevention                                            |
 | `getTrayDeps`                | fn    | src/main/coordinator.ts:97      | Wires tray deps to settings                                                    |
 | `registerIpcHandlers`        | fn    | src/main/ipc.ts:63              | IPC registration (13 channels)                                                 |
@@ -130,6 +130,7 @@ src/
 | `isClamped0to100`            | fn    | src/main/settings.ts            | Type guard: 0 ≤ n ≤ 100                                                         |
 | `isNonEmptyString`           | fn    | src/main/settings.ts            | Type guard: non-empty string                                                    |
 | `VALIDATORS`                 | const | src/main/settings.ts            | Dispatch table keyed by AppSettings field                                       |
+| `initSettings`              | async fn | src/main/settings.ts:136     | Async settings init (readFile, cache, guard). Must be called before `getSettings()` |
 | `invoke<K>`                  | fn    | src/preload/index.ts            | Typed IPC invoke helper with conditional rest params                            |
 | `WiredChannels`              | type  | src/preload/index.ts            | Union of all wired channel literals                                             |
 | `_ExhaustivenessCheck`       | type  | src/preload/index.ts            | Compile-time exhaustiveness guard                                               |
@@ -154,7 +155,7 @@ src/
 - **Dependency injection**: `global-shortcut.ts` and `tray.ts` receive deps via `ShortcutDeps`/`TrayDeps` interfaces — no direct settings imports
 - **No UI framework**: Vanilla TS with `innerHTML` string templates
 - **macOS only**: Dock hiding, entitlements — no cross-platform
-- **Settings persistence**: JSON file in Electron userData directory
+- **Settings persistence**: Async JSON file in Electron userData directory, initialized via `initSettings()` before first `getSettings()` call
 - **Settings change notification**: Internal `EventEmitter` in settings.ts, `onSettingsChanged()` returns unsubscribe
 - **Settings window**: Shows in Dock when open, hides when closed (tray-only otherwise)
 - **Strict TS**: `exactOptionalPropertyTypes`, `verbatimModuleSyntax`, `noUncheckedIndexedAccess`, `noImplicitOverride`, `noImplicitReturns`

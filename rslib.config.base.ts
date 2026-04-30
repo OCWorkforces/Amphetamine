@@ -31,7 +31,7 @@ export function createElectronLibConfig(options: ElectronLibOptions) {
       },
       // === PRODUCTION OPTIMIZATIONS ===
       minify: !isDev,
-      sourceMap: false,
+      sourceMap: isDev,
     },
     tools: {
       bundlerChain(chain: any) {

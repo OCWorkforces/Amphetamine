@@ -107,13 +107,13 @@ function createWindow(): BrowserWindow {
   });
   return win;
 }
-void app.whenReady().then(() => {
+void app.whenReady().then(async () => {
   // Register as accessory app — no Dock icon, no menu bar
   app.setActivationPolicy("accessory");
   mainWindow = createWindow();
   registerIpcHandlers(mainWindow);
   // Initialize coordinator — handles syncPreventSleep, syncAutoLaunch, session cancel, broadcast, shortcut
-  initCoordinator();
+  await initCoordinator();
   cleanupTray = setupTray(getTrayDeps());
   initAutoUpdater();
 });

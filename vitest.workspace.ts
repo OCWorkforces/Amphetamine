@@ -12,8 +12,8 @@ export default defineConfig({
         functions: 80,
         branches: 70,
       },
-      reporter: ['text', 'html', 'lcov'],
     },
+    pool: 'threads',
     projects: [
       {
         test: {

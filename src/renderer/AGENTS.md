@@ -32,7 +32,7 @@ Interactive session status display. Shows prevent-sleep state, session timer cou
 - `sessionExpiresAtPerf: number | null` — module-level anchor; stores `performance.now() + remainingMs` when a timed session status arrives
 - `updateSessionAnchors(status)` — maps main-process `expiresAt` to renderer clock via wall-clock delta; called on every push/IPC status update
 - `computeRemainingSeconds()` — `Math.floor((sessionExpiresAtPerf - performance.now()) / 1000)` — purely renderer-side, no IPC
-- `startCountdownTicker()` / `stopCountdownTicker()` — setInterval/clearInterval every 1000ms; fires `updateStatusUI()` only when `sessionExpiresAtPerf !== null`
+- `startCountdownTicker()` / `stopCountdownTicker()` — setInterval/clearInterval every 1000ms; fires `updateStatusUI()` only when `sessionExpiresAtPerf !== null`. Ticker pauses when popover is hidden (`handleVisibilityChange` calls `stopCountdownTicker()`) and resumes when visible with active session.
 - `COUNTDOWN_TICK_MS = 1000` constant; no IPC call per tick — renderer owns countdown using its own monotonic clock domain
 - Popover visibility tracked via `isPopoverVisible` flag + `visible` CSS class
 

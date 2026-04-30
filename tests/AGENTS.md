@@ -72,7 +72,7 @@ projects: [
 | `tray.test.ts`                    | 22    | Menu, icon, theme, settings sync, about panel  |
 | `sleep-prevention.test.ts`        | 21    | start/stop/sync, idempotency, powerSaveBlocker returns -1 handled             |
 | `packageInfo.test.ts`             | 20    | isPackageInfo runtime guard + cached package.json reader                      |
-| `coordinator.test.ts`             | 19    | Coordinator: init, cleanup, settings dispatch, error boundary                 |
+| `coordinator.test.ts`             | 19    | Coordinator: async init (initSettings), cleanup, settings dispatch, error boundary                 |
 | `battery-monitor.test.ts`         | 24    | pmset parsing (`parsePmsetOutput` pure fn), auto-stop, threshold boundaries, `isCheckingBattery` guard    |
 | `constants.test.ts`               | 16    | Extracted constants: window dims, timeouts, colors, accelerators              |
 | `preload.test.ts`                 | 15    | Context bridge API exposure, exhaustiveness                                   |
@@ -117,6 +117,7 @@ Full replacement when no preservation needed.
 
 ```typescript
 vi.mock("../../src/main/settings.js", () => ({
+  initSettings: vi.fn().mockResolvedValue(undefined),
   getSettings: mockGetSettings,
   updateSettings: mockUpdateSettings,
   onSettingsChanged: vi.fn(),

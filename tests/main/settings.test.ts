@@ -18,7 +18,7 @@ vi.mock("electron-log", () => ({
 const MOCK_USER_DATA_PATH = "/tmp/amphetamine-settings-test";
 
 import {
-  loadSettings,
+  initSettings,
   saveSettings,
   getSettings,
   updateSettings,
@@ -28,7 +28,7 @@ import { DEFAULT_SETTINGS } from "../../src/shared/types.js";
 describe("settings", () => {
   const settingsPath = join(MOCK_USER_DATA_PATH, "settings.json");
 
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
 
     if (existsSync(MOCK_USER_DATA_PATH)) {
@@ -36,7 +36,7 @@ describe("settings", () => {
     }
     mkdirSync(MOCK_USER_DATA_PATH, { recursive: true });
 
-    loadSettings();
+    await initSettings();
   });
 
   afterEach(() => {
@@ -45,35 +45,38 @@ describe("settings", () => {
     }
   });
 
-  describe("loadSettings", () => {
-    it("returns defaults when no file exists", () => {
+  describe("initSettings", () => {
+    it("returns defaults when no file exists", async () => {
       if (existsSync(settingsPath)) {
         rmSync(settingsPath);
       }
 
-      const settings = loadSettings();
+      await initSettings();
+      const settings = getSettings();
 
       expect(settings).toEqual(DEFAULT_SETTINGS);
     });
 
-    it("reads existing file correctly", () => {
+    it("reads existing file correctly", async () => {
       const expectedSettings = { launchAtLogin: true };
 
       mkdirSync(MOCK_USER_DATA_PATH, { recursive: true });
       const fs = require("fs");
       fs.writeFileSync(settingsPath, JSON.stringify(expectedSettings));
 
-      const settings = loadSettings();
+      await initSettings();
+      const settings = getSettings();
 
       expect(settings.launchAtLogin).toBe(true);
     });
 
-    it("handles corrupted JSON (returns defaults)", () => {
+    it("handles corrupted JSON (returns defaults)", async () => {
       mkdirSync(MOCK_USER_DATA_PATH, { recursive: true });
       const fs = require("fs");
       fs.writeFileSync(settingsPath, "{ not valid json }");
 
-      const settings = loadSettings();
+      await initSettings();
+      const settings = getSettings();
 
       expect(settings).toEqual(DEFAULT_SETTINGS);
     });
@@ -108,8 +111,8 @@ describe("settings", () => {
   });
 
   describe("getSettings", () => {
-    it("returns cached copy", () => {
-      loadSettings();
+    it("returns cached copy", async () => {
+      await initSettings();
 
       const settings = getSettings();
 
@@ -158,11 +161,12 @@ describe("settings", () => {
       expect(result2.launchAtLogin).toBe(false);
     });
 
-    it("defaults launchAtLogin to false when not in file", () => {
+    it("defaults launchAtLogin to false when not in file", async () => {
       const fs = require("fs");
       fs.writeFileSync(settingsPath, JSON.stringify({}));
 
-      const settings = loadSettings();
+      await initSettings();
+      const settings = getSettings();
 
       expect(settings.launchAtLogin).toBe(false);
     });
