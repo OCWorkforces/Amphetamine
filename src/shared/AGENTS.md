@@ -14,6 +14,7 @@ Type definitions shared across main, preload, and renderer processes. Single sou
 // types.ts:2-16
 export const IPC_CHANNELS = {
   WINDOW_SET_HEIGHT: "window:set-height",
+  WINDOW_HIDE: "window:hide", // push from main
   APP_GET_VERSION: "app:get-version",
   SETTINGS_GET: "settings:get",
   SETTINGS_SET: "settings:set",
@@ -26,6 +27,10 @@ export const IPC_CHANNELS = {
   APP_QUIT: "app:quit",
   AUTO_UPDATER_CHECK: "auto-updater:check",
   AUTO_UPDATER_STATUS: "auto-updater:status", // push from main
+} as const;
+```
+
+`IpcChannelMap` maps each channel to its `request` / `response` types (14 channels). Push channels (4): `WINDOW_HIDE`, `SETTINGS_CHANGED`, `SESSION_STATUS_UPDATE`, `AUTO_UPDATER_STATUS`.
 } as const;
 ```
 
@@ -132,6 +137,7 @@ export type IpcResponse<K extends IpcChannel> = IpcChannelMap[K]["response"];
 
 ```typescript
 export const PUSH_CHANNELS = [
+  IPC_CHANNELS.WINDOW_HIDE,
   IPC_CHANNELS.SETTINGS_CHANGED,
   IPC_CHANNELS.SESSION_STATUS_UPDATE,
   IPC_CHANNELS.AUTO_UPDATER_STATUS,
@@ -141,6 +147,51 @@ export type PushChannel = (typeof PUSH_CHANNELS)[number];
 ```
 
 `PUSH_CHANNELS` is the single source of truth for push-style channels. `PushChannel` is derived from it — no manual union maintenance.
+
+## BRANDED TYPES
+
+### PerfTimestamp
+
+Phantom branded type for `performance.now()` monotonic millisecond timestamps.
+
+```typescript
+export type PerfTimestamp = number & { readonly __brand: unique symbol };
+```
+
+Re-attach the brand at IPC boundaries via `.AsType<PerfTimestamp>()` — type-safe alternative to raw `as`.
+
+### AsType<T extends number>()
+
+Type-safe branded casting extension on `Number`. Constrains `T` to extend `number` — only allows casting to branded numeric types.
+
+```typescript
+// Usage: (performance.now() + remainingMs).AsType<PerfTimestamp>()
+Number.prototype.AsType = function <T extends number>(): T { ... };
+```
+
+## AUTO-UPDATER TYPES
+
+### AutoUpdaterStatus
+
+Discriminated union for auto-updater push events (4 groups discriminated by `status`):
+
+```typescript
+export type AutoUpdaterStatus =
+  | { status: "checking" }
+  | { status: "available" | "not-available" | "downloaded"; info: UpdateMeta }
+  | { status: "downloading"; progress: { percent: number; transferred: number; total: number } }
+  | { status: "check-error" | "download-error" | "error"; error: string };
+```
+
+### UpdateMeta
+
+```typescript
+export type UpdateMeta = {
+  version: string;
+  releaseDate: string;
+  releaseNotes?: string;
+};
+```
 
 ## USAGE PATTERN
 
