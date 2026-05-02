@@ -71,6 +71,16 @@ const api = {
     };
   },
 
+  onWindowHide: (callback: () => void): (() => void) => {
+    const listener = (_event: IpcRendererEvent) => {
+      callback();
+    };
+    ipcRenderer.on(IPC_CHANNELS.WINDOW_HIDE, listener);
+    return () => {
+      ipcRenderer.removeListener(IPC_CHANNELS.WINDOW_HIDE, listener);
+    };
+  },
+
   onSessionStatusUpdate: (
     callback: (_data: IpcResponse<typeof IPC_CHANNELS.SESSION_STATUS_UPDATE>) => void,
   ) => {
@@ -110,7 +120,7 @@ export type Api = typeof api;
 
 /**
  * Compile-time exhaustiveness check: every channel in `IPC_CHANNELS` must be
- * wired through `window.api`. `WiredChannels` lists all 13 channel literals
+ * wired through `window.api`. `WiredChannels` lists all 14 channel literals
  * explicitly — if a new channel is added to `IpcChannelMap` but not to this
  * union, `_ExhaustivenessCheck` resolves to a tuple that cannot be assigned
  * `true`, breaking the build.
@@ -124,6 +134,7 @@ export type Api = typeof api;
  * distributive-conditional behavior over union members.
  */
 type WiredChannels =
+  | typeof IPC_CHANNELS.WINDOW_HIDE
   | typeof IPC_CHANNELS.WINDOW_SET_HEIGHT
   | typeof IPC_CHANNELS.APP_GET_VERSION
   | typeof IPC_CHANNELS.APP_QUIT

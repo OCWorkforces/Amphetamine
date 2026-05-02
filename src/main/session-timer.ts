@@ -1,12 +1,19 @@
 import type {
   AppSettings,
   IpcResponse,
+  PerfTimestamp,
   PushChannel,
   SessionStatusResponse,
 } from "../shared/types.js";
 import { DEFAULT_SETTINGS, IPC_CHANNELS } from "../shared/types.js";
+
+const perfNow = (): PerfTimestamp => performance.now().AsType<PerfTimestamp>();
 import log from "electron-log";
 import { MS_PER_MINUTE } from "./constants.js";
+
+function assertNever(value: never): never {
+  throw new Error("Unreachable: expected never, got " + JSON.stringify(value));
+}
 
 let onSessionStateChange: ((updates: Partial<AppSettings>) => void) | null = null;
 let getSettingsRef: () => AppSettings = () => ({ ...DEFAULT_SETTINGS });
@@ -49,11 +56,11 @@ export interface SessionState {
 /** Internal discriminated union — single source of truth for session state. */
 type InternalSessionState =
   | { kind: "idle" }
-  | { kind: "indefinite"; startedAt: number }
+  | { kind: "indefinite"; startedAt: PerfTimestamp }
   | {
       kind: "timed";
-      startedAt: number;
-      expiresAt: number;
+      startedAt: PerfTimestamp;
+      expiresAt: PerfTimestamp;
       durationMinutes: number;
       expiryTimer: ReturnType<typeof setTimeout>;
     };
@@ -88,7 +95,7 @@ export function startSession(durationMinutes: number | null): SessionState {
   if (durationMinutes === null) {
     // Indefinite session — no timer
     // performance.now() used for monotonic timing — immune to system clock changes
-    const startedAt = performance.now();
+    const startedAt = perfNow();
     state = { kind: "indefinite", startedAt };
     onSessionStateChange?.({ sessionDuration: null, preventSleep: true });
     broadcastSessionUpdate();
@@ -102,8 +109,8 @@ export function startSession(durationMinutes: number | null): SessionState {
 
   // Timed session
   // performance.now() used for monotonic timing — immune to system clock changes
-  const startedAt = performance.now();
-  const expiresAt = startedAt + durationMinutes * MS_PER_MINUTE;
+  const startedAt = perfNow();
+  const expiresAt = (startedAt + durationMinutes * MS_PER_MINUTE).AsType<PerfTimestamp>();
 
   const expiryTimer = setTimeout(() => {
     try {
@@ -172,16 +179,20 @@ export function getStatus(): SessionStatusResponse {
     };
   }
 
-  // Timed session — compute remaining from monotonic clock
-  const remainingMs = Math.max(0, state.expiresAt - performance.now());
-  const remainingSeconds = Math.floor(remainingMs / 1000);
-  return {
-    isRunning: true,
-    startedAt: state.startedAt,
-    expiresAt: state.expiresAt,
-    remainingSeconds,
-    durationMinutes: state.durationMinutes,
-  };
+  if (state.kind === "timed") {
+    // Timed session — compute remaining from monotonic clock
+    const remainingMs = Math.max(0, state.expiresAt - perfNow());
+    const remainingSeconds = Math.floor(remainingMs / 1000);
+    return {
+      isRunning: true,
+      startedAt: state.startedAt,
+      expiresAt: state.expiresAt,
+      remainingSeconds,
+      durationMinutes: state.durationMinutes,
+    };
+  }
+
+  return assertNever(state);
 }
 
 export function cleanup(): void {

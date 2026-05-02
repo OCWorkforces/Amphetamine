@@ -407,5 +407,12 @@ describe("battery-monitor", () => {
     it("returns null for missing battery format", () => {
       expect(parsePmsetOutput("-InternalBattery-0 (id=1234)\t<missing>")).toBeNull();
     });
+
+    it("returns null for NaN parse result (malformed input)", () => {
+      // This simulates a pathological case where regex matches but parseInt fails
+      // (defense-in-depth — the regex /(\d+)%/ guarantees digits, this guards against future regex changes)
+      const result = parsePmsetOutput("InternalBattery-0\tNaN%; discharging; 0:00 remaining present: true");
+      expect(result).toBeNull();
+    });
   });
 });

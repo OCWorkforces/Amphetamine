@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import type { AppSettings, SessionStatusResponse } from "../../src/shared/types.js";
+import type { AppSettings, PerfTimestamp, SessionStatusResponse } from "../../src/shared/types.js";
 import { DEFAULT_SETTINGS } from "../../src/shared/types.js";
 import {
   STATUS_PREVENTING_SLEEP,
@@ -20,6 +20,7 @@ const mockApi = {
     getStatus: vi.fn<() => Promise<SessionStatusResponse | null>>(),
   },
   onSettingsChanged: vi.fn<(_cb: (s: AppSettings) => void) => () => void>(() => vi.fn()),
+  onWindowHide: vi.fn<(_cb: () => void) => () => void>(() => vi.fn()),
   onSessionStatusUpdate: vi.fn<(_cb: (s: SessionStatusResponse) => void) => () => void>(
     () => vi.fn(),
   ),
@@ -129,7 +130,7 @@ describe("renderer popover (index.ts)", () => {
       });
       mockApi.session.getStatus.mockResolvedValue({
         isRunning: true,
-        startedAt: Date.now(),
+        startedAt: (Date.now()).AsType<PerfTimestamp>(),
         expiresAt: null,
         remainingSeconds: null,
         durationMinutes: null,
@@ -152,8 +153,8 @@ describe("renderer popover (index.ts)", () => {
       // 1h 30m = 5400 seconds
       mockApi.session.getStatus.mockResolvedValue({
         isRunning: true,
-        startedAt: Date.now() - 30 * 60 * 1000,
-        expiresAt: Date.now() + 90 * 60 * 1000,
+        startedAt: (Date.now() - 30 * 60 * 1000).AsType<PerfTimestamp>(),
+        expiresAt: (Date.now() + 90 * 60 * 1000).AsType<PerfTimestamp>(),
         remainingSeconds: 5400,
         durationMinutes: 120,
       });
@@ -178,8 +179,8 @@ describe("renderer popover (index.ts)", () => {
       // 25 minutes remaining = 1500 seconds
       mockApi.session.getStatus.mockResolvedValue({
         isRunning: true,
-        startedAt: Date.now() - 5 * 60 * 1000,
-        expiresAt: Date.now() + 25 * 60 * 1000,
+        startedAt: (Date.now() - 5 * 60 * 1000).AsType<PerfTimestamp>(),
+        expiresAt: (Date.now() + 25 * 60 * 1000).AsType<PerfTimestamp>(),
         remainingSeconds: 1500,
         durationMinutes: 30,
       });
@@ -390,8 +391,8 @@ describe("renderer popover (index.ts)", () => {
       });
       mockApi.session.getStatus.mockResolvedValue({
         isRunning: true,
-        startedAt: Date.now(),
-        expiresAt: Date.now() + 25 * 60 * 1000,
+        startedAt: (Date.now()).AsType<PerfTimestamp>(),
+        expiresAt: (Date.now() + 25 * 60 * 1000).AsType<PerfTimestamp>(),
         remainingSeconds: 1500,
         durationMinutes: 30,
       });
@@ -405,8 +406,8 @@ describe("renderer popover (index.ts)", () => {
       const sessionCallback = mockApi.onSessionStatusUpdate.mock.calls[0]![0];
       sessionCallback({
         isRunning: true,
-        startedAt: Date.now(),
-        expiresAt: Date.now() + 10 * 60 * 1000,
+        startedAt: (Date.now()).AsType<PerfTimestamp>(),
+        expiresAt: (Date.now() + 10 * 60 * 1000).AsType<PerfTimestamp>(),
         remainingSeconds: 600,
         durationMinutes: 30,
       });
@@ -426,8 +427,8 @@ describe("renderer popover (index.ts)", () => {
       });
       mockApi.session.getStatus.mockResolvedValue({
         isRunning: true,
-        startedAt: Date.now(),
-        expiresAt: Date.now() + 25 * 60 * 1000,
+        startedAt: (Date.now()).AsType<PerfTimestamp>(),
+        expiresAt: (Date.now() + 25 * 60 * 1000).AsType<PerfTimestamp>(),
         remainingSeconds: 1500,
         durationMinutes: 30,
       });
@@ -462,8 +463,8 @@ describe("renderer popover (index.ts)", () => {
       });
       mockApi.session.getStatus.mockResolvedValue({
         isRunning: true,
-        startedAt: Date.now() - 14 * 60 * 1000,
-        expiresAt: Date.now() + 45 * 1000,
+        startedAt: (Date.now() - 14 * 60 * 1000).AsType<PerfTimestamp>(),
+        expiresAt: (Date.now() + 45 * 1000).AsType<PerfTimestamp>(),
         remainingSeconds: 45,
         durationMinutes: 15,
       });
@@ -487,8 +488,8 @@ describe("renderer popover (index.ts)", () => {
       });
       mockApi.session.getStatus.mockResolvedValue({
         isRunning: true,
-        startedAt: Date.now() - 15 * 60 * 1000,
-        expiresAt: Date.now(),
+        startedAt: (Date.now() - 15 * 60 * 1000).AsType<PerfTimestamp>(),
+        expiresAt: (Date.now()).AsType<PerfTimestamp>(),
         remainingSeconds: 0,
         durationMinutes: 15,
       });

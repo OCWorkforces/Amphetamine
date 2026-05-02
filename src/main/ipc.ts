@@ -1,4 +1,4 @@
-import { ipcMain, app, type BrowserWindow, type IpcMainEvent } from "electron";
+import { ipcMain, app, type BrowserWindow, type IpcMainEvent, type IpcMainInvokeEvent } from "electron";
 import path from "node:path";
 import log from "electron-log";
 import {
@@ -22,7 +22,7 @@ import * as sessionTimer from "./session-timer.js";
 
 const ALLOWED_ORIGINS: ReadonlySet<string> = new Set(DEV_ORIGINS);
 /** Returns true if the sender's origin is the app's own renderer */
-export function validateSender(event: IpcMainEvent): boolean {
+export function validateSender(event: IpcMainEvent | IpcMainInvokeEvent): boolean {
   const senderUrl = event.senderFrame?.url ?? "";
   return validateSenderUrl(senderUrl);
 }
@@ -59,11 +59,11 @@ function validateSenderUrl(senderUrl: string): boolean {
  * Ensures handler return type matches IpcChannelMap response type at compile time.
  */
 export type IpcHandler<K extends keyof IpcChannelMap> = (
-  _event: IpcMainEvent,
+  _event: IpcMainInvokeEvent,
   _request: IpcChannelMap[K]["request"],
 ) => Promise<IpcChannelMap[K]["response"]> | IpcChannelMap[K]["response"];
 
-function typedHandle<K extends keyof IpcChannelMap>(channel: K, handler: IpcHandler<K>): void {
+export function typedHandle<K extends keyof IpcChannelMap>(channel: K, handler: IpcHandler<K>): void {
   ipcMain.handle(channel, handler as Parameters<typeof ipcMain.handle>[1]);
 }
 

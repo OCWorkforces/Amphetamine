@@ -11,8 +11,13 @@ import type { AppSettings } from "../shared/types.js";
 /** Callback invoked when settings change (partial or full update) */
 type SettingsChangeCallback = (_settings: AppSettings) => void;
 
+/** Event map for the settings emitter */
+type SettingsEvents = {
+  change: [AppSettings];
+};
+
 /** Internal event emitter for settings changes */
-const settingsEmitter = new EventEmitter();
+const settingsEmitter = new EventEmitter<SettingsEvents>();
 
 /** Subscribe to settings changes. Returns an unsubscribe function. */
 export function onSettingsChanged(callback: SettingsChangeCallback): () => void {
@@ -58,7 +63,21 @@ function validateNonEmptyString(value: unknown, defaultValue: string): string {
   return isNonEmptyString(value) ? value : defaultValue;
 }
 
-/** Validate all fields of a raw parsed object into a complete AppSettings */
+/**
+ * Validates raw settings from disk JSON ({@link initSettings}) against expected shape.
+ *
+ * Uses inline per-field validation rather than the {@link VALIDATORS} dispatch table
+ * ({@link mergeValidatedPartial}) because:
+ * 1. validateRawSettings operates on `Record<string, unknown>` — the raw parsed JSON
+ *    with arbitrary keys that must be filtered to known {@link AppSettings} fields.
+ * 2. mergeValidatedPartial operates on `Partial<AppSettings>` — already-typed input
+ *    from runtime callers where keys are known at compile time.
+ * 3. The VALIDATORS table provides per-field type guards; validateRawSettings
+ *    additionally handles unknown-key filtering and sessionDuration null special case.
+ *
+ * The two functions serve DIFFERENT call paths (disk load vs incremental update)
+ * and must be kept manually in sync when {@link AppSettings} fields change.
+ */
 function validateRawSettings(raw: Record<string, unknown>): AppSettings {
   return {
     launchAtLogin: validateBoolean(raw.launchAtLogin, DEFAULT_SETTINGS.launchAtLogin),
@@ -144,8 +163,12 @@ export async function initSettings(): Promise<void> {
 
   try {
     const raw = await readFile(settingsPath, "utf-8");
-    const parsed = JSON.parse(raw);
-    settingsCache = validateRawSettings(parsed);
+    const parsed: unknown = JSON.parse(raw);
+    const safeParsed: Record<string, unknown> =
+      typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
+        ? (parsed as Record<string, unknown>)
+        : {};
+    settingsCache = validateRawSettings(safeParsed);
   } catch (err) {
     const backupPath =
       settingsPath + ".corrupt-" + new Date().toISOString().replace(/:/g, "-") + ".json";

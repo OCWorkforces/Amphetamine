@@ -1,5 +1,5 @@
 import "./styles/main.css";
-import type { AppSettings, SessionStatusResponse } from "../shared/types.js";
+import type { AppSettings, PerfTimestamp, SessionStatusResponse } from "../shared/types.js";
 import { DEFAULT_SETTINGS } from "../shared/types.js";
 import { STATUS_PREVENTING_SLEEP, STATUS_SLEEP_PREVENTION_OFF } from "./constants.js";
 
@@ -12,7 +12,7 @@ const COUNTDOWN_TICK_MS = 1000;
 let settings: AppSettings = { ...DEFAULT_SETTINGS };
 let sessionStatus: SessionStatus = null;
 /** Anchor (in renderer's performance.now() domain) when the active session expires. */
-let sessionExpiresAtPerf: number | null = null;
+let sessionExpiresAtPerf: PerfTimestamp | null = null;
 let statusError: string | null = null;
 let unsubscribeSettings: (() => void) | null = null;
 let unsubscribeSessionStatus: (() => void) | null = null;
@@ -43,16 +43,16 @@ function getApp(): HTMLElement | null {
 function updateSessionAnchors(status: SessionStatus): void {
   if (status?.isRunning && status.expiresAt !== null && status.remainingSeconds !== null) {
     const remainingMs = status.remainingSeconds * 1000;
-    sessionExpiresAtPerf = performance.now() + remainingMs;
+    sessionExpiresAtPerf = (performance.now() + remainingMs).AsType<PerfTimestamp>();
   } else {
     sessionExpiresAtPerf = null;
   }
 }
 
 /** Compute remaining seconds locally from anchors — no IPC. */
-function computeRemainingSeconds(): number | null {
-  if (sessionExpiresAtPerf === null) return null;
-  const remainingMs = Math.max(0, sessionExpiresAtPerf - performance.now());
+function computeRemainingSeconds(expiresAtPerf: PerfTimestamp | null): number | null {
+  if (expiresAtPerf === null) return null;
+  const remainingMs = Math.max(0, expiresAtPerf - performance.now());
   return Math.floor(remainingMs / 1000);
 }
 
@@ -66,7 +66,7 @@ function formatTimerLabel(): string {
   }
 
   // Prefer locally-computed value (no IPC, no 1s-push dependency).
-  const localRemaining = computeRemainingSeconds();
+  const localRemaining = computeRemainingSeconds(sessionExpiresAtPerf);
   const computedRemaining = localRemaining ?? sessionStatus.remainingSeconds;
 
   const totalSeconds = Math.max(0, Math.ceil(computedRemaining));
@@ -290,11 +290,9 @@ function setupPushSubscriptions(): void {
 /** Attach window/document event listeners for popover lifecycle */
 function attachWindowEvents(): void {
   document.addEventListener("visibilitychange", handleVisibilityChange);
-  document.addEventListener(
-    "popover:hide",
-    handlePopoverHide as EventListener,
-  );
-  window.addEventListener("popover:hide", handlePopoverHide as EventListener);
+  const cleanupWindowHide = window.api.onWindowHide(() => {
+    handlePopoverHide();
+  });
 
   window.addEventListener("beforeunload", () => {
     if (rafId !== null) {
@@ -311,14 +309,7 @@ function attachWindowEvents(): void {
     unsubscribeSettings?.();
     unsubscribeSettings = null;
     document.removeEventListener("visibilitychange", handleVisibilityChange);
-    document.removeEventListener(
-      "popover:hide",
-      handlePopoverHide as EventListener,
-    );
-    window.removeEventListener(
-      "popover:hide",
-      handlePopoverHide as EventListener,
-    );
+    cleanupWindowHide();
   });
 }
 
