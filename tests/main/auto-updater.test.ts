@@ -461,7 +461,7 @@ describe("auto-updater", () => {
         const handler = mockIpcMainHandle.mock.calls.find(
           (call) => call[0] === "auto-updater:check",
         )![1];
-        const result = await handler();
+        const result = await handler({ senderFrame: { url: "http://localhost:5173/" } });
 
         expect(result).toBeNull();
       } finally {
@@ -485,7 +485,7 @@ describe("auto-updater", () => {
       const handler = mockIpcMainHandle.mock.calls.find(
         (call) => call[0] === "auto-updater:check",
       )![1];
-      const result = await handler();
+      const result = await handler({ senderFrame: { url: "http://localhost:5173/" } });
 
       expect(result).toEqual({
         version: "2.5.0",
@@ -501,7 +501,7 @@ describe("auto-updater", () => {
       const handler = mockIpcMainHandle.mock.calls.find(
         (call) => call[0] === "auto-updater:check",
       )![1];
-      const result = await handler();
+      const result = await handler({ senderFrame: { url: "http://localhost:5173/" } });
 
       expect(result).toBeNull();
     });
@@ -514,7 +514,7 @@ describe("auto-updater", () => {
       const handler = mockIpcMainHandle.mock.calls.find(
         (call) => call[0] === "auto-updater:check",
       )![1];
-      const result = await handler();
+      const result = await handler({ senderFrame: { url: "http://localhost:5173/" } });
 
       expect(result).toBeNull();
       expect(mockLogWarn).toHaveBeenCalled();

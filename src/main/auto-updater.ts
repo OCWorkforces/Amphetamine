@@ -1,12 +1,18 @@
-import { autoUpdater, type UpdateInfo } from "electron-updater";
-import { app, shell, ipcMain } from "electron";
+import { autoUpdater, type UpdateInfo, type ProgressInfo } from "electron-updater";
+import { app, shell } from "electron";
 import log from "electron-log";
-import { IPC_CHANNELS, type PushChannel, type IpcResponse } from "../shared/types.js";
+import {
+  IPC_CHANNELS,
+  type PushChannel,
+  type IpcResponse,
+  type UpdateMeta,
+} from "../shared/types.js";
 import {
   INITIAL_UPDATE_CHECK_DELAY_MS,
   PERIODIC_UPDATE_CHECK_INTERVAL_MS,
   MAX_UPDATE_CHECK_INTERVAL_MS,
 } from "./constants.js";
+import { typedHandle, validateSender } from "./ipc.js";
 
 let checkIntervalId: ReturnType<typeof setInterval> | null = null;
 
@@ -34,13 +40,14 @@ function onUpdateAvailable(info: UpdateInfo): void {
   log.info("[auto-updater] Update available:", info.version);
   consecutiveFailures = 0;
   rescheduleCheckLoop();
+  const meta: UpdateMeta = {
+    version: info.version,
+    releaseDate: info.releaseDate ?? "",
+    ...(typeof info.releaseNotes === "string" ? { releaseNotes: info.releaseNotes } : {}),
+  };
   broadcastFn?.(IPC_CHANNELS.AUTO_UPDATER_STATUS, {
     status: "available",
-    info: {
-      version: info.version,
-      releaseDate: info.releaseDate ?? "",
-      ...(typeof info.releaseNotes === "string" ? { releaseNotes: info.releaseNotes } : {}),
-    },
+    info: meta,
   });
   // Validate version is a semver-like string before constructing URL
   if (/^\d+\.\d+\.\d+/.test(info.version)) {
@@ -60,18 +67,15 @@ function onUpdateNotAvailable(info: UpdateInfo): void {
   log.info("[auto-updater] No update available. Current version:", info.version);
   consecutiveFailures = 0;
   rescheduleCheckLoop();
+  const meta: UpdateMeta = { version: info.version, releaseDate: info.releaseDate ?? "" };
   broadcastFn?.(IPC_CHANNELS.AUTO_UPDATER_STATUS, {
     status: "not-available",
-    info: { version: info.version, releaseDate: info.releaseDate ?? "" },
+    info: meta,
   });
 }
 
 /** Handle "download-progress" event */
-function onDownloadProgress(progress: {
-  percent: number;
-  transferred: number;
-  total: number;
-}): void {
+function onDownloadProgress(progress: ProgressInfo): void {
   log.info("[auto-updater] Download progress:", Math.round(progress.percent), "%");
   broadcastFn?.(IPC_CHANNELS.AUTO_UPDATER_STATUS, {
     status: "downloading",
@@ -86,9 +90,10 @@ function onDownloadProgress(progress: {
 /** Handle "update-downloaded" event */
 function onUpdateDownloaded(info: UpdateInfo): void {
   log.info("[auto-updater] Update downloaded:", info.version);
+  const meta: UpdateMeta = { version: info.version, releaseDate: info.releaseDate ?? "" };
   broadcastFn?.(IPC_CHANNELS.AUTO_UPDATER_STATUS, {
     status: "downloaded",
-    info: { version: info.version, releaseDate: info.releaseDate ?? "" },
+    info: meta,
   });
 }
 
@@ -200,7 +205,8 @@ export function stopAutoUpdater(): void {
  * Allows renderer to manually trigger an update check.
  */
 export function registerAutoUpdaterIpc(): void {
-  ipcMain.handle(IPC_CHANNELS.AUTO_UPDATER_CHECK, async () => {
+  typedHandle(IPC_CHANNELS.AUTO_UPDATER_CHECK, async (event) => {
+    if (!validateSender(event)) return null;
     if (!app.isPackaged) {
       return null;
     }

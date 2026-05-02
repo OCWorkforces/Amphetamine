@@ -1,6 +1,36 @@
+/**
+ * Phantom branded type for `performance.now()` monotonic millisecond timestamps.
+ *
+ * Prevents accidental mixing with `Date.now()` wall-clock milliseconds. The brand
+ * is compile-time only — at runtime, a `PerfTimestamp` is just a `number` (so it
+ * survives JSON serialization across IPC unchanged; the brand must be re-attached
+ * via `.AsType<PerfTimestamp>()` at the receiving boundary).
+ */
+export type PerfTimestamp = number & { readonly __brand: unique symbol };
+
+/**
+ * Type-safe branded casting extension on `Number`.
+ *
+ * Constrains `T` to extend `number` — only allows casting to branded numeric
+ * types (contrasted with raw `as` which can cast anything). No-op at runtime.
+ *
+ * @example `(performance.now() + remainingMs).AsType<PerfTimestamp>()`
+ */
+declare global {
+  interface Number {
+    AsType<T extends number>(): T;
+  }
+}
+
+Number.prototype.AsType = function <T extends number>(this: number): T {
+  return this as unknown as T;
+};
+
+
 /** IPC channel names — single source of truth */
 export const IPC_CHANNELS = {
   WINDOW_SET_HEIGHT: "window:set-height",
+  WINDOW_HIDE: "window:hide",
   APP_GET_VERSION: "app:get-version",
   SETTINGS_GET: "settings:get",
   SETTINGS_SET: "settings:set",
@@ -39,15 +69,15 @@ export type SessionStatusResponse =
   | {
       // Timed session
       isRunning: true;
-      startedAt: number;
-      expiresAt: number;
+      startedAt: PerfTimestamp;
+      expiresAt: PerfTimestamp;
       remainingSeconds: number;
       durationMinutes: number;
     }
   | {
       // Indefinite session
       isRunning: true;
-      startedAt: number;
+      startedAt: PerfTimestamp;
       expiresAt: null;
       remainingSeconds: null;
       durationMinutes: null;
@@ -65,6 +95,29 @@ export type SessionStartResponse =
       ok: false;
       reason: "invalid-duration" | "rejected";
     };
+
+/**
+ * Minimal local mirror of electron-updater's UpdateInfo — only the fields the
+ * app actually consumes. Kept dependency-free so `shared/` does not import
+ * `electron-updater`.
+ */
+export interface UpdateMeta {
+  version: string;
+  releaseDate: string;
+  releaseNotes?: string;
+}
+
+/**
+ * Discriminated union response for AUTO_UPDATER_STATUS. Each arm is keyed on
+ * `status` so consumers can use exhaustive `switch` narrowing.
+ */
+export type AutoUpdaterStatus =
+  | { status: "checking" }
+  | { status: "available"; info: UpdateMeta }
+  | { status: "not-available"; info: UpdateMeta }
+  | { status: "downloaded"; info: UpdateMeta }
+  | { status: "downloading"; progress: { percent: number; transferred: number; total: number } }
+  | { status: "check-error" | "download-error" | "error"; error: string };
 
 /** IPC Request/Response type map for type-safe IPC */
 export type IpcChannelMap = {
@@ -112,18 +165,17 @@ export type IpcChannelMap = {
     request: undefined;
     response: void;
   };
+  [IPC_CHANNELS.WINDOW_HIDE]: {
+    request: undefined;
+    response: void;
+  };
   [IPC_CHANNELS.AUTO_UPDATER_CHECK]: {
     request: undefined;
     response: { version: string; releaseDate: string } | null;
   };
   [IPC_CHANNELS.AUTO_UPDATER_STATUS]: {
     request: undefined;
-    response: {
-      status: "checking" | "available" | "not-available" | "downloading" | "downloaded" | "error";
-      info?: { version: string; releaseDate: string; releaseNotes?: string };
-      progress?: { percent: number; transferred: number; total: number };
-      error?: string;
-    };
+    response: AutoUpdaterStatus;
   };
 };
 
@@ -137,6 +189,7 @@ export const PUSH_CHANNELS = [
   IPC_CHANNELS.SETTINGS_CHANGED,
   IPC_CHANNELS.SESSION_STATUS_UPDATE,
   IPC_CHANNELS.AUTO_UPDATER_STATUS,
+  IPC_CHANNELS.WINDOW_HIDE,
 ] as const;
 
 export type PushChannel = (typeof PUSH_CHANNELS)[number];

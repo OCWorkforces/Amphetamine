@@ -29,8 +29,8 @@ Interactive session status display. Shows prevent-sleep state, session timer cou
 - Timer formatting: `formatTimerLabel()` uses locally-computed `computeRemainingSeconds()` via `sessionExpiresAtPerf` anchor (renderer-side `performance.now()` clock), NOT the push value from `sessionStatus.remainingSeconds`
 - Init order: `refreshSessionStatus()` runs BEFORE `render(version)` to avoid flash of stale state
 - Resizes window via `window.api.window.setHeight()` after render
-- `sessionExpiresAtPerf: number | null` — module-level anchor; stores `performance.now() + remainingMs` when a timed session status arrives
-- `updateSessionAnchors(status)` — maps main-process `expiresAt` to renderer clock via wall-clock delta; called on every push/IPC status update
+- `sessionExpiresAtPerf: PerfTimestamp | null` — module-level anchor; stores `performance.now() + remainingMs` branded as `PerfTimestamp` via `.AsType<PerfTimestamp>()` when a timed session status arrives
+- `updateSessionAnchors(status)` — maps main-process `expiresAt` (PerfTimestamp) to renderer clock via wall-clock delta, re-attaching brand at IPC boundary via `.AsType<PerfTimestamp>()`; called on every push/IPC status update
 - `computeRemainingSeconds()` — `Math.floor((sessionExpiresAtPerf - performance.now()) / 1000)` — purely renderer-side, no IPC
 - `startCountdownTicker()` / `stopCountdownTicker()` — setInterval/clearInterval every 1000ms; fires `updateStatusUI()` only when `sessionExpiresAtPerf !== null`. Ticker pauses when popover is hidden (`handleVisibilityChange` calls `stopCountdownTicker()`) and resumes when visible with active session.
 - `COUNTDOWN_TICK_MS = 1000` constant; no IPC call per tick — renderer owns countdown using its own monotonic clock domain
@@ -73,6 +73,7 @@ Separate renderer entry at `settings/`. **Five controls**: Launch at Login (togg
 // env.d.ts derives Window.api type from preload's exported Api type
 // Single source of truth — if preload changes, renderer type-check catches drift
 window.api.window.setHeight(height); // → void (fire-and-forget)
+window.api.window.onWindowHide(callback); // → () => void (unsubscribe — typed push channel)
 window.api.app.getVersion(); // → Promise<string>
 window.api.app.quit(); // → Promise<void>  (under app namespace)
 window.api.settings.get(); // → Promise<AppSettings>
@@ -83,7 +84,7 @@ window.api.session.cancel(); // → Promise<{ cancelled: boolean }>
 window.api.session.getStatus(); // → Promise<SessionStatusResponse | null>
 window.api.onSettingsChanged(callback); // → () => void (unsubscribe)
 window.api.autoUpdater.checkForUpdates(); // → Promise<...>
-window.api.autoUpdater.onStatus(callback); // → () => void (unsubscribe)
+window.api.autoUpdater.onStatus(callback); // → () => void (unsubscribe — AutoUpdaterStatus discriminated union)
 window.api.onSessionStatusUpdate(callback); // → () => void (unsubscribe)
 ```
 

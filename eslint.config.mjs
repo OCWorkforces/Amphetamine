@@ -148,6 +148,32 @@ export default [
       // Type safety / async correctness
       "@typescript-eslint/no-floating-promises": "error",
       "@typescript-eslint/consistent-type-imports": "error",
+
+      // Strict typing rules (added by Wave 5)
+      "@typescript-eslint/strict-boolean-expressions": ["error", {
+        allowNullableBoolean: true,
+        allowNullableString: true,
+        allowNullableNumber: false,
+        allowAny: false,
+      }],
+      "@typescript-eslint/no-unnecessary-condition": "warn",
+      "@typescript-eslint/no-unsafe-argument": "error",
+      "@typescript-eslint/no-unsafe-assignment": "error",
+      "@typescript-eslint/no-unsafe-call": "error",
+      "@typescript-eslint/no-unsafe-member-access": "error",
+      "@typescript-eslint/no-unsafe-return": "error",
+    },
+  },
+  {
+    // Tests use vi.hoisted/vi.fn which return `any`-typed mocks by design.
+    // Disable unsafe-* in tests to avoid false positives on mock surfaces.
+    files: ["tests/**/*.ts"],
+    rules: {
+      "@typescript-eslint/no-unsafe-argument": "off",
+      "@typescript-eslint/no-unsafe-assignment": "off",
+      "@typescript-eslint/no-unsafe-call": "off",
+      "@typescript-eslint/no-unsafe-member-access": "off",
+      "@typescript-eslint/no-unsafe-return": "off",
     },
   },
   prettier, // Prettier must be last to override formatting rules

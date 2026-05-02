@@ -60,9 +60,9 @@ projects: [
 `tsconfig.tests.json` extends base tsconfig with `rootDir: "."`, includes `tests/**/*`, relaxes `noUnusedLocals` and `noUnusedParameters`. Run via `bun run typecheck:tests`.
 ```
 
-## TEST COUNTS (350 total, 22 files)
+## TEST COUNTS (351 total, 22 files)
 
-### Main Process (304 tests, 19 files)
+### Main Process (305 tests, 19 files)
 
 | File                              | Tests | Focus                                          |
 | --------------------------------- | ----- | ---------------------------------------------- |
@@ -73,7 +73,7 @@ projects: [
 | `sleep-prevention.test.ts`        | 21    | start/stop/sync, idempotency, powerSaveBlocker returns -1 handled             |
 | `packageInfo.test.ts`             | 20    | isPackageInfo runtime guard + cached package.json reader                      |
 | `coordinator.test.ts`             | 19    | Coordinator: async init (initSettings), cleanup, settings dispatch, error boundary                 |
-| `battery-monitor.test.ts`         | 24    | pmset parsing (`parsePmsetOutput` pure fn), auto-stop, threshold boundaries, `isCheckingBattery` guard    |
+| `battery-monitor.test.ts`         | 25    | pmset parsing (`parsePmsetOutput` pure fn), auto-stop, threshold boundaries, `isCheckingBattery` guard, NaN defense    |
 | `constants.test.ts`               | 16    | Extracted constants: window dims, timeouts, colors, accelerators              |
 | `preload.test.ts`                 | 15    | Context bridge API exposure, exhaustiveness                                   |
 | `settings.test.ts`                | 14    | File I/O, validation, NaN/Infinity rejected, no-change dedup, concurrent saves|

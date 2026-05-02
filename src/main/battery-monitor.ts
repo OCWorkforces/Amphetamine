@@ -98,7 +98,8 @@ export function parsePmsetOutput(stdout: string): number | null {
   }
   const match = stdout.match(/(\d+)%/);
   if (match && match[1] !== undefined) {
-    return parseInt(match[1], 10);
+    const parsed = parseInt(match[1], 10);
+    return Number.isNaN(parsed) ? null : parsed;
   }
   return null;
 }
@@ -108,10 +109,6 @@ export async function getBatteryPercent(): Promise<number | null> {
     const { stdout } = await execFileAsync("pmset", ["-g", "batt"], {
       timeout: BATTERY_CHECK_TIMEOUT_MS,
     });
-    if (!stdout.includes("InternalBattery")) {
-      log.warn("[battery-monitor] No InternalBattery found in pmset output (desktop Mac?)");
-      return null;
-    }
     return parsePmsetOutput(stdout);
   } catch (err) {
     log.warn("[battery-monitor] Failed to get battery percentage:", err);

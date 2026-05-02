@@ -10,6 +10,8 @@ import { initCoordinator, cleanupCoordinator, getTrayDeps } from "./coordinator.
 import { unregisterGlobalShortcut } from "./global-shortcut.js";
 import { closeSettingsWindow } from "./settings-window.js";
 import { initAutoUpdater, stopAutoUpdater } from "./auto-updater.js";
+import { broadcastToWindows } from "./utils/broadcast.js";
+import { IPC_CHANNELS } from "../shared/types.js";
 import {
   MAIN_WINDOW_WIDTH,
   MAIN_WINDOW_HEIGHT,
@@ -84,7 +86,7 @@ function createWindow(): BrowserWindow {
   });
   win.on("minimize", () => {
     if (!win.isDestroyed()) {
-      win.webContents.send("popover:hide");
+      broadcastToWindows(IPC_CHANNELS.WINDOW_HIDE, undefined);
       setTimeout(() => {
         if (!win.isDestroyed()) {
           win.hide();
@@ -96,7 +98,7 @@ function createWindow(): BrowserWindow {
   win.on("blur", () => {
     if (!isDev && !isQuitting) {
       if (!win.isDestroyed()) {
-        win.webContents.send("popover:hide");
+        broadcastToWindows(IPC_CHANNELS.WINDOW_HIDE, undefined);
         setTimeout(() => {
           if (!win.isDestroyed()) {
             win.hide();

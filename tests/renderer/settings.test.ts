@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import type { AppSettings, SessionStatusResponse } from "../../src/shared/types.js";
+import type { AppSettings, PerfTimestamp, SessionStatusResponse } from "../../src/shared/types.js";
 import { DEFAULT_SETTINGS } from "../../src/shared/types.js";
 import { SAVED_INDICATOR } from "../../src/renderer/settings/constants.js";
 
@@ -128,8 +128,8 @@ describe("renderer settings", () => {
       });
       mockApi.session.getStatus.mockResolvedValue({
         isRunning: true,
-        startedAt: Date.now(),
-        expiresAt: Date.now() + 60 * 60 * 1000,
+        startedAt: (Date.now()).AsType<PerfTimestamp>(),
+        expiresAt: (Date.now() + 60 * 60 * 1000).AsType<PerfTimestamp>(),
         remainingSeconds: 3600,
         durationMinutes: 60,
       });
@@ -390,8 +390,8 @@ describe("renderer settings", () => {
     it("preserves running session duration when settings push arrives", async () => {
       mockApi.session.getStatus.mockResolvedValue({
         isRunning: true,
-        startedAt: Date.now(),
-        expiresAt: Date.now() + 60 * 60 * 1000,
+        startedAt: (Date.now()).AsType<PerfTimestamp>(),
+        expiresAt: (Date.now() + 60 * 60 * 1000).AsType<PerfTimestamp>(),
         remainingSeconds: 3600,
         durationMinutes: 60,
       });
@@ -463,8 +463,8 @@ describe("renderer settings", () => {
     it("sets sessionDuration from running session status", async () => {
       mockApi.session.getStatus.mockResolvedValue({
         isRunning: true,
-        startedAt: Date.now(),
-        expiresAt: Date.now() + 60 * 60 * 1000,
+        startedAt: (Date.now()).AsType<PerfTimestamp>(),
+        expiresAt: (Date.now() + 60 * 60 * 1000).AsType<PerfTimestamp>(),
         remainingSeconds: 3600,
         durationMinutes: 60,
       });
@@ -535,8 +535,8 @@ describe("renderer settings", () => {
       mockApi.settings.get.mockRejectedValue(new Error("IPC timeout"));
       mockApi.session.getStatus.mockResolvedValue({
         isRunning: true,
-        startedAt: Date.now(),
-        expiresAt: Date.now() + 30 * 60 * 1000,
+        startedAt: (Date.now()).AsType<PerfTimestamp>(),
+        expiresAt: (Date.now() + 30 * 60 * 1000).AsType<PerfTimestamp>(),
         remainingSeconds: 1800,
         durationMinutes: 30,
       });

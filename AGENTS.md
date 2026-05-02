@@ -1,6 +1,6 @@
 # Amphetamine — Project Knowledge Base
 
-**Generated:** 2026-04-30
+**Generated:** 2026-05-02
 **Commit:** 9ab053f
 **Branch:** develop
 
@@ -14,8 +14,8 @@ macOS tray-only Electron app that prevents the system from sleeping. Session tim
 | Framework | Electron 41                               |
 | Build     | Rslib (main/preload) + Rsbuild (renderer) |
 | Package   | Bun                                       |
-| Test      | Vitest 4 (workspace, 350 tests)           |
-| Linter   | ESLint 10 flat config, @typescript-eslint/no-explicit-any: error, no-floating-promises, no-eval |
+| Test      | Vitest 4 (workspace, 351 tests)           |
+| Linter   | ESLint 10 flat config, @typescript-eslint/no-explicit-any: error, no-floating-promises, no-eval, strict-boolean-expressions, no-unsafe-* |
 
 ## STRUCTURE
 
@@ -28,7 +28,7 @@ src/
 │   ├── auto-launch.ts      # macOS login item management
 │   ├── global-shortcut.ts   # Global hotkey (Cmd+Shift+A)
 │   ├── tray.ts           # System tray icon + context menu
-│   ├── ipc.ts            # IPC handlers (13 channels, typed, decomposed by domain)
+│   ├── ipc.ts            # IPC handlers (14 channels, typed, decomposed by domain)
 │   ├── settings.ts       # Persistent app settings (async JSON, EventEmitter, exported validators)
 │   ├── session-timer.ts  # Session timer state machine
 │   ├── settings-window.ts # Settings BrowserWindow singleton
@@ -52,26 +52,26 @@ src/
 ├── preload/            # Context bridge (sandbox)
 │   └── index.ts          # Exposes window.api to renderer
 ├── shared/             # Types shared across processes
-│   └── types.ts          # IPC_CHANNELS (13), IpcChannelMap, SessionStatusResponse, SessionStartResponse, AppSettings, PUSH_CHANNELS
+│   └── types.ts          # IPC_CHANNELS (14), IpcChannelMap, SessionStatusResponse, SessionStartResponse, AppSettings, PUSH_CHANNELS, PerfTimestamp, AsType, AutoUpdaterStatus, UpdateMeta
 └── assets.d.ts         # Module declarations for *.png, *.css
 
 ## WHERE TO LOOK
 
 | Task                  | Location                               | Notes                                           |
 | --------------------- | -------------------------------------- | ----------------------------------------------- |
-| Add IPC channel       | `src/shared/types.ts` → `IPC_CHANNELS` | Single source of truth                          |
+| Add IPC channel       | `src/shared/types.ts` → `IPC_CHANNELS`, `IpcChannelMap`, `PUSH_CHANNELS` | Also add to preload `WiredChannels` union + `api` object |
 | Implement IPC handler | `src/main/ipc.ts`                      | Register with `typedHandle()` or `ipcMain.on()` |
 | Expose to renderer    | `src/preload/index.ts`                 | Add to `api` object                             |
 | Use in UI             | `src/renderer/`                        | Call via `window.api.*`                         |
 | `Orchestration logic` | `src/main/coordinator.ts` | Settings→system sync hub, imports extracted modules |
-| Session timer logic   | `src/main/session-timer.ts`            | start/cancel/getStatus/cleanup, discriminated InternalSessionState, event-driven broadcasts |
+| Session timer logic   | `src/main/session-timer.ts`            | start/cancel/getStatus/cleanup, discriminated InternalSessionState, PerfTimestamp monotonic clock (via `.AsType<PerfTimestamp>()`), assertNever exhaustiveness, event-driven broadcasts |
 | Sleep prevention      | `src/main/sleep-prevention.ts`         | start/stop/syncPreventSleep |
 | Battery monitoring | `src/main/battery-monitor.ts`          | initBatteryMonitoring, getBatteryPercent, parsePmsetOutput (checks InternalBattery first), checkBatteryAndStop |
 | Global shortcut       | `src/main/global-shortcut.ts`          | registerGlobalShortcut/unregisterGlobalShortcut, ShortcutDeps |
 | Launch at login       | `src/main/auto-launch.ts`              | getAutoLaunchStatus/setAutoLaunch/syncAutoLaunch |
-| User settings         | `src/main/settings.ts`                 | JSON in userData, validated, EventEmitter       |
+| User settings         | `src/main/settings.ts`                 | JSON in userData, validated, typed EventEmitter<SettingsEvents> |
 | Settings window       | `src/main/settings-window.ts`          | Singleton, shows in Dock                        |
-| Auto-updater logic    | `src/main/auto-updater.ts`             | Decomposed: registerUpdateEventHandlers + startUpdateCheckLoop + exponential backoff |
+| Auto-updater logic    | `src/main/auto-updater.ts`             | Decomposed: registerUpdateEventHandlers + startUpdateCheckLoop + exponential backoff; emits discriminated AutoUpdaterStatus via typedHandle |
 | Window config         | `src/main/index.ts`                    | `createWindow()`                                |
 | Tray behavior         | `src/main/tray.ts`                     | Menu, positioning, theming                      |
 | Constants / dev URL   | `src/main/constants.ts`                | Dimensions, timeouts, colors, DEV_ORIGINS, isDev, MAX_UPDATE_CHECK_INTERVAL_MS |
@@ -117,7 +117,7 @@ src/
 | `stopAutoUpdater`            | fn    | src/main/auto-updater.ts        | Stop auto-updater + clear interval                                             |
 | `broadcastToWindows`         | fn    | src/main/utils/broadcast.ts     | Generic send to all non-destroyed BrowserWindows                                |
 | `hardenWebContents`          | fn    | src/main/security.ts            | Navigation allowlist + setWindowOpenHandler deny on BrowserWindow              |
-| `IPC_CHANNELS`               | const | src/shared/types.ts:2           | 13 channel names                                                               |
+| `IPC_CHANNELS`               | const | src/shared/types.ts              | 14 channel names (including window:hide)                                        |
 | `IpcChannelMap`              | type  | src/shared/types.ts:18          | Request/response type map                                                      |
 | `AppSettings`                | iface | src/shared/types.ts:110         | Settings interface (all fields required, no optionals)                    |
 | `DEFAULT_SETTINGS`           | const | src/shared/types.ts:124         | Full defaults                                                                  |
@@ -125,6 +125,12 @@ src/
 | `SessionStartResponse`       | iface | src/shared/types.ts:28          | Session start response shape                                                    |
 | `PUSH_CHANNELS`              | const | src/shared/types.ts:101         | Push channel names tuple (single source of truth)                              |
 | `PushChannel`                | type  | src/shared/types.ts:107         | Derived from PUSH_CHANNELS tuple                                                |
+| `PerfTimestamp`              | type  | src/shared/types.ts              | Phantom branded monotonic timestamp type (`.AsType<PerfTimestamp>()`)           |
+| `AsType<T>`                  | method | src/shared/types.ts (Number)     | Type-safe branded casting: constrains T extends number, safer than raw `as`     |
+| `assertNever`                | fn    | src/main/session-timer.ts        | Compile-time exhaustiveness on discriminated unions                             |
+| `AutoUpdaterStatus`          | type  | src/shared/types.ts              | Discriminated union for auto-updater push events (4 groups)                     |
+| `UpdateMeta`                 | iface | src/shared/types.ts              | Version metadata mirror (version, releaseDate, releaseNotes?)                   |
+| `perfNow`                    | fn    | src/main/session-timer.ts        | Monotonic clock factory returning branded PerfTimestamp                          |
 | `isBoolean`                  | fn    | src/main/settings.ts            | Type guard predicate for boolean                                                |
 | `isPositiveNumber`           | fn    | src/main/settings.ts            | Type guard: finite number > 0                                                   |
 | `isClamped0to100`            | fn    | src/main/settings.ts            | Type guard: 0 ≤ n ≤ 100                                                         |
@@ -165,7 +171,7 @@ src/
 - **Linting**: ESLint flat config with `@typescript-eslint/no-explicit-any: error`, `@typescript-eslint/no-floating-promises`, `no-eval`, `no-new-func`, `@typescript-eslint/consistent-type-imports`
 - **Constants**: All magic numbers extracted to `src/main/constants.ts`
 - **Settings validators exported**: `validatePositiveNumber`, `validateClampedNumber`, `validateBoolean` — use in tests and IPC handlers
-- **Monotonic timing**: Use `performance.now()` for session timing, not `Date.now()` (immune to system clock changes)
+- **Monotonic timing**: Use `performance.now()` for session timing, not `Date.now()` (immune to system clock changes). Timestamps branded as `PerfTimestamp` via `.AsType<PerfTimestamp>()` extension — safer than raw `as` which can cast anything.
 - **Discriminated unions**: SessionStatusResponse (3-arm: not-running / timed / indefinite) and SessionStartResponse (ok/fail) enable compile-time narrowing; never use flat nullable interfaces for IPC responses
 - **Validator dispatch table**: mergeValidatedPartial uses VALIDATORS lookup table — no per-field if/else. Add new AppSettings fields to VALIDATORS in settings.ts
 - **UI string constants**: All UI labels/strings extracted to constants files — never hardcode in renderer or tray
@@ -200,6 +206,7 @@ src/
 - Never use `JSON.parse(...) as T` casts — use runtime type guards (`isPackageInfo` pattern)
 - Never hardcode UI strings in renderer or tray — use constants files
 
+- Never use raw `as PerfTimestamp` — use `.AsType<PerfTimestamp>()` branded casting extension
 ## COMMANDS
 
 ```bash
@@ -246,7 +253,7 @@ Runtime deps (`electron-log`, `electron-updater`) are externalized in rslib conf
 
 | Project  | Env   | Tests | Focus                                                                                           |
 | -------- | ----- | ----- | ----------------------------------------------------------------------------------------------- |
-| main     | node  | 304   | Coordinator, session timer, IPC, power-saver, battery-monitor, settings, tray, shortcut, auto-launch, auto-updater |
+| main     | node  | 305   | Coordinator, session timer, IPC, power-saver, battery-monitor, settings, tray, shortcut, auto-launch, auto-updater |
 | renderer | jsdom | 46    | Popover UI, settings UI, event delegation, push subscriptions, error paths                                        |
 
 **Setup**: `tests/setup.main.ts` mocks full Electron API (app, BrowserWindow, ipcMain, Tray, Menu, webContents.{on,setWindowOpenHandler}, app.getAppPath, etc.)
@@ -257,8 +264,8 @@ Runtime deps (`electron-log`, `electron-updater`) are externalized in rslib conf
 
 ## NOTES
 
-- **Coordinator**: `coordinator.ts` centralizes all settings→system sync. Subscribes to `onSettingsChanged`, diffs against `prevSettings` snapshot, and selectively dispatches to sleep-prevention, battery-monitor, auto-launch, session cancel, broadcast, and shortcut modules.
-- **Session timer**: State machine in `session-timer.ts` — uses `performance.now()` monotonic clock. Discriminated `InternalSessionState` union. Push-on-state-change broadcasts (no interval).
+- **Coordinator**: `coordinator.ts` centralizes all settings→system sync. Subscribes to `onSettingsChanged`, diffs against `prevSettings` snapshot, and selectively dispatches to sleep-prevention, battery-monitor, auto-launch, session cancel, broadcast, window:hide push, and shortcut modules.
+- **Session timer**: State machine in `session-timer.ts` — uses `performance.now()` monotonic clock branded as `PerfTimestamp` via `.AsType<PerfTimestamp>()`. Discriminated `InternalSessionState` union with `assertNever` exhaustiveness check. Push-on-state-change broadcasts (no interval).
 - **Sleep prevention**: `sleep-prevention.ts` manages `powerSaveBlocker`. `syncPreventSleep()` starts/stops based on settings.
 - **Battery monitoring**: `battery-monitor.ts` monitors via `pmset`, auto-cancels session below threshold. `parsePmsetOutput(stdout)` extracted as pure fn (exported, testable). Checks for `InternalBattery` presence before parsing (returns null on desktop Macs).
 - **Global shortcut**: `Cmd+Shift+A` toggles preventSleep. `global-shortcut.ts` receives deps via `ShortcutDeps`.
@@ -269,7 +276,7 @@ Runtime deps (`electron-log`, `electron-updater`) are externalized in rslib conf
 - **Auto-updater**: Checks for updates 3s after startup, every 4 hours (exponential backoff on failure up to 24h). Opens GitHub release URL once per version (`lastNotifiedVersion` guard).
 - **Power-saver**: Uses `electron.powerSaveBlocker.start('prevent-display-sleep')`. No macOS permission required
 - **Launch at login**: Uses `app.setLoginItemSettings()`
-- **Window hide on blur**: Popover behavior — hides when focus lost (dev mode exempt)
+- **Window hide on blur**: Popover behavior — hides when focus lost (dev mode exempt). Uses typed `window:hide` push channel via `broadcastToWindows()`; subscribed via `window.api.onWindowHide` in renderer (no DOM CustomEvent, no `as EventListener` casts).
 - **CI**: GitHub Actions (ci.yml: lint+test+build on Bun ≥1.3.13, cd.yml: tag+release from CI artifacts)
 - **Dependencies**: Runtime deps are `electron-log` and `electron-updater`
 - **Settings persistence**: Async atomic writes with `randomUUID()` temp files. `writeChain` promise mutex serializes concurrent `updateSettings()` calls. No-change dedup skips disk write + event cascade when nothing changed. On JSON parse error, backs up corrupt file to `settings.corrupt-{timestamp}.json` and falls back to defaults.

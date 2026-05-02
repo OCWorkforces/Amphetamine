@@ -1,6 +1,6 @@
 # Main Process — Electron Main
 
-Electron main process (Node.js). App lifecycle, system tray, IPC, session timer, power-saver, battery monitoring, global shortcut, settings persistence, and auto-updater.
+Electron main process (Node.js). App lifecycle, system tray, IPC, session timer, power-saver, battery monitoring, global shortcut, settings persistence (typed EventEmitter), and auto-updater.
 
 ## FILES
 
@@ -13,9 +13,9 @@ Electron main process (Node.js). App lifecycle, system tray, IPC, session timer,
 | `auto-launch.ts`       | macOS login item management                              |
 | `global-shortcut.ts`   | Global hotkey (Cmd+Shift+A) + ShortcutDeps interface     |
 | `tray.ts`              | System tray icon, context menu, window positioning       |
-| `ipc.ts`               | IPC handlers (13 channels, decomposed by domain)         |
-| `settings.ts`          | Persistent app settings (JSON in userData, EventEmitter) |
-| `session-timer.ts`     | Session timer state machine (start/cancel/expiry)        |
+| `ipc.ts`               | IPC handlers (14 channels, decomposed by domain, IpcMainInvokeEvent) |
+| `settings.ts`          | Persistent app settings (JSON in userData, typed EventEmitter<SettingsEvents>) |
+| `session-timer.ts`     | Session timer state machine (PerfTimestamp monotonic clock, assertNever exhaustiveness)        |
 | `settings-window.ts`   | Settings BrowserWindow singleton (shows in Dock)         |
 | `auto-updater.ts`      | Auto-updater (decomposed event handlers + check loop + exponential backoff)   |
 | `constants.ts`         | Window dims, timeouts, colors, dev URL, DEV_ORIGINS      |
@@ -83,13 +83,13 @@ Electron main process (Node.js). App lifecycle, system tray, IPC, session timer,
 
 ## SESSION TIMER
 
-- `startSession(durationMinutes)` — validates input (positive finite integer); starts timer with `performance.now()` (monotonic clock), syncs `preventSleep: true`, triggers event-driven `broadcastSessionUpdate()`. Protected by `isStarting` concurrency flag.
+- `startSession(durationMinutes)` — validates input (positive finite integer); starts timer with `perfNow()` (monotonic clock, `PerfTimestamp` branded), syncs `preventSleep: true`, triggers event-driven `broadcastSessionUpdate()`. Protected by `isStarting` concurrency flag.
 - `cancelSession()` — clears expiry timer, syncs `preventSleep: false`, triggers event-driven `broadcastSessionUpdate()`
-- `getStatus()` — returns `SessionStatusResponse` (isRunning, startedAt, expiresAt, remainingSeconds, sessionDuration). **Pure** — no side effects. Never re-entrant.
+- `getStatus()` — returns `SessionStatusResponse` (isRunning, startedAt, expiresAt, remainingSeconds, sessionDuration). **Pure** — no side effects. Never re-entrant. Three-arm `kind` switch with `assertNever(state)` exhaustiveness tail — adding a 4th arm is a compile error.
 - `reconcileSessionState()` — exported no-op safety shim (union branch logic handles reconciliation internally)
 - `cleanup()` — clears expiry timer without syncing sleep (for app teardown)
 - `broadcastSessionUpdate()` — push-on-state-change only; no interval timer; computes and broadcasts current status to all windows
-- Internal `InternalSessionState` discriminated union (NOT exported): `{ kind: "idle" } | { kind: "indefinite"; startedAt: number } | { kind: "timed"; startedAt: number; expiresAt: number; durationMinutes: number; expiryTimer }`
+- Internal `InternalSessionState` discriminated union (NOT exported): `{ kind: "idle" } | { kind: "indefinite"; startedAt: PerfTimestamp } | { kind: "timed"; startedAt: PerfTimestamp; expiresAt: PerfTimestamp; durationMinutes: number; expiryTimer }`
 - All deps injected via setters: `setOnSessionStateChange`, `setSettingsReader`, `setBroadcastFn` — no direct module imports inside session-timer
 - Expiry callback wrapped in try/catch with `log.error` for safety
 - Timers use `.unref()` so they don’t block process exit
