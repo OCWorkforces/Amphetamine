@@ -90,7 +90,6 @@ export function reconcileSessionState(): void {
 
 export function startSession(durationMinutes: number | null): SessionState {
   clearTimedExpiryTimer();
-  clearTimedExpiryTimer();
 
   if (durationMinutes === null) {
     const startedAt = perfNow();
