@@ -155,7 +155,6 @@ describe("renderer settings", () => {
       toggle.checked = true;
       toggle.dispatchEvent(new Event("change"));
 
-      // Wait for debounce (300ms) + async save
       await vi.advanceTimersByTimeAsync(350);
 
       const indicator = document.getElementById("launch-save-indicator");
@@ -173,7 +172,6 @@ describe("renderer settings", () => {
       toggle.checked = true;
       toggle.dispatchEvent(new Event("change"));
 
-      // Wait for debounce + save + indicator timeout
       await vi.advanceTimersByTimeAsync(350);
       expect(document.getElementById("launch-save-indicator")?.classList.contains("visible")).toBe(
         true,
@@ -195,7 +193,6 @@ describe("renderer settings", () => {
 
       const toggle = document.getElementById("launch-at-login-toggle") as HTMLInputElement;
 
-      // Rapid toggling
       toggle.checked = true;
       toggle.dispatchEvent(new Event("change"));
       await vi.advanceTimersByTimeAsync(100);
@@ -207,13 +204,10 @@ describe("renderer settings", () => {
       toggle.checked = true;
       toggle.dispatchEvent(new Event("change"));
 
-      // Not yet saved
       expect(mockApi.settings.set).not.toHaveBeenCalled();
 
-      // Wait for debounce
       await vi.advanceTimersByTimeAsync(350);
 
-      // Only one save call (the last state)
       expect(mockApi.settings.set).toHaveBeenCalledTimes(1);
       expect(mockApi.settings.set).toHaveBeenCalledWith(
         expect.objectContaining({ launchAtLogin: true }),
@@ -234,7 +228,6 @@ describe("renderer settings", () => {
       toggle.checked = true;
       toggle.dispatchEvent(new Event("change"));
 
-      // Wait for debounce + save failure
       await vi.advanceTimersByTimeAsync(350);
 
       const errorEl = document.getElementById("settings-error-text");
@@ -349,11 +342,9 @@ describe("renderer settings", () => {
       document.dispatchEvent(new Event("DOMContentLoaded"));
       await vi.advanceTimersByTimeAsync(0);
 
-      // Verify initial state
       const launchToggle = document.getElementById("launch-at-login-toggle") as HTMLInputElement;
       expect(launchToggle.checked).toBe(false);
 
-      // Get the onSettingsChanged callback and simulate push
       const callback = mockApi.onSettingsChanged.mock.calls[0]![0];
       callback({
         ...defaultSettings,
@@ -361,7 +352,6 @@ describe("renderer settings", () => {
         preventSleep: true,
       });
 
-      // Verify UI updated
       expect(launchToggle.checked).toBe(true);
       const sleepToggle = document.getElementById("prevent-sleep-toggle") as HTMLInputElement;
       expect(sleepToggle.checked).toBe(true);
@@ -421,7 +411,6 @@ describe("renderer settings", () => {
 
   describe("isSaving guard", () => {
     it("does not double-save when already saving", async () => {
-      // Make save take a while
       let resolveSet: ((v: AppSettings) => void) | null = null;
       mockApi.settings.set.mockImplementation(
         () =>
@@ -435,25 +424,20 @@ describe("renderer settings", () => {
       document.dispatchEvent(new Event("DOMContentLoaded"));
       await vi.advanceTimersByTimeAsync(0);
 
-      // First toggle change
       const toggle = document.getElementById("launch-at-login-toggle") as HTMLInputElement;
       toggle.checked = true;
       toggle.dispatchEvent(new Event("change"));
 
-      // Wait for debounce to trigger save
       await vi.advanceTimersByTimeAsync(350);
 
-      // Second toggle change while first save is pending
       toggle.checked = false;
       toggle.dispatchEvent(new Event("change"));
 
-      // Wait for second debounce
       await vi.advanceTimersByTimeAsync(350);
 
       // Only the first save should have been called (isSaving guard)
       expect(mockApi.settings.set).toHaveBeenCalledTimes(1);
 
-      // Resolve the pending save
       (resolveSet as ((v: AppSettings) => void) | null)?.({ ...defaultSettings, launchAtLogin: true });
       await vi.advanceTimersByTimeAsync(0);
     });
@@ -490,7 +474,6 @@ describe("renderer settings", () => {
       toggle.checked = true;
       toggle.dispatchEvent(new Event("change"));
 
-      // Wait for debounce + save failure
       await vi.advanceTimersByTimeAsync(350);
 
       // After failure, render() is called with the error message which rebuilds
@@ -501,7 +484,6 @@ describe("renderer settings", () => {
       ) as HTMLInputElement;
       expect(refreshedToggle.checked).toBe(true);
 
-      // Error message displayed
       const errorEl = document.getElementById("settings-error-text");
       expect(errorEl?.textContent).toBe("Disk full");
     });
@@ -555,7 +537,6 @@ describe("renderer settings", () => {
       expect(launchToggle).not.toBeNull();
       expect(launchToggle?.checked).toBe(false);
 
-      // Successfully-loaded session status applied to the duration dropdown
       const select = document.getElementById(
         "session-duration-select",
       ) as HTMLSelectElement | null;

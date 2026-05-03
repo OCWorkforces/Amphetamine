@@ -29,7 +29,6 @@ export function validateSender(event: IpcMainEvent | IpcMainInvokeEvent): boolea
 function validateSenderUrl(senderUrl: string): boolean {
   try {
     const url = new URL(senderUrl);
-    // Dev server origins - use URL origin for proper comparison
     if (url.protocol === "http:") {
       return ALLOWED_ORIGINS.has(url.origin) || ALLOWED_ORIGINS.has(`${url.protocol}//${url.host}`);
     }
@@ -75,7 +74,6 @@ function registerWindowIpc(win: BrowserWindow): void {
       if (!validateSender(event)) return;
       try {
         if (typeof height === "number" && height > 0) {
-          // Clamp height to acceptable bounds
           const clampedHeight = Math.max(
             MIN_POPOVER_HEIGHT,
             Math.min(MAX_POPOVER_HEIGHT, Math.round(height)),

@@ -89,12 +89,10 @@ export function reconcileSessionState(): void {
 }
 
 export function startSession(durationMinutes: number | null): SessionState {
-  // Clear any existing session — discriminated union allows clean replacement.
+  clearTimedExpiryTimer();
   clearTimedExpiryTimer();
 
   if (durationMinutes === null) {
-    // Indefinite session — no timer
-    // performance.now() used for monotonic timing — immune to system clock changes
     const startedAt = perfNow();
     state = { kind: "indefinite", startedAt };
     onSessionStateChange?.({ sessionDuration: null, preventSleep: true });
@@ -108,21 +106,19 @@ export function startSession(durationMinutes: number | null): SessionState {
   }
 
   // Timed session
-  // performance.now() used for monotonic timing — immune to system clock changes
   const startedAt = perfNow();
   const expiresAt = (startedAt + durationMinutes * MS_PER_MINUTE).AsType<PerfTimestamp>();
 
   const expiryTimer = setTimeout(() => {
     try {
       state = { kind: "idle" };
-      // Session expired — coordinator will sync power-saver via settings change
       onSessionStateChange?.({ sessionDuration: null, preventSleep: false });
       broadcastSessionUpdate();
     } catch (err) {
       log.error("[session-timer] Error in session expiry callback:", err);
     }
   }, durationMinutes * MS_PER_MINUTE);
-  // Don't pin the event loop — node timer ref guard for tests/cleanup safety
+  // unref so the timer doesn't pin the event loop (test/cleanup safety)
   if (typeof expiryTimer === "object" && expiryTimer !== null && "unref" in expiryTimer) {
     (expiryTimer as { unref: () => void }).unref();
   }
@@ -143,7 +139,6 @@ export function startSession(durationMinutes: number | null): SessionState {
 export function cancelSession(): SessionState {
   clearTimedExpiryTimer();
   state = { kind: "idle" };
-  // Coordinator will sync power-saver via settings change
   onSessionStateChange?.({ sessionDuration: null, preventSleep: false });
   broadcastSessionUpdate();
   return {
@@ -180,7 +175,6 @@ export function getStatus(): SessionStatusResponse {
   }
 
   if (state.kind === "timed") {
-    // Timed session — compute remaining from monotonic clock
     const remainingMs = Math.max(0, state.expiresAt - perfNow());
     const remainingSeconds = Math.floor(remainingMs / 1000);
     return {

@@ -8,18 +8,14 @@ import { EventEmitter } from "node:events";
 import { DEFAULT_SETTINGS } from "../shared/types.js";
 import type { AppSettings } from "../shared/types.js";
 
-/** Callback invoked when settings change (partial or full update) */
 type SettingsChangeCallback = (_settings: AppSettings) => void;
 
-/** Event map for the settings emitter */
 type SettingsEvents = {
   change: [AppSettings];
 };
 
-/** Internal event emitter for settings changes */
 const settingsEmitter = new EventEmitter<SettingsEvents>();
 
-/** Subscribe to settings changes. Returns an unsubscribe function. */
 export function onSettingsChanged(callback: SettingsChangeCallback): () => void {
   settingsEmitter.on("change", callback);
   return () => {
@@ -32,7 +28,6 @@ let settingsCache: AppSettings = { ...DEFAULT_SETTINGS };
 /** Promise chain for serializing concurrent updateSettings() calls */
 let writeChain: Promise<unknown> = Promise.resolve();
 
-/** Type-guard predicates — single source of truth for validity semantics */
 
 export const isBoolean = (v: unknown): v is boolean => typeof v === "boolean";
 
@@ -44,21 +39,17 @@ export const isClamped0to100 = (v: unknown): v is number =>
 
 export const isNonEmptyString = (v: unknown): v is string => typeof v === "string" && v.length > 0;
 
-/** Validate a boolean field, returning the default if invalid */
 export const validateBoolean = (value: unknown, defaultValue: boolean): boolean =>
   isBoolean(value) ? value : defaultValue;
 
-/** Validate a positive number field (null is preserved as a valid sentinel value) */
 export const validatePositiveNumber = (
   value: unknown,
   defaultValue: number | null,
 ): number | null => (isPositiveNumber(value) ? value : defaultValue);
 
-/** Validate a clamped number field (0-100), returning the default if invalid */
 export const validateClampedNumber = (value: unknown, defaultValue: number): number =>
   isClamped0to100(value) ? value : defaultValue;
 
-/** Validate a non-empty string field, returning the default if invalid */
 function validateNonEmptyString(value: unknown, defaultValue: string): string {
   return isNonEmptyString(value) ? value : defaultValue;
 }
@@ -92,8 +83,9 @@ function validateRawSettings(raw: Record<string, unknown>): AppSettings {
 }
 
 /**
- * Per-field validator dispatch. Mapped type ensures every AppSettings
- * field has an entry — adding a field without updating VALIDATORS is a compile error.
+ * Validates raw JSON from disk against AppSettings shape. Filters unknown keys
+ * and handles sessionDuration's null sentinel (indefinite session marker).
+ * Kept separate from VALIDATORS dispatch because input type differs (Record vs Partial).
  */
 type SettingsValidator<K extends keyof AppSettings> = (
   value: unknown,
@@ -104,15 +96,13 @@ const VALIDATORS: { [K in keyof AppSettings]: SettingsValidator<K> } = {
   launchAtLogin: (v, f) => (isBoolean(v) ? v : f),
   preventSleep: (v, f) => (isBoolean(v) ? v : f),
   sessionDuration: (v, f) => {
-    // SPECIAL CASE: null is a valid value (indefinite session marker)
-    if (v === null) return null;
+    if (v === null) return null; // null = indefinite session marker
     return isPositiveNumber(v) ? v : f;
   },
   batteryThreshold: (v, f) => (isClamped0to100(v) ? v : f),
   shortcut: (v, f) => (isNonEmptyString(v) ? v : f),
 };
 
-/** Apply a single validator with full type-safety (encapsulates the unavoidable cast). */
 function applyValidator<K extends keyof AppSettings>(
   key: K,
   value: unknown,
@@ -121,7 +111,6 @@ function applyValidator<K extends keyof AppSettings>(
   return VALIDATORS[key](value, fallback);
 }
 
-/** Merge validated partial settings into a base settings object — dispatches via VALIDATORS */
 export function mergeValidatedPartial(
   base: AppSettings,
   partial: Partial<AppSettings>,
@@ -129,7 +118,6 @@ export function mergeValidatedPartial(
   const merged: AppSettings = { ...base };
   for (const key of Object.keys(partial) as (keyof AppSettings)[]) {
     if (!(key in VALIDATORS)) continue;
-    // Per-key generic dispatch — `K` is inferred per iteration via helper.
     assignValidated(merged, key, partial[key]);
   }
   return merged;
@@ -187,10 +175,9 @@ export async function initSettings(): Promise<void> {
 export async function saveSettings(settings: AppSettings): Promise<void> {
   await ensureUserDataDir();
   const settingsPath = getSettingsPath();
-  // Use unique tmp file per write to avoid concurrent rename races
+  // Atomic write: unique tmp file (avoids concurrent rename races) + rename
   const tmpPath = settingsPath + `.tmp-${randomUUID()}`;
   const raw = JSON.stringify(settings, null, 2);
-  // Write to temp file first, then atomically rename
   await writeFile(tmpPath, raw, "utf-8");
   await rename(tmpPath, settingsPath);
 }
@@ -225,7 +212,7 @@ export async function updateSettings(partial: Partial<AppSettings>): Promise<App
 
     return snapshot;
   });
-  // writeChain always resolves (never rejects) — catch prevents unhandled rejection
+  // catch prevents unhandled rejection; writeChain must always resolve
   writeChain = result.catch(() => {});
   return result;
 }

@@ -307,7 +307,6 @@ describe("renderer popover (index.ts)", () => {
       document.dispatchEvent(new Event("DOMContentLoaded"));
       await vi.advanceTimersByTimeAsync(0);
 
-      // Should still render with fallback version "-"
       const version = document.querySelector(".app-version");
       expect(version?.textContent).toBe("v-");
     });
@@ -364,7 +363,6 @@ describe("renderer popover (index.ts)", () => {
       document.dispatchEvent(new Event("DOMContentLoaded"));
       await vi.advanceTimersByTimeAsync(0);
 
-      // Initially off
       expect(getStatusText()).toBe(STATUS_SLEEP_PREVENTION_OFF);
 
       // Simulate push: preventSleep turned on
