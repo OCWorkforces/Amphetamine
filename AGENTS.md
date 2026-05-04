@@ -1,8 +1,3 @@
-## BEHAVIORAL GUIDELINES
-
-Coding agents: consult [CODING_GUIDELINES.md](./CODING_GUIDELINES.md) for behavioral guidelines to reduce common LLM coding mistakes — think before coding, simplicity first, surgical changes, and goal-driven execution.
-
----
 # Amphetamine — Project Knowledge Base
 
 **Generated:** 2026-05-02
@@ -21,6 +16,10 @@ macOS tray-only Electron app that prevents the system from sleeping. Session tim
 | Package   | Bun                                       |
 | Test      | Vitest 4 (workspace, 351 tests)           |
 | Linter   | ESLint 10 flat config, @typescript-eslint/no-explicit-any: error, no-floating-promises, no-eval, strict-boolean-expressions, no-unsafe-* |
+
+## BEHAVIORAL GUIDELINES
+
+Coding agents: consult [CODING_GUIDELINES.md](./CODING_GUIDELINES.md) for behavioral guidelines to reduce common LLM coding mistakes — think before coding, simplicity first, surgical changes, and goal-driven execution.
 
 ## STRUCTURE
 
