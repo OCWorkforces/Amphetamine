@@ -1,3 +1,8 @@
+## BEHAVIORAL GUIDELINES
+
+Coding agents: consult [CODING_GUIDELINES.md](./CODING_GUIDELINES.md) for behavioral guidelines to reduce common LLM coding mistakes — think before coding, simplicity first, surgical changes, and goal-driven execution.
+
+---
 # Amphetamine — Project Knowledge Base
 
 **Generated:** 2026-05-02
