@@ -26,7 +26,6 @@ Number.prototype.AsType = function <T extends number>(this: number): T {
   return this as unknown as T;
 };
 
-
 /** IPC channel names — single source of truth */
 export const IPC_CHANNELS = {
   WINDOW_SET_HEIGHT: "window:set-height",

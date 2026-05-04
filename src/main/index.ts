@@ -23,7 +23,6 @@ import { hardenWebContents } from "./security.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// === Process-level error handlers ===
 process.on("uncaughtException", (error: Error) => {
   log.error("[main] Uncaught exception:", error);
   if (!isDev) {
@@ -120,8 +119,7 @@ void app.whenReady().then(async () => {
   initAutoUpdater();
 });
 app.on("window-all-closed", () => {
-  // Prevent default quit — tray-only app stays alive
-  // No-op: keep app running in tray
+  // Tray-only app stays alive when all windows close
 });
 app.on("before-quit", () => {
   isQuitting = true;

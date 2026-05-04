@@ -1,14 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-// --- Hoisted mocks ---
 const mockPowerMonitor = vi.hoisted(() => ({
   on: vi.fn(),
 }));
 const mockLogInfo = vi.hoisted(() => vi.fn());
 const mockLogWarn = vi.hoisted(() => vi.fn());
 
-
-// Child process mock for getBatteryPercent
 const mockExecFile = vi.hoisted(() => vi.fn());
 
 vi.mock("electron", () => ({
@@ -39,14 +36,11 @@ describe("battery-monitor", () => {
     vi.useFakeTimers();
     vi.clearAllMocks();
     vi.resetModules();
-    vi.clearAllMocks();
-    vi.resetModules();
 
     mockPowerMonitor.on.mockImplementation(() => {});
     mockIsActive = vi.fn<() => boolean>().mockReturnValue(false);
     mockStopSleep = vi.fn<() => void>();
 
-    // Mock execFile to simulate pmset output
     mockExecFile.mockImplementation(
       (
         _cmd: string,
@@ -109,7 +103,6 @@ describe("battery-monitor", () => {
         },
       );
 
-      // Re-import to pick up new mock
       vi.resetModules();
       const mod = await import("../../src/main/battery-monitor.js");
       const percent = await mod.getBatteryPercent();
@@ -174,7 +167,6 @@ describe("battery-monitor", () => {
       setBatteryThresholdGetter(() => 80);
       setBatteryAutoStopCallback(mockAutoStopCb);
 
-      // Battery at 75% which is below 80% threshold
       mockExecFile.mockImplementation(
         (
           _cmd: string,
@@ -249,7 +241,6 @@ describe("battery-monitor", () => {
       setBatteryThresholdGetter(() => 20);
       setBatteryAutoStopCallback(mockAutoStopCb);
 
-      // Battery at 75% which is above 20% threshold
       await initBatteryMonitoring();
 
       const onBatteryCall = mockPowerMonitor.on.mock.calls.find(
@@ -358,7 +349,6 @@ describe("battery-monitor", () => {
       );
       expect(onAcCall).toBeDefined();
 
-      // Fire the on-ac callback
       const onAcCallback = onAcCall![1] as () => void;
       onAcCallback();
 
