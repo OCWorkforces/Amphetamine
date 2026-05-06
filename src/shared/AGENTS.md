@@ -180,7 +180,7 @@ export type AutoUpdaterStatus =
   | { status: "checking" }
   | { status: "available" | "not-available" | "downloaded"; info: UpdateMeta }
   | { status: "downloading"; progress: { percent: number; transferred: number; total: number } }
-  | { status: "check-error" | "download-error" | "error"; error: string };
+  | { status: "check-error" | "download-error" | "error"; category: "network" | "signature" | "io" | "unknown" };
 ```
 
 ### UpdateMeta

@@ -4,6 +4,9 @@ import { promisify } from "node:util";
 import log from "electron-log";
 import { BATTERY_CHECK_TIMEOUT_MS } from "./constants.js";
 
+/** Fallback threshold (%) used when the configured threshold is missing or non-positive. */
+const DEFAULT_BATTERY_THRESHOLD = 20;
+
 const execFileAsync = promisify(execFile);
 
 type GetBatteryThresholdFn = () => number;
@@ -69,8 +72,11 @@ export function cleanupBatteryMonitoring(): void {
 }
 
 async function checkBatteryAndStop(): Promise<void> {
-  const threshold = getBatteryThreshold();
-  if (threshold <= 0) return;
+  const rawThreshold = getBatteryThreshold();
+  const threshold =
+    typeof rawThreshold === "number" && Number.isFinite(rawThreshold) && rawThreshold > 0
+      ? rawThreshold
+      : DEFAULT_BATTERY_THRESHOLD;
   if (!(checkSleepPrevention?.() ?? false)) return;
 
   try {
@@ -92,11 +98,17 @@ async function checkBatteryAndStop(): Promise<void> {
  * - No percentage pattern matched
  * - Output is empty or malformed
  */
+const PCT_REGEX = /(\d+)%/;
+
 export function parsePmsetOutput(stdout: string): number | null {
   if (!stdout.includes("InternalBattery")) {
     return null;
   }
-  const match = stdout.match(/(\d+)%/);
+  const internalLine = stdout.split("\n").find((line) => line.includes("InternalBattery"));
+  if (internalLine === undefined) {
+    return null;
+  }
+  const match = internalLine.match(PCT_REGEX);
   if (match && match[1] !== undefined) {
     const parsed = parseInt(match[1], 10);
     return Number.isNaN(parsed) ? null : parsed;
@@ -106,7 +118,7 @@ export function parsePmsetOutput(stdout: string): number | null {
 
 export async function getBatteryPercent(): Promise<number | null> {
   try {
-    const { stdout } = await execFileAsync("pmset", ["-g", "batt"], {
+    const { stdout } = await execFileAsync("/usr/bin/pmset", ["-g", "batt"], {
       timeout: BATTERY_CHECK_TIMEOUT_MS,
     });
     return parsePmsetOutput(stdout);

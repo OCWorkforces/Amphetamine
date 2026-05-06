@@ -195,12 +195,48 @@ describe("battery-monitor", () => {
       expect(mockAutoStopCb).toHaveBeenCalled();
     });
 
-    it("does NOT call auto-stop when threshold is 0 (disabled)", async () => {
+    it("treats threshold 0 as the default (20%) and DOES auto-stop below default", async () => {
       const mockAutoStopCb = vi.fn();
       mockIsActive.mockReturnValue(true);
       setBatteryThresholdGetter(() => 0);
       setBatteryAutoStopCallback(mockAutoStopCb);
 
+      // Battery at 15% < default 20% → should auto-stop.
+      mockExecFile.mockImplementation(
+        (
+          _cmd: string,
+          _args: string[],
+          _opts: Record<string, unknown>,
+          cb: (_err: Error | null, _result: { stdout: string }) => void,
+        ) => {
+          cb(null, {
+            stdout:
+              "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=1234)\t15%; discharging",
+          });
+        },
+      );
+
+      await initBatteryMonitoring();
+
+      const onBatteryCall = mockPowerMonitor.on.mock.calls.find(
+        (call: unknown[]) => call[0] === "on-battery",
+      );
+      const onBatteryCallback = onBatteryCall![1] as () => void;
+      onBatteryCallback();
+
+      await vi.advanceTimersByTimeAsync(50);
+
+      expect(mockStopSleep).toHaveBeenCalled();
+      expect(mockAutoStopCb).toHaveBeenCalled();
+    });
+
+    it("treats threshold 0 as the default (20%) and does NOT auto-stop above default", async () => {
+      const mockAutoStopCb = vi.fn();
+      mockIsActive.mockReturnValue(true);
+      setBatteryThresholdGetter(() => 0);
+      setBatteryAutoStopCallback(mockAutoStopCb);
+
+      // Battery at 75% > default 20% → should NOT auto-stop.
       await initBatteryMonitoring();
 
       const onBatteryCall = mockPowerMonitor.on.mock.calls.find(
@@ -403,6 +439,41 @@ describe("battery-monitor", () => {
       // (defense-in-depth — the regex /(\d+)%/ guarantees digits, this guards against future regex changes)
       const result = parsePmsetOutput("InternalBattery-0\tNaN%; discharging; 0:00 remaining present: true");
       expect(result).toBeNull();
+    });
+
+    it("ignores extra % tokens before InternalBattery line (AlDente scenario)", () => {
+      const stdout =
+        "Now drawing from 'Battery Power'\n - AlDente Pro Limit\t80%; present: true\n -InternalBattery-0 (id=1234)\t45%; discharging";
+      expect(parsePmsetOutput(stdout)).toBe(45);
+    });
+
+    it("ignores Battery Health % token before InternalBattery line (Endurance scenario)", () => {
+      const stdout =
+        "Now drawing from 'Battery Power'\n - Battery Health: 92%\n -InternalBattery-0 (id=1234)\t60%; discharging; 3:21 remaining present: true";
+      expect(parsePmsetOutput(stdout)).toBe(60);
+    });
+
+    it("parses charging state correctly", () => {
+      const stdout =
+        "Now drawing from 'AC Power'\n -InternalBattery-0 (id=1234)\t55%; charging; 1:23 remaining present: true";
+      expect(parsePmsetOutput(stdout)).toBe(55);
+    });
+
+    it("parses discharging state with multi-line realistic output", () => {
+      const stdout = [
+        "Now drawing from 'Battery Power'",
+        " -InternalBattery-0 (id=4325091)\t87%; discharging; 6:42 remaining present: true",
+      ].join("\n");
+      expect(parsePmsetOutput(stdout)).toBe(87);
+    });
+
+    it("picks InternalBattery line when multiple battery entries present", () => {
+      const stdout = [
+        "Now drawing from 'Battery Power'",
+        " - ExternalBattery-0\t99%; present: true",
+        " -InternalBattery-0 (id=1234)\t33%; discharging",
+      ].join("\n");
+      expect(parsePmsetOutput(stdout)).toBe(33);
     });
   });
 });

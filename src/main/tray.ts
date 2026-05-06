@@ -118,9 +118,14 @@ export function setupTray(deps: TrayDeps): () => void {
   nativeTheme.on("updated", onThemeUpdated);
 
   // Store unsubscribe for cleanup robustness
+  let lastPreventSleep = initialPreventSleep;
   const unsubscribe = deps.onSettingsChanged(() => {
     refreshTrayIcon();
-    cachedMenu = buildMenu();
+    const currentPreventSleep = deps.getPreventSleep();
+    if (currentPreventSleep !== lastPreventSleep) {
+      lastPreventSleep = currentPreventSleep;
+      cachedMenu = buildMenu();
+    }
   });
 
   // Listener is cleaned up on process exit (app.before-quit destroys the tray).

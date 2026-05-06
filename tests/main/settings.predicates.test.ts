@@ -17,6 +17,7 @@ import {
   isPositiveNumber,
   isClamped0to100,
   isNonEmptyString,
+  isValidAccelerator,
   mergeValidatedPartial,
 } from "../../src/main/settings.js";
 import { DEFAULT_SETTINGS } from "../../src/shared/types.js";
@@ -80,11 +81,41 @@ describe("settings predicates", () => {
     });
   });
 
+  describe("isValidAccelerator", () => {
+    it("accepts valid accelerators with modifier + key", () => {
+      expect(isValidAccelerator("Cmd+Shift+A")).toBe(true);
+      expect(isValidAccelerator("Cmd+Ctrl+X")).toBe(true);
+      expect(isValidAccelerator("Cmd+Option+K")).toBe(true);
+      expect(isValidAccelerator("Command+Shift+A")).toBe(true);
+      expect(isValidAccelerator("Alt+Shift+R")).toBe(true);
+    });
+    it("rejects modifier-only strings", () => {
+      expect(isValidAccelerator("Cmd")).toBe(false);
+      expect(isValidAccelerator("Shift")).toBe(false);
+      expect(isValidAccelerator("Cmd+Shift")).toBe(false);
+    });
+    it("rejects reserved/system-conflicting shortcuts", () => {
+      expect(isValidAccelerator("Cmd+Q")).toBe(false);
+      expect(isValidAccelerator("Cmd+W")).toBe(false);
+      expect(isValidAccelerator("Cmd+Tab")).toBe(false);
+      expect(isValidAccelerator("Cmd+Space")).toBe(false);
+      expect(isValidAccelerator("Command+Q")).toBe(false);
+    });
+    it("rejects empty/non-string/non-modifier inputs", () => {
+      expect(isValidAccelerator("")).toBe(false);
+      expect(isValidAccelerator("A")).toBe(false);
+      expect(isValidAccelerator(123)).toBe(false);
+      expect(isValidAccelerator(null)).toBe(false);
+      expect(isValidAccelerator(undefined)).toBe(false);
+    });
+  });
+
   describe("mergeValidatedPartial", () => {
     it("preserves sessionDuration: null (indefinite session marker)", () => {
       const base = { ...DEFAULT_SETTINGS, sessionDuration: 60 };
       const result = mergeValidatedPartial(base, { sessionDuration: null });
-      expect(result.sessionDuration).toBeNull();
+      expect(result.merged.sessionDuration).toBeNull();
+      expect(result.rejectedKeys).toEqual([]);
     });
 
     it("ignores unknown keys in patch", () => {
@@ -94,14 +125,16 @@ describe("settings predicates", () => {
         // @ts-expect-error -- intentionally testing unknown key fallthrough
         bogusField: "evil",
       });
-      expect(result.preventSleep).toBe(true);
-      expect(result).not.toHaveProperty("bogusField");
+      expect(result.merged.preventSleep).toBe(true);
+      expect(result.merged).not.toHaveProperty("bogusField");
+      expect(result.rejectedKeys).toContain("bogusField");
     });
 
     it("falls back to base when value fails validation", () => {
       const base = { ...DEFAULT_SETTINGS, batteryThreshold: 30 };
       const result = mergeValidatedPartial(base, { batteryThreshold: 150 });
-      expect(result.batteryThreshold).toBe(30);
+      expect(result.merged.batteryThreshold).toBe(30);
+      expect(result.rejectedKeys).toEqual(["batteryThreshold"]);
     });
   });
 });

@@ -1,7 +1,7 @@
-import { app } from "electron";
+import { app, dialog } from "electron";
 import log from "electron-log";
-import { existsSync } from "node:fs";
-import { readFile, writeFile, rename, mkdir } from "node:fs/promises";
+
+import { readFile, writeFile, rename, mkdir, chmod } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { join } from "path";
 import { EventEmitter } from "node:events";
@@ -28,6 +28,10 @@ let settingsCache: AppSettings = { ...DEFAULT_SETTINGS };
 /** Promise chain for serializing concurrent updateSettings() calls */
 let writeChain: Promise<unknown> = Promise.resolve();
 
+/** Tracks consecutive saveSettings failures to surface a user-visible alert when persistence is broken. */
+let consecutiveSaveFailures = 0;
+const MAX_CONSECUTIVE_SAVE_FAILURES = 3;
+
 
 export const isBoolean = (v: unknown): v is boolean => typeof v === "boolean";
 
@@ -38,6 +42,40 @@ export const isClamped0to100 = (v: unknown): v is number =>
   typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= 100;
 
 export const isNonEmptyString = (v: unknown): v is string => typeof v === "string" && v.length > 0;
+
+/**
+ * Validates a macOS Electron accelerator string (e.g. "Cmd+Shift+A").
+ * Requires:
+ *  - non-empty string
+ *  - at least one modifier (Cmd/Command/Ctrl/Control/Option/Alt/Shift/Super)
+ *  - at least one non-modifier key
+ *  - not a reserved system shortcut (Cmd+Q, Cmd+W, Cmd+Tab, Cmd+Space)
+ */
+export const isValidAccelerator = (s: unknown): s is string => {
+  if (!isNonEmptyString(s)) return false;
+
+  const MODIFIERS = ["Cmd", "Command", "Ctrl", "Control", "Option", "Alt", "Shift", "Super"];
+  const modifierPattern = /(Cmd|Command|Ctrl|Control|Option|Alt|Shift|Super)/;
+  if (!modifierPattern.test(s)) return false;
+
+  const parts = s.split("+").map((p) => p.trim());
+  const nonModifiers = parts.filter((p) => !MODIFIERS.includes(p));
+  if (nonModifiers.length === 0) return false;
+
+  const forbiddenCombos = [
+    /^Cmd\+Q$/i,
+    /^Cmd\+W$/i,
+    /^Cmd\+Tab$/i,
+    /^Command\+Q$/i,
+    /^Command\+W$/i,
+    /^Command\+Tab$/i,
+    /^Cmd\+Space$/i,
+    /^Command\+Space$/i,
+  ];
+  if (forbiddenCombos.some((r) => r.test(s))) return false;
+
+  return true;
+};
 
 export const validateBoolean = (value: unknown, defaultValue: boolean): boolean =>
   isBoolean(value) ? value : defaultValue;
@@ -100,7 +138,7 @@ const VALIDATORS: { [K in keyof AppSettings]: SettingsValidator<K> } = {
     return isPositiveNumber(v) ? v : f;
   },
   batteryThreshold: (v, f) => (isClamped0to100(v) ? v : f),
-  shortcut: (v, f) => (isNonEmptyString(v) ? v : f),
+  shortcut: (v, f) => (isValidAccelerator(v) ? v : f),
 };
 
 function applyValidator<K extends keyof AppSettings>(
@@ -114,13 +152,23 @@ function applyValidator<K extends keyof AppSettings>(
 export function mergeValidatedPartial(
   base: AppSettings,
   partial: Partial<AppSettings>,
-): AppSettings {
+): { merged: AppSettings; rejectedKeys: string[] } {
   const merged: AppSettings = { ...base };
+  const rejectedKeys: string[] = [];
   for (const key of Object.keys(partial) as (keyof AppSettings)[]) {
-    if (!(key in VALIDATORS)) continue;
-    assignValidated(merged, key, partial[key]);
+    if (!(key in VALIDATORS)) {
+      rejectedKeys.push(key);
+      continue;
+    }
+    const incoming = partial[key];
+    if (incoming === undefined) continue;
+    const validated = applyValidator(key, incoming, base[key]);
+    if (validated !== incoming) {
+      rejectedKeys.push(key);
+    }
+    assignValidated(merged, key, incoming);
   }
-  return merged;
+  return { merged, rejectedKeys };
 }
 
 function assignValidated<K extends keyof AppSettings>(
@@ -143,14 +191,23 @@ async function ensureUserDataDir(): Promise<void> {
 export async function initSettings(): Promise<void> {
   const settingsPath = getSettingsPath();
 
-  if (!existsSync(settingsPath)) {
+  let raw: string;
+  try {
+    raw = await readFile(settingsPath, "utf-8");
+  } catch (err) {
+    const code = (err as { code?: string }).code;
+    if (code === "ENOENT") {
+      settingsCache = { ...DEFAULT_SETTINGS };
+      initialized = true;
+      return;
+    }
+    log.error("[settings] Failed to read settings file:", err);
     settingsCache = { ...DEFAULT_SETTINGS };
     initialized = true;
     return;
   }
 
   try {
-    const raw = await readFile(settingsPath, "utf-8");
     const parsed: unknown = JSON.parse(raw);
     const safeParsed: Record<string, unknown> =
       typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
@@ -178,8 +235,10 @@ export async function saveSettings(settings: AppSettings): Promise<void> {
   // Atomic write: unique tmp file (avoids concurrent rename races) + rename
   const tmpPath = settingsPath + `.tmp-${randomUUID()}`;
   const raw = JSON.stringify(settings, null, 2);
-  await writeFile(tmpPath, raw, "utf-8");
+  await writeFile(tmpPath, raw, { encoding: "utf-8", mode: 0o600 });
   await rename(tmpPath, settingsPath);
+  // Defensive: ensure final file mode is 0o600 even if rename inherited prior perms.
+  await chmod(settingsPath, 0o600);
 }
 
 export function getSettings(): AppSettings {
@@ -189,32 +248,61 @@ export function getSettings(): AppSettings {
   return { ...settingsCache };
 }
 
-export async function updateSettings(partial: Partial<AppSettings>): Promise<AppSettings> {
+export async function updateSettings(
+  partial: Partial<AppSettings>,
+): Promise<{ settings: AppSettings; rejectedKeys: string[] }> {
   const result = writeChain.then(async () => {
-    const merged = mergeValidatedPartial(settingsCache, partial);
+    const { merged, rejectedKeys } = mergeValidatedPartial(settingsCache, partial);
 
     const changed = (Object.keys(merged) as (keyof AppSettings)[]).some(
       (key) => merged[key] !== settingsCache[key],
     );
     if (!changed) {
-      return getSettings();
+      return { settings: getSettings(), rejectedKeys };
     }
 
+    await saveSettings(merged);
+    consecutiveSaveFailures = 0;
     settingsCache = { ...merged };
     const snapshot = getSettings();
     settingsEmitter.emit("change", snapshot);
 
-    try {
-      await saveSettings(merged);
-    } catch (err) {
-      log.error("[settings] Failed to save settings:", err);
-    }
-
-    return snapshot;
+    return { settings: snapshot, rejectedKeys };
   });
-  // catch prevents unhandled rejection; writeChain must always resolve
-  writeChain = result.catch(() => {});
+  // catch prevents unhandled rejection; writeChain must always resolve.
+  // On save failure: log, increment failure counter, and surface a dialog after threshold.
+  writeChain = result.catch((err: unknown) => {
+    consecutiveSaveFailures++;
+    log.error("[settings] Failed to save settings:", err);
+    if (consecutiveSaveFailures >= MAX_CONSECUTIVE_SAVE_FAILURES) {
+      try {
+        dialog.showErrorBox(
+          "Settings Cannot Be Saved",
+          "Disk may be full. Changes will be lost on restart.",
+        );
+      } catch (dialogErr) {
+        log.error("[settings] Failed to show error dialog:", dialogErr);
+      }
+    }
+  });
   return result;
 }
+
+// --- before-quit write-chain flush (T19) ---
+// Ensure queued settings writes complete before the app quits — without this,
+// a queued write can be cut mid-flight when the user quits during a debounced save.
+let didFlushWriteChain = false;
+app.on("before-quit", (event) => {
+  if (didFlushWriteChain) return;
+  event.preventDefault();
+  didFlushWriteChain = true;
+  writeChain
+    .catch(() => {
+      /* errors already logged inside updateSettings */
+    })
+    .finally(() => {
+      app.quit();
+    });
+});
 
 

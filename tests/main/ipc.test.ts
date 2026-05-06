@@ -197,8 +197,11 @@ describe("ipc additional coverage", () => {
       registerIpcHandlers(mockWindow);
       const handler = registeredHandlers.get(IPC_CHANNELS.WINDOW_SET_HEIGHT);
       expect(handler).toBeDefined();
+      vi.useFakeTimers();
       handler!(validEvent, 320);
-      expect(mockWindow.setSize).toHaveBeenCalledWith(360, 320, true);
+      vi.runAllTimers();
+      vi.useRealTimers();
+      expect(mockWindow.setSize).toHaveBeenCalledWith(360, 320, false);
     });
 
     it("invalid origin (https://evil.com): does NOT invoke window.setSize", () => {

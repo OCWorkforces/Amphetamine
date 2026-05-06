@@ -282,13 +282,18 @@ describe("tray", () => {
       expect(quitItem.accelerator).toBe(ACCELERATOR_QUIT);
     });
 
-    it("menu is rebuilt when settings change", async () => {
+    it("menu is rebuilt when preventSleep changes", async () => {
       const { setupTray } = await import("../../src/main/tray.js");
       setupTray(createTrayDeps());
 
       const callsBefore = mockBuildFromTemplate.mock.calls.length;
 
-      // Trigger settings change
+      // Settings change without preventSleep change should NOT rebuild
+      settingsChangeCallbacks[0]!();
+      expect(mockBuildFromTemplate.mock.calls.length).toBe(callsBefore);
+
+      // Change preventSleep then trigger callback — menu should rebuild
+      preventSleep = !preventSleep;
       settingsChangeCallbacks[0]!();
 
       expect(mockBuildFromTemplate.mock.calls.length).toBeGreaterThan(callsBefore);

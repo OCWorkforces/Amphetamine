@@ -5,9 +5,9 @@ import type {
   PushChannel,
   SessionStatusResponse,
 } from "../shared/types.js";
-import { DEFAULT_SETTINGS, IPC_CHANNELS } from "../shared/types.js";
+import { asPerf, DEFAULT_SETTINGS, IPC_CHANNELS } from "../shared/types.js";
 
-const perfNow = (): PerfTimestamp => performance.now().AsType<PerfTimestamp>();
+const perfNow = (): PerfTimestamp => asPerf(performance.now());
 import log from "electron-log";
 import { MS_PER_MINUTE } from "./constants.js";
 
@@ -106,7 +106,7 @@ export function startSession(durationMinutes: number | null): SessionState {
 
   // Timed session
   const startedAt = perfNow();
-  const expiresAt = (startedAt + durationMinutes * MS_PER_MINUTE).AsType<PerfTimestamp>();
+  const expiresAt = asPerf(startedAt + durationMinutes * MS_PER_MINUTE);
 
   const expiryTimer = setTimeout(() => {
     try {

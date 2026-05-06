@@ -41,6 +41,7 @@ let prevPreventSleep = false;
 let prevSettings: AppSettings | null = null;
 let shortcutDeps: ShortcutDeps | null = null;
 let unsubscribeSettings: (() => void) | null = null;
+let inSubscriber = false;
 
 function togglePreventSleep(): void {
   updateSettings({ preventSleep: !getSettings().preventSleep }).catch((err) =>
@@ -94,7 +95,24 @@ export async function initCoordinator(): Promise<void> {
 
   // Subscribe to settings changes for automatic system sync
   unsubscribeSettings = onSettingsChanged((settings: AppSettings) => {
+    // Re-entrancy guard: cancelSession()/updateSettings() can synchronously
+    // re-trigger this subscriber. Skip nested invocations.
+    if (inSubscriber) return;
+    inSubscriber = true;
     try {
+      // Skip if nothing actually changed (prevents redundant syncs/broadcasts)
+      if (prevSettings !== null) {
+        const keys = Object.keys(settings) as (keyof AppSettings)[];
+        let changed = false;
+        for (const key of keys) {
+          if (settings[key] !== prevSettings[key]) {
+            changed = true;
+            break;
+          }
+        }
+        if (!changed) return;
+      }
+
       // Reconcile in-memory session state against settings (replaces the side
       // effect formerly hidden inside getStatus()).
       reconcileSessionState();
@@ -105,6 +123,12 @@ export async function initCoordinator(): Promise<void> {
       }
       if (!prevSettings || settings.launchAtLogin !== prevSettings.launchAtLogin) {
         syncAutoLaunch(settings.launchAtLogin);
+      }
+
+      // Re-register shortcut when user changes the keyboard shortcut setting.
+      // registerGlobalShortcut handles unregistering the previous accelerator internally.
+      if (prevSettings && settings.shortcut !== prevSettings.shortcut && shortcutDeps) {
+        registerGlobalShortcut(shortcutDeps);
       }
 
       // Update prevPreventSleep BEFORE cancelSession() to prevent infinite recursion.
@@ -122,6 +146,8 @@ export async function initCoordinator(): Promise<void> {
       broadcastToWindows(IPC_CHANNELS.SETTINGS_CHANGED, settings);
     } catch (err) {
       log.error("[coordinator] Settings subscriber error:", err);
+    } finally {
+      inSubscriber = false;
     }
   });
 

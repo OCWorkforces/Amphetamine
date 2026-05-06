@@ -19,6 +19,17 @@ const mockLogInfo = vi.hoisted(() => vi.fn());
 const mockLogError = vi.hoisted(() => vi.fn());
 const mockLogWarn = vi.hoisted(() => vi.fn());
 const mockShellOpenExternal = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+const mockGetPackageInfo = vi.hoisted(() =>
+  vi.fn().mockReturnValue({
+    name: "amphetamine",
+    productName: "Amphetamine",
+    version: "1.6.2",
+    description: "",
+    repository: "https://github.com/OCWorkforces/Amphetamine",
+    homepage: "https://github.com/OCWorkforces/Amphetamine",
+    author: "OCWorkforces Engineers",
+  }),
+);
 
 vi.mock("electron-updater", () => ({
   autoUpdater: {
@@ -34,6 +45,7 @@ vi.mock("electron-updater", () => ({
 vi.mock("electron", () => ({
   app: {
     isPackaged: true,
+    getAppPath: () => "/path/to/app.asar",
   },
   BrowserWindow: {
     getAllWindows: mockGetAllWindows,
@@ -44,6 +56,10 @@ vi.mock("electron", () => ({
   ipcMain: {
     handle: mockIpcMainHandle,
   },
+}));
+
+vi.mock("../../src/main/utils/packageInfo.js", () => ({
+  getPackageInfo: mockGetPackageInfo,
 }));
 
 vi.mock("electron-log", () => ({
@@ -114,7 +130,6 @@ describe("auto-updater", () => {
       expect(mockOn).toHaveBeenCalledWith("checking-for-update", expect.any(Function));
       expect(mockOn).toHaveBeenCalledWith("update-available", expect.any(Function));
       expect(mockOn).toHaveBeenCalledWith("update-not-available", expect.any(Function));
-      expect(mockOn).toHaveBeenCalledWith("download-progress", expect.any(Function));
       expect(mockOn).toHaveBeenCalledWith("update-downloaded", expect.any(Function));
       expect(mockOn).toHaveBeenCalledWith("error", expect.any(Function));
     });
@@ -171,7 +186,7 @@ describe("auto-updater", () => {
       handler({ version: "2.0.0", releaseDate: "2025-01-01" });
 
       expect(mockShellOpenExternal).toHaveBeenCalledWith(
-        "https://github.com/CCWorkforce/OpenAmphetamine/releases/tag/v2.0.0",
+        "https://github.com/OCWorkforces/Amphetamine/releases/tag/v2.0.0",
       );
     });
 
@@ -202,7 +217,7 @@ describe("auto-updater", () => {
         "auto-updater:status",
         expect.objectContaining({
           status: "error",
-          error: "Network error",
+          category: "network",
         }),
       );
     });
@@ -249,7 +264,7 @@ describe("auto-updater", () => {
 
       // The regex /^\d+\.\d+\.\d+/ matches the leading digits
       expect(mockShellOpenExternal).toHaveBeenCalledWith(
-        "https://github.com/CCWorkforce/OpenAmphetamine/releases/tag/v1.0.0-alpha",
+        "https://github.com/OCWorkforces/Amphetamine/releases/tag/v1.0.0-alpha",
       );
     });
 
@@ -261,7 +276,7 @@ describe("auto-updater", () => {
       handler({ version: "1.0.0+build.123", releaseDate: "2025-01-01" });
 
       expect(mockShellOpenExternal).toHaveBeenCalledWith(
-        "https://github.com/CCWorkforce/OpenAmphetamine/releases/tag/v1.0.0+build.123",
+        "https://github.com/OCWorkforces/Amphetamine/releases/tag/v1.0.0%2Bbuild.123",
       );
     });
 
@@ -273,6 +288,77 @@ describe("auto-updater", () => {
       handler({ version: "latest", releaseDate: "2025-01-01" });
 
       expect(mockShellOpenExternal).not.toHaveBeenCalled();
+    });
+
+    it("rejects unanchored garbage suffix (e.g. 1.2.3.evil)", () => {
+      initAutoUpdater();
+      const call = mockOn.mock.calls.find((call) => call[0] === "update-available");
+      const handler = call![1];
+
+      handler({ version: "1.2.3.evil", releaseDate: "2025-01-01" });
+
+      expect(mockShellOpenExternal).not.toHaveBeenCalled();
+      expect(mockLogWarn).toHaveBeenCalled();
+    });
+
+    it("rejects partial semver (e.g. 1.2)", () => {
+      initAutoUpdater();
+      const call = mockOn.mock.calls.find((call) => call[0] === "update-available");
+      const handler = call![1];
+
+      handler({ version: "1.2", releaseDate: "2025-01-01" });
+
+      expect(mockShellOpenExternal).not.toHaveBeenCalled();
+    });
+
+    it("accepts plain semver 1.2.3", () => {
+      initAutoUpdater();
+      const call = mockOn.mock.calls.find((call) => call[0] === "update-available");
+      const handler = call![1];
+
+      handler({ version: "1.2.3", releaseDate: "2025-01-01" });
+
+      expect(mockShellOpenExternal).toHaveBeenCalledWith(
+        "https://github.com/OCWorkforces/Amphetamine/releases/tag/v1.2.3",
+      );
+    });
+
+    it("accepts pre-release tag 1.2.3-beta.1", () => {
+      initAutoUpdater();
+      const call = mockOn.mock.calls.find((call) => call[0] === "update-available");
+      const handler = call![1];
+
+      handler({ version: "1.2.3-beta.1", releaseDate: "2025-01-01" });
+
+      expect(mockShellOpenExternal).toHaveBeenCalledWith(
+        "https://github.com/OCWorkforces/Amphetamine/releases/tag/v1.2.3-beta.1",
+      );
+    });
+
+    it("URL-encodes the version when constructing the release URL", () => {
+      // Although the regex normally rejects unsafe chars, verify encodeURIComponent is
+      // applied so that valid-but-encodable chars (like '+') are escaped.
+      initAutoUpdater();
+      const call = mockOn.mock.calls.find((call) => call[0] === "update-available");
+      const handler = call![1];
+
+      handler({ version: "1.0.0+build.1", releaseDate: "2025-01-01" });
+
+      expect(mockShellOpenExternal).toHaveBeenCalledWith(
+        "https://github.com/OCWorkforces/Amphetamine/releases/tag/v1.0.0%2Bbuild.1",
+      );
+    });
+
+    it("derives release URL from package.json repository field (no hardcoded org)", () => {
+      initAutoUpdater();
+      const call = mockOn.mock.calls.find((call) => call[0] === "update-available");
+      const handler = call![1];
+
+      handler({ version: "3.0.0", releaseDate: "2025-01-01" });
+
+      const url = mockShellOpenExternal.mock.calls[0]![0] as string;
+      expect(url).toContain("https://github.com/OCWorkforces/Amphetamine/releases/tag/");
+      expect(url).not.toContain("CCWorkforce");
     });
   });
 
@@ -308,25 +394,6 @@ describe("auto-updater", () => {
         expect.objectContaining({
           status: "not-available",
           info: expect.objectContaining({ version: "1.0.0" }),
-        }),
-      );
-    });
-
-    it("broadcasts download-progress with transfer info", () => {
-      const mockWindow = createMockWindow();
-      mockGetAllWindows.mockReturnValue([mockWindow]);
-
-      initAutoUpdater();
-
-      const progressCall = mockOn.mock.calls.find((call) => call[0] === "download-progress");
-      const handler = progressCall![1];
-      handler({ percent: 42.5, transferred: 1000, total: 2352 });
-
-      expect(mockWindow.webContents.send).toHaveBeenCalledWith(
-        "auto-updater:status",
-        expect.objectContaining({
-          status: "downloading",
-          progress: { percent: 42.5, transferred: 1000, total: 2352 },
         }),
       );
     });
@@ -485,7 +552,7 @@ describe("auto-updater", () => {
       const handler = mockIpcMainHandle.mock.calls.find(
         (call) => call[0] === "auto-updater:check",
       )![1];
-      const result = await handler({ senderFrame: { url: "http://localhost:5173/" } });
+      const result = await handler({ senderFrame: { url: "file:///path/to/app.asar/lib/renderer/index.html" } });
 
       expect(result).toEqual({
         version: "2.5.0",
@@ -501,7 +568,7 @@ describe("auto-updater", () => {
       const handler = mockIpcMainHandle.mock.calls.find(
         (call) => call[0] === "auto-updater:check",
       )![1];
-      const result = await handler({ senderFrame: { url: "http://localhost:5173/" } });
+      const result = await handler({ senderFrame: { url: "file:///path/to/app.asar/lib/renderer/index.html" } });
 
       expect(result).toBeNull();
     });
@@ -514,7 +581,7 @@ describe("auto-updater", () => {
       const handler = mockIpcMainHandle.mock.calls.find(
         (call) => call[0] === "auto-updater:check",
       )![1];
-      const result = await handler({ senderFrame: { url: "http://localhost:5173/" } });
+      const result = await handler({ senderFrame: { url: "file:///path/to/app.asar/lib/renderer/index.html" } });
 
       expect(result).toBeNull();
       expect(mockLogWarn).toHaveBeenCalled();
@@ -532,7 +599,7 @@ describe("auto-updater", () => {
 
       expect(mockShellOpenExternal).toHaveBeenCalledTimes(1);
       expect(mockShellOpenExternal).toHaveBeenCalledWith(
-        "https://github.com/CCWorkforce/OpenAmphetamine/releases/tag/v2.0.0",
+        "https://github.com/OCWorkforces/Amphetamine/releases/tag/v2.0.0",
       );
     });
 

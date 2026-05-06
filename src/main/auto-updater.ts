@@ -1,4 +1,4 @@
-import { autoUpdater, type UpdateInfo, type ProgressInfo } from "electron-updater";
+import { autoUpdater, type UpdateInfo } from "electron-updater";
 import { app, shell } from "electron";
 import log from "electron-log";
 import {
@@ -12,7 +12,8 @@ import {
   PERIODIC_UPDATE_CHECK_INTERVAL_MS,
   MAX_UPDATE_CHECK_INTERVAL_MS,
 } from "./constants.js";
-import { typedHandle, validateSender } from "./ipc.js";
+import { typedHandle, validateSender } from "./ipc-utils.js";
+import { getPackageInfo } from "./utils/packageInfo.js";
 
 let checkIntervalId: ReturnType<typeof setInterval> | null = null;
 
@@ -21,6 +22,36 @@ let broadcastFn: (<K extends PushChannel>(channel: K, data: IpcResponse<K>) => v
 let lastNotifiedVersion: string | null = null;
 
 let consecutiveFailures = 0;
+
+let cachedReleaseUrlBase: string | null = null;
+
+/**
+ * Lazily compute the GitHub release URL base from package.json's `repository` field.
+ * Cached after first successful read. Returns `null` if the repository URL is missing
+ * or malformed (caller should skip opening the URL in that case).
+ * Must be called after `app.isReady()` (depends on `app.getAppPath()`).
+ */
+function getReleaseUrlBase(): string | null {
+  if (cachedReleaseUrlBase !== null) {
+    return cachedReleaseUrlBase;
+  }
+  try {
+    const pkg = getPackageInfo();
+    const repoUrlStr = pkg.repository;
+    // Validate it's an https github URL before trusting it
+    const parsed = new URL(repoUrlStr);
+    if (parsed.protocol !== "https:" || parsed.hostname !== "github.com") {
+      log.warn("[auto-updater] package.json repository is not an https github.com URL:", repoUrlStr);
+      return null;
+    }
+    const normalized = repoUrlStr.replace(/\.git$/, "").replace(/\/$/, "");
+    cachedReleaseUrlBase = `${normalized}/releases/tag/v`;
+    return cachedReleaseUrlBase;
+  } catch (err) {
+    log.warn("[auto-updater] Failed to derive release URL from package.json:", err);
+    return null;
+  }
+}
 
 /** Inject broadcast function (called from coordinator) */
 export function setBroadcastFn(
@@ -49,13 +80,17 @@ function onUpdateAvailable(info: UpdateInfo): void {
     status: "available",
     info: meta,
   });
-  // Validate version is a semver-like string before constructing URL
-  if (/^\d+\.\d+\.\d+/.test(info.version)) {
+  // Validate version is a strict semver (anchored end) before constructing URL.
+  // Accepts: 1.2.3, 1.2.3-beta.1, 1.2.3-rc.0+build.5
+  if (/^\d+\.\d+\.\d+(-[\w.-]+)?(\+[\w.-]+)?$/.test(info.version)) {
     if (info.version !== lastNotifiedVersion) {
-      lastNotifiedVersion = info.version;
-      void shell.openExternal(
-        `https://github.com/CCWorkforce/OpenAmphetamine/releases/tag/v${info.version}`,
-      );
+      const base = getReleaseUrlBase();
+      if (base === null) {
+        log.warn("[auto-updater] Skipping release URL \u2014 no derivable repository URL");
+      } else {
+        lastNotifiedVersion = info.version;
+        void shell.openExternal(base + encodeURIComponent(info.version));
+      }
     }
   } else {
     log.warn("[auto-updater] Skipping release URL \u2014 invalid version format:", info.version);
@@ -74,19 +109,6 @@ function onUpdateNotAvailable(info: UpdateInfo): void {
   });
 }
 
-/** Handle "download-progress" event */
-function onDownloadProgress(progress: ProgressInfo): void {
-  log.info("[auto-updater] Download progress:", Math.round(progress.percent), "%");
-  broadcastFn?.(IPC_CHANNELS.AUTO_UPDATER_STATUS, {
-    status: "downloading",
-    progress: {
-      percent: progress.percent,
-      transferred: progress.transferred,
-      total: progress.total,
-    },
-  });
-}
-
 /** Handle "update-downloaded" event */
 function onUpdateDownloaded(info: UpdateInfo): void {
   log.info("[auto-updater] Update downloaded:", info.version);
@@ -97,6 +119,40 @@ function onUpdateDownloaded(info: UpdateInfo): void {
   });
 }
 
+/**
+  * Sanitize an auto-updater error into a fixed category to avoid leaking
+  * filesystem paths, proxy URLs, or tokens into the renderer/UI. The raw
+  * `err.message` is still logged via electron-log for diagnostics.
+  */
+export function categorizeUpdaterError(err: Error): "network" | "signature" | "io" | "unknown" {
+  const haystack = `${err.name} ${err.message}`.toLowerCase();
+  if (
+    haystack.includes("enotfound") ||
+    haystack.includes("econnrefused") ||
+    haystack.includes("etimedout") ||
+    haystack.includes("net")
+  ) {
+    return "network";
+  }
+  if (
+    haystack.includes("signature") ||
+    haystack.includes("certificate") ||
+    haystack.includes("code-signing")
+  ) {
+    return "signature";
+  }
+  if (
+    haystack.includes("eacces") ||
+    haystack.includes("enospc") ||
+    haystack.includes("eio") ||
+    haystack.includes("write") ||
+    haystack.includes("read")
+  ) {
+    return "io";
+  }
+  return "unknown";
+}
+
 /** Handle "error" event */
 function onError(err: Error): void {
   log.error("[auto-updater] Error:", err.message);
@@ -104,7 +160,7 @@ function onError(err: Error): void {
   rescheduleCheckLoop();
   broadcastFn?.(IPC_CHANNELS.AUTO_UPDATER_STATUS, {
     status: "error",
-    error: err.message,
+    category: categorizeUpdaterError(err),
   });
 }
 
@@ -113,7 +169,6 @@ function registerUpdateEventHandlers(): void {
   autoUpdater.on("checking-for-update", onCheckingForUpdate);
   autoUpdater.on("update-available", onUpdateAvailable);
   autoUpdater.on("update-not-available", onUpdateNotAvailable);
-  autoUpdater.on("download-progress", onDownloadProgress);
   autoUpdater.on("update-downloaded", onUpdateDownloaded);
   autoUpdater.on("error", onError);
 }

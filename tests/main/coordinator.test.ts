@@ -90,6 +90,8 @@ describe("coordinator", () => {
     launchAtLogin: false,
     preventSleep: false,
     sessionDuration: null as number | null,
+    batteryThreshold: 0,
+    shortcut: "",
   };
 
   beforeEach(async () => {
@@ -208,6 +210,72 @@ describe("coordinator", () => {
     it("logs initialization", async () => { await initCoordinator();
     
     expect(mockLogInfo).toHaveBeenCalledWith("[coordinator] Initialized"); });
+  });
+
+  describe("re-entrancy guard + shallow-diff + shortcut re-register", () => {
+    it("prevents nested re-invocation when subscriber re-triggers itself", async () => {
+      mockGetSettings.mockReturnValue({ ...defaultSettings, preventSleep: true });
+      await initCoordinator();
+
+      mockSyncPreventSleep.mockClear();
+      mockCancelSession.mockClear();
+
+      let nested = false;
+      mockCancelSession.mockImplementation(() => {
+        if (!nested) {
+          nested = true;
+          settingsCallback({ ...defaultSettings, preventSleep: false });
+        }
+      });
+
+      settingsCallback({ ...defaultSettings, preventSleep: false });
+
+      expect(mockCancelSession).toHaveBeenCalledTimes(1);
+      expect(mockSyncPreventSleep).toHaveBeenCalledTimes(1);
+    });
+
+    it("skips sync + broadcast when settings are identical (shallow-equal)", async () => {
+      const mockSend = vi.fn();
+      mockGetAllWindows.mockReturnValue([{ isDestroyed: () => false, webContents: { send: mockSend } }]);
+      await initCoordinator();
+
+      mockSyncAutoLaunch.mockClear();
+      mockSyncPreventSleep.mockClear();
+      mockSend.mockClear();
+
+      settingsCallback({ ...defaultSettings });
+
+      expect(mockSyncAutoLaunch).not.toHaveBeenCalled();
+      expect(mockSyncPreventSleep).not.toHaveBeenCalled();
+      expect(mockSend).not.toHaveBeenCalled();
+    });
+
+    it("re-registers shortcut when shortcut setting changes", async () => {
+      await initCoordinator();
+      expect(mockRegisterGlobalShortcut).toHaveBeenCalledTimes(1);
+
+      settingsCallback({ ...defaultSettings, shortcut: "Cmd+Shift+B" });
+
+      expect(mockRegisterGlobalShortcut).toHaveBeenCalledTimes(2);
+    });
+
+    it("does not re-register shortcut when shortcut is unchanged", async () => {
+      await initCoordinator();
+      expect(mockRegisterGlobalShortcut).toHaveBeenCalledTimes(1);
+
+      settingsCallback({ ...defaultSettings, preventSleep: true });
+
+      expect(mockRegisterGlobalShortcut).toHaveBeenCalledTimes(1);
+    });
+
+    it("still processes genuine changes (syncPreventSleep called)", async () => {
+      await initCoordinator();
+      mockSyncPreventSleep.mockClear();
+
+      settingsCallback({ ...defaultSettings, preventSleep: true });
+
+      expect(mockSyncPreventSleep).toHaveBeenCalledWith(true);
+    });
   });
 
   describe("cleanupCoordinator", () => {
