@@ -16,6 +16,7 @@ tests/
 │   ├── battery-monitor.test.ts  # Battery parsing, auto-stop, pmset
 │   ├── auto-launch.test.ts      # macOS login item management
 │   ├── shortcut.test.ts         # Global shortcut registration + toggle
+│   ├── global-shortcut.test.ts   # Global shortcut security (forbidden combos, state guards, lifecycle)
 │   ├── settings.test.ts         # File I/O, async persistence, defaults, cache
 │   ├── settings.predicates.test.ts # isBoolean/isPositiveNumber/isClamped0to100/isNonEmptyString predicate unit tests
 │   ├── session-timer.test.ts    # Session start/cancel/expiry/broadcast
