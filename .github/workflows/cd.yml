@@ -60,7 +60,18 @@ jobs:
           name: dist-mac-x64
           path: artifacts/x64
 
+      - name: Verify release artifacts
+        run: |
+          DMG_COUNT=$(find artifacts -name '*.dmg' 2>/dev/null | wc -l)
+          ZIP_COUNT=$(find artifacts -name '*.zip' 2>/dev/null | wc -l)
+          echo "Found ${DMG_COUNT} DMG(s), ${ZIP_COUNT} ZIP(s)"
+          if [ "$DMG_COUNT" -eq 0 ] && [ "$ZIP_COUNT" -eq 0 ]; then
+            echo 'ERROR: No DMG or ZIP artifacts found to release'
+            exit 1
+          fi
+
       - uses: softprops/action-gh-release@153bb8e04406b158c6c84fc1615b65b24149a1fe # v2.6.1
+
         with:
           tag_name: v${{ steps.version.outputs.version }}
           files: |

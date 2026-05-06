@@ -71,6 +71,10 @@ jobs:
         env:
           ELECTRON_CACHE: ${{ runner.temp }}/.cache/electron
       - run: bun run build
+      - name: Verify build artifacts
+        run: |
+          test -f lib/main/index.cjs || { echo 'ERROR: lib/main/index.cjs missing'; exit 1; }
+          test -f lib/preload/index.cjs || { echo 'ERROR: lib/preload/index.cjs missing'; exit 1; }
       - run: bunx electron-builder --mac --${{ matrix.arch }}
         env:
           ELECTRON_CACHE: ${{ runner.temp }}/.cache/electron
