@@ -8,6 +8,7 @@ import { registerIpcHandlers } from "./ipc.js";
 import { getPackageInfo } from "./utils/packageInfo.js";
 import { initCoordinator, cleanupCoordinator, getTrayDeps } from "./coordinator.js";
 import { unregisterGlobalShortcut } from "./global-shortcut.js";
+import { stopPreventingSleep } from "./sleep-prevention.js";
 import { closeSettingsWindow } from "./settings-window.js";
 import { initAutoUpdater, stopAutoUpdater } from "./auto-updater.js";
 import { broadcastToWindows } from "./utils/broadcast.js";
@@ -26,7 +27,11 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 process.on("uncaughtException", (error: Error) => {
   log.error("[main] Uncaught exception:", error);
   if (!isDev) {
-    dialog.showErrorBox("Unexpected Error", error.message || "An unexpected error occurred.");
+    dialog.showErrorBox(
+      "Unexpected Error",
+      "An unexpected error occurred. Please restart the app.",
+    );
+    stopPreventingSleep();
     app.exit(1);
   }
 });
@@ -108,7 +113,14 @@ function createWindow(): BrowserWindow {
   });
   return win;
 }
+app.on("second-instance", () => {
+  mainWindow?.show();
+});
 void app.whenReady().then(async () => {
+  if (!app.requestSingleInstanceLock()) {
+    app.quit();
+    return;
+  }
   // Register as accessory app — no Dock icon, no menu bar
   app.setActivationPolicy("accessory");
   mainWindow = createWindow();

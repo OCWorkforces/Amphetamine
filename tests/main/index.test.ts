@@ -19,6 +19,7 @@ const mockGetVersion = vi.hoisted(() => vi.fn().mockReturnValue("1.0.0"));
 const mockGetAppPath = vi.hoisted(() => vi.fn().mockReturnValue("/mock/app/path"));
 const mockWhenReady = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 const mockExit = vi.hoisted(() => vi.fn());
+const mockRequestSingleInstanceLock = vi.hoisted(() => vi.fn().mockReturnValue(true));
 const mockOn = vi.hoisted(() => vi.fn());
 const mockProcessOn = vi.hoisted(() => vi.fn());
 
@@ -37,6 +38,7 @@ vi.mock("electron", async (importOriginal) => {
       getAppPath: mockGetAppPath,
       setActivationPolicy: mockSetActivationPolicy,
       exit: mockExit,
+      requestSingleInstanceLock: mockRequestSingleInstanceLock,
     },
     BrowserWindow: vi.fn().mockImplementation(function (this: Record<string, unknown>) {
       this.loadURL = vi.fn();

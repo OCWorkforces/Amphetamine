@@ -17,8 +17,10 @@ vi.mock("electron", () => ({
       // Delegate to the mock which stores the callback
       return mockRegister(...args);
     },
+    unregister: vi.fn(),
     unregisterAll: mockUnregisterAll,
   },
+  BrowserWindow: { getAllWindows: () => [] },
 }));
 
 vi.mock("electron-log", () => ({
