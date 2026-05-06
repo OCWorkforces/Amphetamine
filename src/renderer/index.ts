@@ -1,6 +1,6 @@
 import "./styles/main.css";
 import type { AppSettings, PerfTimestamp, SessionStatusResponse } from "../shared/types.js";
-import { DEFAULT_SETTINGS } from "../shared/types.js";
+import { asPerf, DEFAULT_SETTINGS } from "../shared/types.js";
 import { STATUS_PREVENTING_SLEEP, STATUS_SLEEP_PREVENTION_OFF } from "./constants.js";
 
 type SessionStatus = SessionStatusResponse | null;
@@ -27,7 +27,7 @@ const BOLT_ICON_SVG = `<svg class="app-title-icon" aria-hidden="true" width="12"
 // Cached DOM element references (populated after render)
 let statusDotEl: HTMLElement | null = null;
 let statusTextEl: HTMLElement | null = null;
-let timerTextEl: HTMLElement | null = null;
+let timerValueEl: HTMLElement | null = null;
 let statusErrorEl: HTMLElement | null = null;
 let rafId: number | null = null;
 
@@ -43,7 +43,7 @@ function getApp(): HTMLElement | null {
 function updateSessionAnchors(status: SessionStatus): void {
   if (status?.isRunning && status.expiresAt !== null && status.remainingSeconds !== null) {
     const remainingMs = status.remainingSeconds * 1000;
-    sessionExpiresAtPerf = (performance.now() + remainingMs).AsType<PerfTimestamp>();
+    sessionExpiresAtPerf = asPerf(performance.now() + remainingMs);
   } else {
     sessionExpiresAtPerf = null;
   }
@@ -56,13 +56,13 @@ function computeRemainingSeconds(expiresAtPerf: PerfTimestamp | null): number | 
   return Math.floor(remainingMs / 1000);
 }
 
-function formatTimerLabel(): string {
+function formatTimerValue(): string {
   if (!settings.preventSleep) {
-    return `${TIMER_ICON_SVG} Indefinitely`;
+    return " Indefinitely";
   }
 
   if (!sessionStatus?.isRunning || sessionStatus.durationMinutes === null) {
-    return `${TIMER_ICON_SVG} Indefinitely`;
+    return " Indefinitely";
   }
 
   // Prefer locally-computed value (no IPC, no 1s-push dependency).
@@ -74,11 +74,11 @@ function formatTimerLabel(): string {
   const minutes = Math.ceil((totalSeconds % 3600) / 60);
 
   if (hours >= 1) {
-    return `${TIMER_ICON_SVG} ${hours}h ${minutes}m remaining`;
+    return ` ${hours}h ${minutes}m remaining`;
   }
 
   const minuteValue = Math.max(0, Math.ceil(totalSeconds / 60));
-  return `${TIMER_ICON_SVG} ${minuteValue}m remaining`;
+  return ` ${minuteValue}m remaining`;
 }
 
 function startCountdownTicker(): void {
@@ -118,8 +118,8 @@ function updateStatusUI(): void {
         ? STATUS_PREVENTING_SLEEP
         : STATUS_SLEEP_PREVENTION_OFF;
     }
-    if (timerTextEl) {
-      timerTextEl.innerHTML = formatTimerLabel();
+    if (timerValueEl) {
+      timerValueEl.textContent = formatTimerValue();
     }
     if (statusErrorEl) {
       statusErrorEl.textContent = statusError ?? "";
@@ -206,7 +206,7 @@ function render(version: string): void {
 
       <p id="status-error" class="status-error${statusError !== null ? " visible" : ""}">${statusError ?? ""}</p>
 
-      <p id="timer-text" class="popover-timer">${formatTimerLabel()}</p>
+      <p id="timer-text" class="popover-timer"><span class="timer-icon">${TIMER_ICON_SVG}</span><span class="timer-value">${formatTimerValue()}</span></p>
 
       <div class="popover-divider" role="presentation"></div>
 
@@ -223,7 +223,7 @@ function render(version: string): void {
     // Cache DOM element references for updateStatusUI
     statusDotEl = app.querySelector("#status-dot");
     statusTextEl = app.querySelector("#status-text");
-    timerTextEl = app.querySelector("#timer-text");
+    timerValueEl = app.querySelector(".timer-value");
     statusErrorEl = app.querySelector("#status-error");
     resizeToContent();
 
@@ -239,6 +239,7 @@ function handlePopoverHide(): void {
 
   isPopoverVisible = false;
   app.classList.remove("visible");
+  stopCountdownTicker();
 }
 
 function handleVisibilityChange(): void {
@@ -250,6 +251,7 @@ function handleVisibilityChange(): void {
     app.classList.add("visible");
     // Resume countdown ticker when popover becomes visible and session is active
     if (sessionExpiresAtPerf !== null) {
+      updateStatusUI();
       startCountdownTicker();
     }
     return;
@@ -302,7 +304,7 @@ function attachWindowEvents(): void {
     stopCountdownTicker();
     statusDotEl = null;
     statusTextEl = null;
-    timerTextEl = null;
+    timerValueEl = null;
     statusErrorEl = null;
     unsubscribeSessionStatus?.();
     unsubscribeSessionStatus = null;
@@ -341,7 +343,7 @@ async function init(): Promise<void> {
       // Cache DOM element references for updateStatusUI
       statusDotEl = app.querySelector("#status-dot");
       statusTextEl = app.querySelector("#status-text");
-      timerTextEl = app.querySelector("#timer-text");
+      timerValueEl = app.querySelector(".timer-value");
       statusErrorEl = app.querySelector("#status-error");
 
       isPopoverVisible = true;

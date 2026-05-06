@@ -4,27 +4,19 @@
  * Prevents accidental mixing with `Date.now()` wall-clock milliseconds. The brand
  * is compile-time only — at runtime, a `PerfTimestamp` is just a `number` (so it
  * survives JSON serialization across IPC unchanged; the brand must be re-attached
- * via `.AsType<PerfTimestamp>()` at the receiving boundary).
+ * via `asPerf(n)` at the receiving boundary).
  */
 export type PerfTimestamp = number & { readonly __brand: unique symbol };
 
 /**
- * Type-safe branded casting extension on `Number`.
+ * Type-safe branded cast helper for `PerfTimestamp`.
  *
- * Constrains `T` to extend `number` — only allows casting to branded numeric
- * types (contrasted with raw `as` which can cast anything). No-op at runtime.
+ * No-op at runtime; preferable to raw `as PerfTimestamp` because it constrains
+ * the input to `number`. Avoids mutating `Number.prototype` (SES-incompatible).
  *
- * @example `(performance.now() + remainingMs).AsType<PerfTimestamp>()`
+ * @example asPerf(performance.now() + remainingMs)
  */
-declare global {
-  interface Number {
-    AsType<T extends number>(): T;
-  }
-}
-
-Number.prototype.AsType = function <T extends number>(this: number): T {
-  return this as unknown as T;
-};
+export const asPerf = (n: number): PerfTimestamp => n as PerfTimestamp;
 
 /** IPC channel names — single source of truth */
 export const IPC_CHANNELS = {
@@ -42,6 +34,7 @@ export const IPC_CHANNELS = {
   APP_QUIT: "app:quit",
   AUTO_UPDATER_CHECK: "auto-updater:check",
   AUTO_UPDATER_STATUS: "auto-updater:status",
+  SHORTCUT_REGISTRATION_FAILED: "shortcut:registration-failed",
 } as const;
 
 /**
@@ -92,7 +85,7 @@ export type SessionStartResponse =
     }
   | {
       ok: false;
-      reason: "invalid-duration" | "rejected";
+      reason: "invalid-duration" | "rejected" | "Duration cannot exceed 24 hours";
     };
 
 /**
@@ -116,7 +109,7 @@ export type AutoUpdaterStatus =
   | { status: "not-available"; info: UpdateMeta }
   | { status: "downloaded"; info: UpdateMeta }
   | { status: "downloading"; progress: { percent: number; transferred: number; total: number } }
-  | { status: "check-error" | "download-error" | "error"; error: string };
+  | { status: "check-error" | "download-error" | "error"; category: "network" | "signature" | "io" | "unknown" };
 
 /** IPC Request/Response type map for type-safe IPC */
 export type IpcChannelMap = {
@@ -134,7 +127,7 @@ export type IpcChannelMap = {
   };
   [IPC_CHANNELS.SETTINGS_SET]: {
     request: Partial<AppSettings>;
-    response: AppSettings;
+    response: { settings: AppSettings; rejectedKeys: string[] };
   };
   [IPC_CHANNELS.SESSION_START]: {
     request: { durationMinutes: number | null };
@@ -176,6 +169,10 @@ export type IpcChannelMap = {
     request: undefined;
     response: AutoUpdaterStatus;
   };
+  [IPC_CHANNELS.SHORTCUT_REGISTRATION_FAILED]: {
+    request: undefined;
+    response: { accelerator: string };
+  };
 };
 
 /** Type utilities for type-safe IPC */
@@ -189,6 +186,7 @@ export const PUSH_CHANNELS = [
   IPC_CHANNELS.SESSION_STATUS_UPDATE,
   IPC_CHANNELS.AUTO_UPDATER_STATUS,
   IPC_CHANNELS.WINDOW_HIDE,
+  IPC_CHANNELS.SHORTCUT_REGISTRATION_FAILED,
 ] as const;
 
 export type PushChannel = (typeof PUSH_CHANNELS)[number];

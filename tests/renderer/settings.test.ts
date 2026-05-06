@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { AppSettings, PerfTimestamp, SessionStatusResponse } from "../../src/shared/types.js";
-import { DEFAULT_SETTINGS } from "../../src/shared/types.js";
+import { asPerf, DEFAULT_SETTINGS } from "../../src/shared/types.js";
 import { SAVED_INDICATOR } from "../../src/renderer/settings/constants.js";
 
 const mockApi = {
@@ -128,8 +128,8 @@ describe("renderer settings", () => {
       });
       mockApi.session.getStatus.mockResolvedValue({
         isRunning: true,
-        startedAt: (Date.now()).AsType<PerfTimestamp>(),
-        expiresAt: (Date.now() + 60 * 60 * 1000).AsType<PerfTimestamp>(),
+        startedAt: asPerf(Date.now()),
+        expiresAt: asPerf(Date.now() + 60 * 60 * 1000),
         remainingSeconds: 3600,
         durationMinutes: 60,
       });
@@ -380,8 +380,8 @@ describe("renderer settings", () => {
     it("preserves running session duration when settings push arrives", async () => {
       mockApi.session.getStatus.mockResolvedValue({
         isRunning: true,
-        startedAt: (Date.now()).AsType<PerfTimestamp>(),
-        expiresAt: (Date.now() + 60 * 60 * 1000).AsType<PerfTimestamp>(),
+        startedAt: asPerf(Date.now()),
+        expiresAt: asPerf(Date.now() + 60 * 60 * 1000),
         remainingSeconds: 3600,
         durationMinutes: 60,
       });
@@ -447,8 +447,8 @@ describe("renderer settings", () => {
     it("sets sessionDuration from running session status", async () => {
       mockApi.session.getStatus.mockResolvedValue({
         isRunning: true,
-        startedAt: (Date.now()).AsType<PerfTimestamp>(),
-        expiresAt: (Date.now() + 60 * 60 * 1000).AsType<PerfTimestamp>(),
+        startedAt: asPerf(Date.now()),
+        expiresAt: asPerf(Date.now() + 60 * 60 * 1000),
         remainingSeconds: 3600,
         durationMinutes: 60,
       });
@@ -517,8 +517,8 @@ describe("renderer settings", () => {
       mockApi.settings.get.mockRejectedValue(new Error("IPC timeout"));
       mockApi.session.getStatus.mockResolvedValue({
         isRunning: true,
-        startedAt: (Date.now()).AsType<PerfTimestamp>(),
-        expiresAt: (Date.now() + 30 * 60 * 1000).AsType<PerfTimestamp>(),
+        startedAt: asPerf(Date.now()),
+        expiresAt: asPerf(Date.now() + 30 * 60 * 1000),
         remainingSeconds: 1800,
         durationMinutes: 30,
       });

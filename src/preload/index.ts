@@ -96,6 +96,21 @@ const api = {
     };
   },
 
+  onShortcutRegistrationFailed: (
+    callback: (_data: IpcResponse<typeof IPC_CHANNELS.SHORTCUT_REGISTRATION_FAILED>) => void,
+  ): (() => void) => {
+    const listener = (
+      _event: IpcRendererEvent,
+      data: IpcResponse<typeof IPC_CHANNELS.SHORTCUT_REGISTRATION_FAILED>,
+    ) => {
+      callback(data);
+    };
+    ipcRenderer.on(IPC_CHANNELS.SHORTCUT_REGISTRATION_FAILED, listener);
+    return () => {
+      ipcRenderer.removeListener(IPC_CHANNELS.SHORTCUT_REGISTRATION_FAILED, listener);
+    };
+  },
+
   autoUpdater: {
     checkForUpdates: (): Promise<IpcResponse<typeof IPC_CHANNELS.AUTO_UPDATER_CHECK>> =>
       invoke(IPC_CHANNELS.AUTO_UPDATER_CHECK),
@@ -147,7 +162,8 @@ type WiredChannels =
   | typeof IPC_CHANNELS.SESSION_STATUS
   | typeof IPC_CHANNELS.SESSION_STATUS_UPDATE
   | typeof IPC_CHANNELS.AUTO_UPDATER_CHECK
-  | typeof IPC_CHANNELS.AUTO_UPDATER_STATUS;
+  | typeof IPC_CHANNELS.AUTO_UPDATER_STATUS
+  | typeof IPC_CHANNELS.SHORTCUT_REGISTRATION_FAILED;
 
 type _UnwiredChannels = Exclude<IpcChannel, WiredChannels>;
 type _ExhaustivenessCheck = [_UnwiredChannels] extends [never]
