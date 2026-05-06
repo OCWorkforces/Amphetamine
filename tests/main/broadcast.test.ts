@@ -80,7 +80,7 @@ describe("broadcastToWindows", () => {
       { isDestroyed: () => true, webContents: { send: mockSend } },
     ]);
 
-    broadcastToWindows(IPC_CHANNELS.AUTO_UPDATER_STATUS, { status: "error", error: "fail" });
+    broadcastToWindows(IPC_CHANNELS.AUTO_UPDATER_STATUS, { status: "error", category: "network" });
 
     expect(mockSend).not.toHaveBeenCalled();
   });

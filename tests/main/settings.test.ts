@@ -2,9 +2,33 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { existsSync, readFileSync, mkdirSync, rmSync } from "fs";
 import { join } from "path";
 
+const fsMockState = vi.hoisted(() => ({
+  failWriteFile: false,
+  writeFileError: new Error("ENOSPC: no space left on device"),
+}));
+
+import type * as SettingsModule from "../../src/main/settings.js";
+import type * as FsPromises from "node:fs/promises";
+vi.mock("node:fs/promises", async () => {
+  const actual = await vi.importActual<typeof FsPromises>("node:fs/promises");
+  return {
+    ...actual,
+    writeFile: vi.fn(async (...args: Parameters<typeof actual.writeFile>) => {
+      if (fsMockState.failWriteFile) {
+        throw fsMockState.writeFileError;
+      }
+      return actual.writeFile(...args);
+    }),
+  };
+});
 vi.mock("electron", () => ({
   app: {
     getPath: vi.fn().mockReturnValue("/tmp/amphetamine-settings-test"),
+    on: vi.fn(),
+    quit: vi.fn(),
+  },
+  dialog: {
+    showErrorBox: vi.fn(),
   },
 }));
 
@@ -17,11 +41,14 @@ vi.mock("electron-log", () => ({
 
 const MOCK_USER_DATA_PATH = "/tmp/amphetamine-settings-test";
 
+import { dialog } from "electron";
+import log from "electron-log";
 import {
   initSettings,
   saveSettings,
   getSettings,
   updateSettings,
+  onSettingsChanged,
 } from "../../src/main/settings.js";
 import { DEFAULT_SETTINGS } from "../../src/shared/types.js";
 
@@ -108,6 +135,30 @@ describe("settings", () => {
       expect(saved.launchAtLogin).toBe(true);
       expect(saved.preventSleep).toBe(true);
     });
+    it("writes settings file with mode 0o600 (owner-only) and chmods after rename", async () => {
+      const fsPromises = await import("node:fs/promises");
+      const writeFileMock = fsPromises.writeFile as unknown as ReturnType<typeof vi.fn>;
+      writeFileMock.mockClear();
+
+      await saveSettings({ ...DEFAULT_SETTINGS, launchAtLogin: true });
+
+      // writeFile should have been called with mode 0o600 in the options object.
+      const calledWithMode = writeFileMock.mock.calls.some((call) => {
+        const opts = call[2] as unknown;
+        return (
+          typeof opts === "object" &&
+          opts !== null &&
+          (opts as { mode?: number }).mode === 0o600
+        );
+      });
+      expect(calledWithMode).toBe(true);
+
+      // Final on-disk file should have 0o600 permission bits.
+      const fs = await import("node:fs");
+      const stat = fs.statSync(settingsPath);
+      // mode & 0o777 should be exactly 0o600 (owner rw, no group/other).
+      expect(stat.mode & 0o777).toBe(0o600);
+    });
   });
 
   describe("getSettings", () => {
@@ -126,7 +177,8 @@ describe("settings", () => {
 
       const result = await updateSettings({ launchAtLogin: true });
 
-      expect(result.launchAtLogin).toBe(true);
+      expect(result.settings.launchAtLogin).toBe(true);
+      expect(result.rejectedKeys).toEqual([]);
 
       const raw = readFileSync(settingsPath, "utf-8");
       const saved = JSON.parse(raw);
@@ -141,7 +193,7 @@ describe("settings", () => {
 
       const result = await updateSettings({ launchAtLogin: true });
 
-      expect(Object.keys(result).sort()).toEqual(
+      expect(Object.keys(result.settings).sort()).toEqual(
         ["launchAtLogin", "preventSleep", "sessionDuration", "batteryThreshold", "shortcut"].sort(),
       );
     });
@@ -151,14 +203,14 @@ describe("settings", () => {
 
       const result = await updateSettings({ launchAtLogin: true });
 
-      expect(result.launchAtLogin).toBe(true);
+      expect(result.settings.launchAtLogin).toBe(true);
 
       const raw = readFileSync(settingsPath, "utf-8");
       const saved = JSON.parse(raw);
       expect(saved.launchAtLogin).toBe(true);
 
       const result2 = await updateSettings({ launchAtLogin: false });
-      expect(result2.launchAtLogin).toBe(false);
+      expect(result2.settings.launchAtLogin).toBe(false);
     });
 
     it("defaults launchAtLogin to false when not in file", async () => {
@@ -179,8 +231,9 @@ describe("settings", () => {
 
       const result = await updateSettings({ sessionDuration: Number.NaN });
 
-      expect(result.sessionDuration).toBe(before);
-      expect(result.sessionDuration).toBe(60);
+      expect(result.settings.sessionDuration).toBe(before);
+      expect(result.settings.sessionDuration).toBe(60);
+      expect(result.rejectedKeys).toContain("sessionDuration");
     });
 
     it("rejects Infinity sessionDuration (no change)", async () => {
@@ -189,11 +242,11 @@ describe("settings", () => {
 
       const result = await updateSettings({ sessionDuration: Number.POSITIVE_INFINITY });
 
-      expect(result.sessionDuration).toBe(before);
-      expect(result.sessionDuration).toBe(60);
+      expect(result.settings.sessionDuration).toBe(before);
+      expect(result.settings.sessionDuration).toBe(60);
 
       const result2 = await updateSettings({ sessionDuration: Number.NEGATIVE_INFINITY });
-      expect(result2.sessionDuration).toBe(60);
+      expect(result2.settings.sessionDuration).toBe(60);
     });
   });
 
@@ -208,7 +261,7 @@ describe("settings", () => {
       const results = await Promise.all([p1, p2, p3]);
 
       // Final result observed by caller and cache must reflect the last update
-      expect(results[2].sessionDuration).toBe(90);
+      expect(results[2].settings.sessionDuration).toBe(90);
       expect(getSettings().sessionDuration).toBe(90);
     });
   });
@@ -226,8 +279,95 @@ describe("settings", () => {
       // Same value as cache — dedup must skip the disk write
       const result = await updateSettings({ launchAtLogin: true });
 
-      expect(result.launchAtLogin).toBe(true);
+      expect(result.settings.launchAtLogin).toBe(true);
       expect(existsSync(settingsPath)).toBe(false);
+    });
+  });
+
+  describe("save failure handling", () => {
+    let _settings: typeof SettingsModule;
+
+    beforeEach(async () => {
+      vi.resetModules();
+      fsMockState.failWriteFile = false;
+      _settings = await import("../../src/main/settings.js");
+      await _settings.initSettings();
+      vi.mocked(dialog.showErrorBox).mockClear();
+      vi.mocked(log.error).mockClear();
+    });
+
+    afterEach(() => {
+      fsMockState.failWriteFile = false;
+    });
+
+    it("throws and leaves settingsCache unchanged when writeFile rejects", async () => {
+      await _settings.updateSettings({ launchAtLogin: false, sessionDuration: 60 });
+      const before = _settings.getSettings();
+
+      fsMockState.failWriteFile = true;
+
+      await expect(_settings.updateSettings({ launchAtLogin: true })).rejects.toThrow(/ENOSPC/);
+
+      const after = _settings.getSettings();
+      expect(after).toEqual(before);
+      expect(after.launchAtLogin).toBe(false);
+    });
+
+    it("does not emit change event on save failure", async () => {
+      await _settings.updateSettings({ launchAtLogin: false });
+      fsMockState.failWriteFile = true;
+
+      const listener = vi.fn();
+      const unsubscribe = _settings.onSettingsChanged(listener);
+
+      await expect(_settings.updateSettings({ launchAtLogin: true })).rejects.toThrow();
+
+      expect(listener).not.toHaveBeenCalled();
+      unsubscribe();
+    });
+
+    it("logs error on save failure (does not swallow)", async () => {
+      fsMockState.failWriteFile = true;
+
+      await expect(_settings.updateSettings({ launchAtLogin: true })).rejects.toThrow();
+
+      expect(log.error).toHaveBeenCalledWith(
+        "[settings] Failed to save settings:",
+        expect.any(Error),
+      );
+    });
+
+    it("shows error dialog after 3 consecutive save failures", async () => {
+      fsMockState.failWriteFile = true;
+
+      await expect(_settings.updateSettings({ sessionDuration: 30 })).rejects.toThrow();
+      expect(dialog.showErrorBox).not.toHaveBeenCalled();
+
+      await expect(_settings.updateSettings({ sessionDuration: 60 })).rejects.toThrow();
+      expect(dialog.showErrorBox).not.toHaveBeenCalled();
+
+      await expect(_settings.updateSettings({ sessionDuration: 90 })).rejects.toThrow();
+      expect(dialog.showErrorBox).toHaveBeenCalledWith(
+        "Settings Cannot Be Saved",
+        "Disk may be full. Changes will be lost on restart.",
+      );
+    });
+
+    it("resets consecutive failure counter on successful save", async () => {
+      fsMockState.failWriteFile = true;
+      await expect(_settings.updateSettings({ sessionDuration: 30 })).rejects.toThrow();
+      await expect(_settings.updateSettings({ sessionDuration: 60 })).rejects.toThrow();
+
+      // Recover
+      fsMockState.failWriteFile = false;
+      await _settings.updateSettings({ sessionDuration: 90 });
+
+      // Two more failures should NOT trigger dialog (counter reset)
+      fsMockState.failWriteFile = true;
+      await expect(_settings.updateSettings({ sessionDuration: 120 })).rejects.toThrow();
+      await expect(_settings.updateSettings({ sessionDuration: 150 })).rejects.toThrow();
+
+      expect(dialog.showErrorBox).not.toHaveBeenCalled();
     });
   });
 });
