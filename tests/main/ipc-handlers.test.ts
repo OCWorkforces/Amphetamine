@@ -120,9 +120,12 @@ describe("ipc-handlers", () => {
       };
 
       // Height below minimum (220)
+      vi.useFakeTimers();
       handler!(mockEvent, 100);
+      vi.runAllTimers();
+      vi.useRealTimers();
 
-      expect(mockWindow.setSize).toHaveBeenCalledWith(360, 220, true);
+      expect(mockWindow.setSize).toHaveBeenCalledWith(360, 220, false);
     });
 
     it("clamps height to MAX_WINDOW_HEIGHT if too large", async () => {
@@ -135,9 +138,12 @@ describe("ipc-handlers", () => {
       };
 
       // Height above maximum (480)
+      vi.useFakeTimers();
       handler!(mockEvent, 1000);
+      vi.runAllTimers();
+      vi.useRealTimers();
 
-      expect(mockWindow.setSize).toHaveBeenCalledWith(360, 480, true);
+      expect(mockWindow.setSize).toHaveBeenCalledWith(360, 480, false);
     });
 
     it("accepts valid height within bounds", async () => {
@@ -149,9 +155,12 @@ describe("ipc-handlers", () => {
         senderFrame: { url: "file:///mock/app/lib/renderer/index.html" },
       };
 
+      vi.useFakeTimers();
       handler!(mockEvent, 350);
+      vi.runAllTimers();
+      vi.useRealTimers();
 
-      expect(mockWindow.setSize).toHaveBeenCalledWith(360, 350, true);
+      expect(mockWindow.setSize).toHaveBeenCalledWith(360, 350, false);
     });
 
     it("ignores non-positive height values", async () => {
@@ -215,7 +224,7 @@ describe("ipc-handlers", () => {
         senderFrame: { url: "file:///mock/app/lib/renderer/index.html" },
       };
 
-      mockUpdateSettings.mockReturnValue({ ...DEFAULT_SETTINGS, preventSleep: true });
+      mockUpdateSettings.mockReturnValue({ settings: { ...DEFAULT_SETTINGS, preventSleep: true }, rejectedKeys: [] });
 
       await handler!(mockEvent, { preventSleep: true });
 

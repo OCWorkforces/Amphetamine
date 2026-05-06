@@ -1,84 +1,43 @@
-import { ipcMain, app, type BrowserWindow, type IpcMainEvent, type IpcMainInvokeEvent } from "electron";
-import path from "node:path";
+import { ipcMain, app, type BrowserWindow } from "electron";
 import log from "electron-log";
 import {
   IPC_CHANNELS,
   DEFAULT_SETTINGS,
-  type IpcChannelMap,
   type IpcRequest,
   type IpcResponse,
 } from "../shared/types.js";
-import {
-  MAIN_WINDOW_WIDTH,
-  MIN_POPOVER_HEIGHT,
-  MAX_POPOVER_HEIGHT,
-  DEV_ORIGINS,
-} from "./constants.js";
+import { MAIN_WINDOW_WIDTH, MIN_POPOVER_HEIGHT, MAX_POPOVER_HEIGHT } from "./constants.js";
 
 import { getSettings, updateSettings } from "./settings.js";
 import { createSettingsWindow } from "./settings-window.js";
 import { registerAutoUpdaterIpc } from "./auto-updater.js";
 import * as sessionTimer from "./session-timer.js";
 
-const ALLOWED_ORIGINS: ReadonlySet<string> = new Set(DEV_ORIGINS);
-/** Returns true if the sender's origin is the app's own renderer */
-export function validateSender(event: IpcMainEvent | IpcMainInvokeEvent): boolean {
-  const senderUrl = event.senderFrame?.url ?? "";
-  return validateSenderUrl(senderUrl);
-}
-function validateSenderUrl(senderUrl: string): boolean {
-  try {
-    const url = new URL(senderUrl);
-    if (url.protocol === "http:") {
-      return ALLOWED_ORIGINS.has(url.origin) || ALLOWED_ORIGINS.has(`${url.protocol}//${url.host}`);
-    }
-    // file:// origin check (packaged app) - exact path match within app bundle
-    if (url.protocol === "file:") {
-      const appPath = path.resolve(app.getAppPath());
-      let urlPath: string;
-      try {
-        urlPath = path.resolve(decodeURIComponent(url.pathname));
-      } catch {
-        return false;
-      }
-      const allowedPaths = [
-        path.join(appPath, "lib", "renderer", "index.html"),
-        path.join(appPath, "lib", "renderer", "settings.html"),
-      ];
-      return allowedPaths.includes(urlPath);
-    }
-    return false;
-  } catch {
-    log.warn("[ipc] Invalid sender URL:", senderUrl);
-    return false;
-  }
-}
-/**
- * Type-safe IPC handler wrapper.
- * Ensures handler return type matches IpcChannelMap response type at compile time.
- */
-export type IpcHandler<K extends keyof IpcChannelMap> = (
-  _event: IpcMainInvokeEvent,
-  _request: IpcChannelMap[K]["request"],
-) => Promise<IpcChannelMap[K]["response"]> | IpcChannelMap[K]["response"];
-
-export function typedHandle<K extends keyof IpcChannelMap>(channel: K, handler: IpcHandler<K>): void {
-  ipcMain.handle(channel, handler as Parameters<typeof ipcMain.handle>[1]);
-}
+import { validateSender, typedHandle } from "./ipc-utils.js";
+export { validateSender } from "./ipc-utils.js";
 
 /** Window IPC handlers (fire-and-forget) */
 function registerWindowIpc(win: BrowserWindow): void {
+  let pendingResizeTimer: ReturnType<typeof setTimeout> | null = null;
+  let pendingResizeHeight = 0;
+
   ipcMain.on(
     IPC_CHANNELS.WINDOW_SET_HEIGHT,
     (event, height: IpcRequest<typeof IPC_CHANNELS.WINDOW_SET_HEIGHT>) => {
       if (!validateSender(event)) return;
       try {
-        if (typeof height === "number" && height > 0) {
-          const clampedHeight = Math.max(
-            MIN_POPOVER_HEIGHT,
-            Math.min(MAX_POPOVER_HEIGHT, Math.round(height)),
-          );
-          win.setSize(MAIN_WINDOW_WIDTH, clampedHeight, true);
+        if (typeof height === "number" && height > 0 && Number.isInteger(height)) {
+          pendingResizeHeight = height;
+          if (pendingResizeTimer === null) {
+            pendingResizeTimer = setTimeout(() => {
+              pendingResizeTimer = null;
+              const clampedHeight = Math.max(
+                MIN_POPOVER_HEIGHT,
+                Math.min(MAX_POPOVER_HEIGHT, Math.round(pendingResizeHeight)),
+              );
+              win.setSize(MAIN_WINDOW_WIDTH, clampedHeight, false);
+            }, 16);
+          }
         }
       } catch (err) {
         log.error("[ipc] WINDOW_SET_HEIGHT error:", err);
@@ -114,7 +73,7 @@ function registerSettingsIpc(): void {
       event,
       partial: IpcRequest<typeof IPC_CHANNELS.SETTINGS_SET>,
     ): Promise<IpcResponse<typeof IPC_CHANNELS.SETTINGS_SET>> => {
-      if (!validateSender(event)) return getSettings();
+      if (!validateSender(event)) return { settings: getSettings(), rejectedKeys: [] };
       // Coordinator handles system sync (power-saver, auto-launch, session cancel, broadcast) via settings change
       return await updateSettings(partial);
     },
@@ -140,6 +99,10 @@ function registerSessionIpc(): void {
         log.warn("[ipc] SESSION_START rejected invalid durationMinutes:", request.durationMinutes);
         return { ok: false, reason: "invalid-duration" };
       }
+    }
+    if (request.durationMinutes !== null && request.durationMinutes !== undefined && request.durationMinutes > 1440) {
+      log.warn("[ipc] SESSION_START rejected: duration exceeds 24h:", request.durationMinutes);
+      return { ok: false, reason: "Duration cannot exceed 24 hours" };
     }
     const result = sessionTimer.startSession(request.durationMinutes);
     // startSession() guarantees non-null startedAt; SessionState type is widened for getStatus() reuse.
