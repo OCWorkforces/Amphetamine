@@ -1,8 +1,8 @@
 # Amphetamine — Project Knowledge Base
 
-**Generated:** 2026-05-02
-**Commit:** 9ab053f
-**Branch:** develop
+**Generated:** 2026-05-06
+**Commit:** d33ab51
+**Branch:** feat/ts-typing-enhancements
 
 ## OVERVIEW
 
@@ -32,7 +32,8 @@ src/
 │   ├── auto-launch.ts      # macOS login item management
 │   ├── global-shortcut.ts   # Global hotkey (Cmd+Shift+A)
 │   ├── tray.ts           # System tray icon + context menu
-│   ├── ipc.ts            # IPC handlers (14 channels, typed, decomposed by domain)
+│   ├── ipc.ts            # IPC handlers (14 channels, decomposed by domain)
+│   ├── ipc-utils.ts      # IPC validation helpers (validateSender, validateSenderUrl, typedHandle) — extracted from ipc.ts
 │   ├── settings.ts       # Persistent app settings (async JSON, EventEmitter, exported validators)
 │   ├── session-timer.ts  # Session timer state machine
 │   ├── settings-window.ts # Settings BrowserWindow singleton
@@ -65,6 +66,7 @@ src/
 | --------------------- | -------------------------------------- | ----------------------------------------------- |
 | Add IPC channel       | `src/shared/types.ts` → `IPC_CHANNELS`, `IpcChannelMap`, `PUSH_CHANNELS` | Also add to preload `WiredChannels` union + `api` object |
 | Implement IPC handler | `src/main/ipc.ts`                      | Register with `typedHandle()` or `ipcMain.on()` |
+| IPC validation       | `src/main/ipc-utils.ts`                 | `validateSender()`, `validateSenderUrl()`, `typedHandle()` — shared logic extracted from ipc.ts
 | Expose to renderer    | `src/preload/index.ts`                 | Add to `api` object                             |
 | Use in UI             | `src/renderer/`                        | Call via `window.api.*`                         |
 | `Orchestration logic` | `src/main/coordinator.ts` | Settings→system sync hub, imports extracted modules |
@@ -95,11 +97,12 @@ src/
 | `initCoordinator`            | async fn | src/main/coordinator.ts:54      | Central orchestrator: async initSettings→settings→power/auto-launch/session/shortcut/broadcast |
 | `cleanupCoordinator`         | fn    | src/main/coordinator.ts:87      | Unsubscribe + stop sleep prevention                                            |
 | `getTrayDeps`                | fn    | src/main/coordinator.ts:97      | Wires tray deps to settings                                                    |
-| `registerIpcHandlers`        | fn    | src/main/ipc.ts:63              | IPC registration (13 channels)                                                 |
-| `typedHandle`                | fn    | src/main/ipc.ts:59              | Type-safe IPC wrapper                                                          |
-| `validateSender`             | fn    | src/main/ipc.ts:20              | Origin validation                                                              |
-| `validateOnSender`           | fn    | src/main/ipc.ts:46              | Origin validation for ipcMain.on                                               |
-| `validateSenderUrl`          | fn    | src/main/ipc.ts:24              | Shared URL validation logic                                                    |
+| `registerIpcHandlers`        | fn    | src/main/ipc.ts:63              | IPC registration (13 channels)  
+| `typedHandle`                | fn    | src/main/ipc-utils.ts           | Type-safe IPC wrapper  
+| `validateSender`             | fn    | src/main/ipc-utils.ts:23        | Origin validation  
+| `validateOnSender`           | fn    | src/main/ipc.ts:46              | Origin validation for ipcMain.on (uses validateSender internally)  
+| `validateSenderUrl`          | fn    | src/main/ipc-utils.ts:34        | Shared URL validation logic (exact path match, NFC normalization)  
+| `isValidAccelerator`         | fn    | src/main/settings.ts            | Accelerator string validation (modifiers, forbidden combos)  
 | `registerGlobalShortcut`     | fn    | src/main/global-shortcut.ts      | Global hotkey registration             |
 | `unregisterGlobalShortcut`   | fn    | src/main/global-shortcut.ts      | Global hotkey unregistration           |
 | `ShortcutDeps`               | iface | src/main/global-shortcut.ts      | Deps for shortcut (getShortcut, getPreventSleep, togglePreventSleep) |
