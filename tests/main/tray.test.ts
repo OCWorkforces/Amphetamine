@@ -29,7 +29,6 @@ const mockCreateFromPath = vi.hoisted(() =>
 const mockCreateEmpty = vi.hoisted(() => vi.fn().mockReturnValue({ addRepresentation: vi.fn() }));
 const mockBuildFromTemplate = vi.hoisted(() => vi.fn().mockReturnValue({}));
 const mockAppQuit = vi.hoisted(() => vi.fn());
-const mockShowAboutPanel = vi.hoisted(() => vi.fn());
 
 vi.mock("electron", () => ({
   Tray: mockTrayConstructor,
@@ -37,7 +36,6 @@ vi.mock("electron", () => ({
   shell: { openExternal: vi.fn().mockResolvedValue(undefined) },
   app: {
     quit: mockAppQuit,
-    showAboutPanel: mockShowAboutPanel,
     getPath: vi.fn().mockReturnValue("/tmp/test-user-data"),
   },
   nativeImage: {

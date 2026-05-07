@@ -10,6 +10,7 @@ import { initCoordinator, cleanupCoordinator, getTrayDeps } from "./coordinator.
 import { unregisterGlobalShortcut } from "./global-shortcut.js";
 import { stopPreventingSleep } from "./sleep-prevention.js";
 import { closeSettingsWindow } from "./settings-window.js";
+import { closeAboutWindow } from "./about-window.js";
 import { initAutoUpdater, stopAutoUpdater } from "./auto-updater.js";
 import { broadcastToWindows } from "./utils/broadcast.js";
 import { IPC_CHANNELS } from "../shared/types.js";
@@ -137,6 +138,7 @@ app.on("before-quit", () => {
   isQuitting = true;
   cleanupTray?.();
   closeSettingsWindow();
+  closeAboutWindow();
   cleanupCoordinator();
   unregisterGlobalShortcut();
   stopAutoUpdater();

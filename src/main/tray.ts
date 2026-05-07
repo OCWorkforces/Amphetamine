@@ -45,9 +45,9 @@ const fallbackIconLight = nativeImage.createFromBuffer(
 );
 
 function showAbout(): void {
-  // app.showAboutPanel() is a native macOS dialog, managed by the OS as a singleton.
-  // No need for manual window tracking.
-  app.showAboutPanel();
+  // Dynamically import to avoid circular dependency at module load time.
+  // showAbout creates a BrowserWindow singleton with alwaysOnTop: true.
+  void import("./about-window.js").then(({ showAbout }) => showAbout());
 }
 
 /**
