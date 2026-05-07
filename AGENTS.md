@@ -1,7 +1,7 @@
 # Amphetamine — Project Knowledge Base
 
-**Generated:** 2026-05-06
-**Commit:** d33ab51
+**Generated:** 2026-05-07
+**Commit:** d5c4ee3
 **Branch:** feat/ts-typing-enhancements
 
 ## OVERVIEW
@@ -32,7 +32,7 @@ src/
 │   ├── auto-launch.ts      # macOS login item management
 │   ├── global-shortcut.ts   # Global hotkey (Cmd+Shift+A)
 │   ├── tray.ts           # System tray icon + context menu
-│   ├── ipc.ts            # IPC handlers (14 channels, decomposed by domain)
+│   ├── ipc.ts            # IPC handlers (15 channels, decomposed by domain)
 │   ├── ipc-utils.ts      # IPC validation helpers (validateSender, validateSenderUrl, typedHandle) — extracted from ipc.ts
 │   ├── settings.ts       # Persistent app settings (async JSON, EventEmitter, exported validators)
 │   ├── session-timer.ts  # Session timer state machine
@@ -124,7 +124,7 @@ src/
 | `stopAutoUpdater`            | fn    | src/main/auto-updater.ts        | Stop auto-updater + clear interval                                             |
 | `broadcastToWindows`         | fn    | src/main/utils/broadcast.ts     | Generic send to all non-destroyed BrowserWindows                                |
 | `hardenWebContents`          | fn    | src/main/security.ts            | Navigation allowlist + setWindowOpenHandler deny on BrowserWindow              |
-| `IPC_CHANNELS`               | const | src/shared/types.ts              | 14 channel names (including window:hide)                                        |
+| `IPC_CHANNELS`               | const | src/shared/types.ts              | 15 channel names (including window:hide)                                        |
 | `IpcChannelMap`              | type  | src/shared/types.ts:18          | Request/response type map                                                      |
 | `AppSettings`                | iface | src/shared/types.ts:110         | Settings interface (all fields required, no optionals)                    |
 | `DEFAULT_SETTINGS`           | const | src/shared/types.ts:124         | Full defaults                                                                  |

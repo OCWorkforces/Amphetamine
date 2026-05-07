@@ -27,12 +27,11 @@ export const IPC_CHANNELS = {
   APP_QUIT: "app:quit",
   AUTO_UPDATER_CHECK: "auto-updater:check",
   AUTO_UPDATER_STATUS: "auto-updater:status", // push from main
+  SHORTCUT_REGISTRATION_FAILED: "shortcut:registration-failed", // push from main
 } as const;
 ```
 
-`IpcChannelMap` maps each channel to its `request` / `response` types (14 channels). Push channels (4): `WINDOW_HIDE`, `SETTINGS_CHANGED`, `SESSION_STATUS_UPDATE`, `AUTO_UPDATER_STATUS`.
-} as const;
-```
+`IpcChannelMap` maps each channel to its `request` / `response` types (15 channels). Push channels (5): `WINDOW_HIDE`, `SETTINGS_CHANGED`, `SESSION_STATUS_UPDATE`, `AUTO_UPDATER_STATUS`, `SHORTCUT_REGISTRATION_FAILED`.
 
 `IpcChannelMap` maps each channel to its `request` / `response` types. Note: `SESSION_STATUS` and `SESSION_STATUS_UPDATE` always return `SessionStatusResponse` — never `null`.
 

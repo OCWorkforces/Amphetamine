@@ -13,7 +13,7 @@ Electron main process (Node.js). App lifecycle, system tray, IPC, session timer,
 | `auto-launch.ts`       | macOS login item management                              |
 | `global-shortcut.ts`   | Global hotkey (Cmd+Shift+A) + ShortcutDeps interface     |
 | `tray.ts`              | System tray icon, context menu, window positioning       |
-| `ipc.ts`               | IPC handlers (14 channels, decomposed by domain, IpcMainInvokeEvent) |
+| `ipc.ts`               | IPC handlers (15 channels, decomposed by domain, IpcMainInvokeEvent) |
 | `ipc-utils.ts`        | IPC validation helpers (`validateSender`, `validateSenderUrl`, `typedHandle`) — extracted from ipc.ts |
 | `settings.ts`          | Persistent app settings (JSON in userData, typed EventEmitter<SettingsEvents>) |
 | `session-timer.ts`     | Session timer state machine (PerfTimestamp monotonic clock, assertNever exhaustiveness)        |
