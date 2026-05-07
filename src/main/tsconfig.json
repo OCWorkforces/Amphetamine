@@ -5,7 +5,7 @@
     "declaration": true,
     "rootDir": "..",
     "outDir": "../../lib/main",
-    "lib": ["ES2024"],
+    "lib": ["ES2025"],
     "types": ["node"],
     "moduleResolution": "nodenext",
     "module": "nodenext"
