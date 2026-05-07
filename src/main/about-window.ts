@@ -53,30 +53,16 @@ export function showAbout(_mainWindow?: BrowserWindow): void {
     -webkit-user-select: none;
     cursor: default;
   }
-  @media (prefers-color-scheme: dark) {
-    body { background: #1e1e1e; color: #e0e0e0; }
-    .version { color: #8e8e93; }
-    .description { color: #a0a0a0; }
+    body { background: #0D1017; color: #f5f5f7; }
+    .version { color: #98989d; }
+    .description { color: #98989d; }
     button {
-      border: 1px solid #48484a;
-      background: #2c2c2e;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: rgba(255, 255, 255, 0.08);
       color: #f5f5f7;
     }
-    button:hover { background: #3a3a3c; }
-    button:active { background: #48484a; }
-  }
-  @media (prefers-color-scheme: light) {
-    body { background: #f0f0f0; color: #1d1d1f; }
-    .version { color: #86868b; }
-    .description { color: #6e6e73; }
-    button {
-      border: 1px solid #d2d2d7;
-      background: #ffffff;
-      color: #1d1d1f;
-    }
-    button:hover { background: #f5f5f7; }
-    button:active { background: #e8e8ed; }
-  }
+    button:hover { background: rgba(255, 255, 255, 0.12); }
+    button:active { background: rgba(255, 255, 255, 0.16); }
   .app-icon {
     width: 96px;
     height: 96px;
