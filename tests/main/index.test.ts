@@ -61,6 +61,11 @@ vi.mock("electron", async (importOriginal) => {
         setWindowOpenHandler: vi.fn(),
       };
     }),
+    nativeImage: {
+      createFromPath: vi.fn().mockReturnValue({
+        toPNG: vi.fn().mockReturnValue(Buffer.alloc(0)),
+      }),
+    },
     dialog: {
       showErrorBox: mockShowErrorBox,
     },
