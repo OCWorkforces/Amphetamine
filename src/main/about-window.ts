@@ -1,4 +1,4 @@
-import { BrowserWindow, nativeImage } from "electron";
+import { BrowserWindow, nativeImage, shell } from "electron";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { ABOUT_WINDOW_WIDTH, ABOUT_WINDOW_HEIGHT } from "./constants.js";
@@ -69,6 +69,7 @@ export function showAbout(_mainWindow?: BrowserWindow): void {
     margin-bottom: 16px;
     border-radius: 22px;
     box-shadow: 0 8px 32px rgba(0, 122, 255, 0.18);
+    -webkit-app-region: no-drag;
   }
   h1 {
     font-size: 20px;
@@ -98,7 +99,7 @@ export function showAbout(_mainWindow?: BrowserWindow): void {
 </style>
 </head>
 <body>
-  <img class="app-icon" src="${ABOUT_ICON_DATA_URI}" alt="${pkg.productName} icon" draggable="false" />
+  <img class="app-icon" src="${ABOUT_ICON_DATA_URI}" alt="${pkg.productName} icon" draggable="false" onclick="window.open('${pkg.repository}', '_blank')" style="cursor:pointer" title="View source on GitHub" />
   <h1>${pkg.productName}</h1>
   <div class="version">Version ${pkg.version}</div>
   <div class="description">${pkg.description}</div>
@@ -126,6 +127,13 @@ export function showAbout(_mainWindow?: BrowserWindow): void {
   });
 
   hardenWebContents(win);
+
+  // Override window.open handler: open repo URL in default browser rather than
+  // a new Electron window. hardenWebContents sets it to deny all — override here.
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    void shell.openExternal(url);
+    return { action: "deny" };
+  });
 
   void win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
 

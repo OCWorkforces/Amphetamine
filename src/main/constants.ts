@@ -5,7 +5,7 @@ export const MAIN_WINDOW_WIDTH = 360;
 export const MAIN_WINDOW_HEIGHT = 480;
 export const SETTINGS_WINDOW_WIDTH = 520;
 export const SETTINGS_WINDOW_HEIGHT = 540;
-export const ABOUT_WINDOW_WIDTH = 380;
+export const ABOUT_WINDOW_WIDTH = 340;
 export const ABOUT_WINDOW_HEIGHT = 380;
 
 // === IPC Popover Height Bounds ===
