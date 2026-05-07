@@ -47,7 +47,7 @@ export function showAbout(_mainWindow?: BrowserWindow): void {
     align-items: center;
     justify-content: center;
     height: 100vh;
-    padding: 24px;
+    padding: 24px 24px 12px 24px;
     -webkit-app-region: drag;
     user-select: none;
     -webkit-user-select: none;
