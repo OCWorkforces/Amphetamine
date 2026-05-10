@@ -135,9 +135,24 @@ vi.mock("../../src/main/auto-updater.js", () => ({
 describe("ipc additional coverage", () => {
   let registerIpcHandlers: (
     _win: { setSize?: (_w: number, _h: number, _animate?: boolean) => void },
+    _deps: unknown,
   ) => void;
   let registeredHandlers: Map<string, (..._args: unknown[]) => unknown>;
   let appQuitMock: ReturnType<typeof vi.fn>;
+
+  function makeIpcDeps(): unknown {
+    return {
+      getSettings: mockGetSettings,
+      updateSettings: mockUpdateSettings,
+      createSettingsWindow: mockCreateSettingsWindow,
+      registerAutoUpdaterIpc: vi.fn(),
+      sessionTimer: {
+        startSession: mockStartSession,
+        cancelSession: mockCancelSession,
+        getStatus: mockGetStatus,
+      },
+    };
+  }
 
   const validEvent = {
       senderFrame: { url: "file:///path/to/app.asar/lib/renderer/index.html" },
@@ -194,7 +209,7 @@ describe("ipc additional coverage", () => {
   describe("ipcMain.on sender validation (WINDOW_SET_HEIGHT)", () => {
     it("valid file:// origin: invokes window.setSize", () => {
       const mockWindow = { setSize: vi.fn() };
-      registerIpcHandlers(mockWindow);
+      registerIpcHandlers(mockWindow, makeIpcDeps());
       const handler = registeredHandlers.get(IPC_CHANNELS.WINDOW_SET_HEIGHT);
       expect(handler).toBeDefined();
       vi.useFakeTimers();
@@ -206,7 +221,7 @@ describe("ipc additional coverage", () => {
 
     it("invalid origin (https://evil.com): does NOT invoke window.setSize", () => {
       const mockWindow = { setSize: vi.fn() };
-      registerIpcHandlers(mockWindow);
+      registerIpcHandlers(mockWindow, makeIpcDeps());
       const handler = registeredHandlers.get(IPC_CHANNELS.WINDOW_SET_HEIGHT);
       handler!(invalidEvent, 320);
       expect(mockWindow.setSize).not.toHaveBeenCalled();
@@ -216,7 +231,7 @@ describe("ipc additional coverage", () => {
   describe("APP_QUIT handler", () => {
     it("valid sender: app.quit() is called", async () => {
       const mockWindow = { setSize: vi.fn() };
-      registerIpcHandlers(mockWindow);
+      registerIpcHandlers(mockWindow, makeIpcDeps());
       const handler = registeredHandlers.get(IPC_CHANNELS.APP_QUIT);
       expect(handler).toBeDefined();
       await handler!(validEvent);
@@ -225,7 +240,7 @@ describe("ipc additional coverage", () => {
 
     it("invalid sender: app.quit() is NOT called", async () => {
       const mockWindow = { setSize: vi.fn() };
-      registerIpcHandlers(mockWindow);
+      registerIpcHandlers(mockWindow, makeIpcDeps());
       const handler = registeredHandlers.get(IPC_CHANNELS.APP_QUIT);
       await handler!(invalidEvent);
       expect(appQuitMock).not.toHaveBeenCalled();
@@ -237,7 +252,7 @@ describe("ipc additional coverage", () => {
 
     it("negative number: returns invalid-duration failure and does not start session", async () => {
       const mockWindow = { setSize: vi.fn() };
-      registerIpcHandlers(mockWindow);
+      registerIpcHandlers(mockWindow, makeIpcDeps());
       const handler = registeredHandlers.get(IPC_CHANNELS.SESSION_START);
       const result = await handler!(validEvent, { durationMinutes: -5 });
       expect(result).toEqual(invalidDurationResponse);
@@ -246,7 +261,7 @@ describe("ipc additional coverage", () => {
 
     it("NaN: returns invalid-duration failure and does not start session", async () => {
       const mockWindow = { setSize: vi.fn() };
-      registerIpcHandlers(mockWindow);
+      registerIpcHandlers(mockWindow, makeIpcDeps());
       const handler = registeredHandlers.get(IPC_CHANNELS.SESSION_START);
       const result = await handler!(validEvent, { durationMinutes: NaN });
       expect(result).toEqual(invalidDurationResponse);
@@ -255,7 +270,7 @@ describe("ipc additional coverage", () => {
 
     it("zero: returns invalid-duration failure and does not start session", async () => {
       const mockWindow = { setSize: vi.fn() };
-      registerIpcHandlers(mockWindow);
+      registerIpcHandlers(mockWindow, makeIpcDeps());
       const handler = registeredHandlers.get(IPC_CHANNELS.SESSION_START);
       const result = await handler!(validEvent, { durationMinutes: 0 });
       expect(result).toEqual(invalidDurationResponse);
@@ -264,7 +279,7 @@ describe("ipc additional coverage", () => {
 
     it("non-integer (e.g. 1.5): returns invalid-duration failure and does not start session", async () => {
       const mockWindow = { setSize: vi.fn() };
-      registerIpcHandlers(mockWindow);
+      registerIpcHandlers(mockWindow, makeIpcDeps());
       const handler = registeredHandlers.get(IPC_CHANNELS.SESSION_START);
       const result = await handler!(validEvent, { durationMinutes: 1.5 });
       expect(result).toEqual(invalidDurationResponse);
@@ -273,7 +288,7 @@ describe("ipc additional coverage", () => {
 
     it("invalid sender: returns rejected failure", async () => {
       const mockWindow = { setSize: vi.fn() };
-      registerIpcHandlers(mockWindow);
+      registerIpcHandlers(mockWindow, makeIpcDeps());
       const handler = registeredHandlers.get(IPC_CHANNELS.SESSION_START);
       const result = await handler!(invalidEvent, { durationMinutes: 30 });
       expect(result).toEqual({ ok: false, reason: "rejected" });
@@ -288,7 +303,7 @@ describe("ipc additional coverage", () => {
         durationMinutes: null,
       });
       const mockWindow = { setSize: vi.fn() };
-      registerIpcHandlers(mockWindow);
+      registerIpcHandlers(mockWindow, makeIpcDeps());
       const handler = registeredHandlers.get(IPC_CHANNELS.SESSION_START);
       const result = await handler!(validEvent, { durationMinutes: 30 });
       expect(result).toEqual({ ok: false, reason: "rejected" });
@@ -296,7 +311,7 @@ describe("ipc additional coverage", () => {
 
     it("valid duration: returns ok success with payload", async () => {
       const mockWindow = { setSize: vi.fn() };
-      registerIpcHandlers(mockWindow);
+      registerIpcHandlers(mockWindow, makeIpcDeps());
       const handler = registeredHandlers.get(IPC_CHANNELS.SESSION_START);
       const result = await handler!(validEvent, { durationMinutes: 30 });
       expect(result).toMatchObject({
@@ -320,7 +335,7 @@ describe("ipc additional coverage", () => {
         durationMinutes: 1,
       });
       const mockWindow = { setSize: vi.fn() };
-      registerIpcHandlers(mockWindow);
+      registerIpcHandlers(mockWindow, makeIpcDeps());
       const handler = registeredHandlers.get(IPC_CHANNELS.SESSION_STATUS);
       const result = (await handler!(validEvent)) as {
         isRunning: boolean;
@@ -358,7 +373,7 @@ describe("ipc additional coverage", () => {
         senderFrame: { url: "file:///path/to/app.asar/../../etc/passwd/index.html" },
       } as unknown as IpcMainEvent;
       const mockWindow = { setSize: vi.fn() };
-      registerIpcHandlers(mockWindow);
+      registerIpcHandlers(mockWindow, makeIpcDeps());
       const handler = registeredHandlers.get(IPC_CHANNELS.APP_QUIT);
       await handler!(traversalEvent);
       expect(appQuitMock).not.toHaveBeenCalled();

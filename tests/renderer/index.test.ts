@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import type { AppSettings, PerfTimestamp, SessionStatusResponse } from "../../src/shared/types.js";
+import type { AppSettings, SessionStatusResponse } from "../../src/shared/types.js";
 import { asPerf, DEFAULT_SETTINGS } from "../../src/shared/types.js";
 import {
   STATUS_PREVENTING_SLEEP,
@@ -66,8 +66,10 @@ describe("renderer popover (index.ts)", () => {
       value: {
         ...globalThis.window,
         api: mockApi,
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
         addEventListener: globalThis.window?.addEventListener?.bind(globalThis.window) ?? vi.fn(),
         removeEventListener:
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
           globalThis.window?.removeEventListener?.bind(globalThis.window) ?? vi.fn(),
       },
       writable: true,
