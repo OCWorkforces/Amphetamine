@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import type { SessionState } from "../../src/main/session-timer.js";
 import type { AppSettings, SessionStatusResponse } from "../../src/shared/types.js";
 import { DEFAULT_SETTINGS } from "../../src/shared/types.js";
+import type { SessionState, SessionTimerHandle } from "../../src/main/session-timer.js";
 
 // Hoisted mock functions - evaluated before vi.mock calls
 const mockGetSettings = vi.hoisted(() => vi.fn());
@@ -27,15 +27,27 @@ vi.mock("../../src/main/settings.js", () => ({
   onSettingsChanged: vi.fn(),
 }));
 
+/**
+ * Build a fresh session-timer handle wired to the mock callbacks. Mirrors what
+ * the coordinator does at runtime: construct via the factory, register as the
+ * active module-level handle so module-level exports keep delegating.
+ */
+async function buildHandle(): Promise<SessionTimerHandle> {
+  const mod = await import("../../src/main/session-timer.js");
+  const handle = mod.createSessionTimer({
+    onStateChange: mockOnSessionStateChange,
+    getSettings: mockGetSettings,
+    broadcast: mockBroadcastToWindows,
+  });
+  mod.setActiveSessionTimer(handle);
+  return handle;
+}
 
 describe("session-timer", () => {
   let startSession: (_durationMinutes: number | null) => SessionState;
   let cancelSession: () => SessionState;
   let getStatus: () => SessionStatusResponse;
   let cleanup: () => void;
-  let setOnSessionStateChange: (cb: (updates: Partial<typeof settingsState>) => void) => void;
-  let setSettingsReader: (getSettings: () => typeof settingsState) => void;
-  let setBroadcastFn: (fn: (channel: string, data: unknown) => void) => void;
 
   beforeEach(async () => {
     vi.useRealTimers();
@@ -51,19 +63,11 @@ describe("session-timer", () => {
 
     vi.resetModules();
 
-    const mod = await import("../../src/main/session-timer.js");
-    startSession = mod.startSession;
-    cancelSession = mod.cancelSession;
-    getStatus = mod.getStatus;
-    cleanup = mod.cleanup;
-    setOnSessionStateChange = mod.setOnSessionStateChange;
-    setSettingsReader = mod.setSettingsReader;
-    setBroadcastFn = mod.setBroadcastFn;
-
-    // Wire the callbacks (simulates what coordinator does)
-    setOnSessionStateChange(mockOnSessionStateChange);
-    setSettingsReader(mockGetSettings);
-    setBroadcastFn(mockBroadcastToWindows);
+    const handle = await buildHandle();
+    startSession = handle.startSession;
+    cancelSession = handle.cancelSession;
+    getStatus = handle.getStatus;
+    cleanup = handle.cleanup;
   });
 
   afterEach(() => {
@@ -79,9 +83,8 @@ describe("session-timer", () => {
       expect(state.expiresAt).toBeNull();
       expect(state.durationMinutes).toBeNull();
       expect(mockOnSessionStateChange).toHaveBeenCalledWith({
-        sessionDuration: null,
-        preventSleep: true,
-      });
+              sessionDuration: null,
+            });
     });
 
     it("timed 30min - starts session with correct expiry", () => {
@@ -95,9 +98,8 @@ describe("session-timer", () => {
       expect(state.expiresAt).toBeLessThanOrEqual(after + 30 * 60 * 1000);
       expect(state.durationMinutes).toBe(30);
       expect(mockOnSessionStateChange).toHaveBeenCalledWith({
-        sessionDuration: 30,
-        preventSleep: true,
-      });
+              sessionDuration: 30,
+            });
     });
 
     it("clears previous timer when starting a new session", () => {
@@ -123,9 +125,8 @@ describe("session-timer", () => {
       expect(state.expiresAt).toBeNull();
       expect(state.durationMinutes).toBeNull();
       expect(mockOnSessionStateChange).toHaveBeenCalledWith({
-        sessionDuration: null,
-        preventSleep: false,
-      });
+              sessionDuration: null,
+            });
     });
 
     it("no running session - cancel is safe, still syncs sleep", () => {
@@ -136,9 +137,8 @@ describe("session-timer", () => {
       expect(state.expiresAt).toBeNull();
       expect(state.durationMinutes).toBeNull();
       expect(mockOnSessionStateChange).toHaveBeenCalledWith({
-        sessionDuration: null,
-        preventSleep: false,
-      });
+              sessionDuration: null,
+            });
     });
   });
 
@@ -243,20 +243,17 @@ describe("session-timer", () => {
         sessionDuration: null,
       };
 
-      const mod = await import("../../src/main/session-timer.js");
-      mod.setOnSessionStateChange(mockOnSessionStateChange);
-      mod.setSettingsReader(mockGetSettings);
-      mod.startSession(1); // 1 minute = 60000ms
+      const handle = await buildHandle();
+      handle.startSession(1); // 1 minute = 60000ms
 
       mockOnSessionStateChange.mockClear();
 
       vi.advanceTimersByTime(1 * 60 * 1000);
 
       expect(mockOnSessionStateChange).toHaveBeenCalledWith({
-        sessionDuration: null,
-        preventSleep: false,
-      });
-      expect(mod.getStatus().isRunning).toBe(false);
+              sessionDuration: null,
+            });
+      expect(handle.getStatus().isRunning).toBe(false);
 
       vi.useRealTimers();
     });
@@ -274,14 +271,12 @@ describe("session-timer", () => {
         sessionDuration: null,
       };
 
-      const mod = await import("../../src/main/session-timer.js");
-      mod.setOnSessionStateChange(mockOnSessionStateChange);
-      mod.setSettingsReader(mockGetSettings);
+      const handle = await buildHandle();
 
       // Start first session of 2 minutes
-      mod.startSession(2);
+      handle.startSession(2);
       // Start second session of 1 minute — should clear first
-      mod.startSession(1);
+      handle.startSession(1);
 
       mockOnSessionStateChange.mockClear();
 
@@ -289,10 +284,9 @@ describe("session-timer", () => {
       vi.advanceTimersByTime(1 * 60 * 1000);
 
       expect(mockOnSessionStateChange).toHaveBeenCalledWith({
-        sessionDuration: null,
-        preventSleep: false,
-      });
-      expect(mod.getStatus().isRunning).toBe(false);
+              sessionDuration: null,
+            });
+      expect(handle.getStatus().isRunning).toBe(false);
 
       // Advance to 2 minutes — first timer should NOT fire again
       mockOnSessionStateChange.mockClear();
@@ -313,11 +307,9 @@ describe("session-timer", () => {
         sessionDuration: null,
       };
 
-      const mod = await import("../../src/main/session-timer.js");
-      mod.setOnSessionStateChange(mockOnSessionStateChange);
-      mod.setSettingsReader(mockGetSettings);
+      const handle = await buildHandle();
 
-      const state = mod.startSession(0);
+      const state = handle.startSession(0);
       expect(state.isRunning).toBe(true);
       expect(state.durationMinutes).toBe(0);
 
@@ -327,9 +319,8 @@ describe("session-timer", () => {
       vi.advanceTimersByTime(0);
 
       expect(mockOnSessionStateChange).toHaveBeenCalledWith({
-        sessionDuration: null,
-        preventSleep: false,
-      });
+              sessionDuration: null,
+            });
 
       vi.useRealTimers();
     });
@@ -345,11 +336,9 @@ describe("session-timer", () => {
         sessionDuration: null,
       };
 
-      const mod = await import("../../src/main/session-timer.js");
-      mod.setOnSessionStateChange(mockOnSessionStateChange);
-      mod.setSettingsReader(mockGetSettings);
+      const handle = await buildHandle();
 
-      const state = mod.startSession(-1);
+      const state = handle.startSession(-1);
       expect(state.isRunning).toBe(true);
 
       mockOnSessionStateChange.mockClear();
@@ -358,9 +347,8 @@ describe("session-timer", () => {
       vi.advanceTimersByTime(0);
 
       expect(mockOnSessionStateChange).toHaveBeenCalledWith({
-        sessionDuration: null,
-        preventSleep: false,
-      });
+              sessionDuration: null,
+            });
 
       vi.useRealTimers();
     });
@@ -384,9 +372,8 @@ describe("session-timer", () => {
       cancelSession();
 
       expect(mockOnSessionStateChange).toHaveBeenCalledWith({
-        sessionDuration: null,
-        preventSleep: false,
-      });
+              sessionDuration: null,
+            });
     });
   });
 
@@ -403,19 +390,12 @@ describe("session-timer", () => {
         sessionDuration: null,
       };
 
-      const mod = await import("../../src/main/session-timer.js");
-      startSession = mod.startSession;
-      cancelSession = mod.cancelSession;
-      getStatus = mod.getStatus;
-      cleanup = mod.cleanup;
-      setOnSessionStateChange = mod.setOnSessionStateChange;
-      setSettingsReader = mod.setSettingsReader;
-      setBroadcastFn = mod.setBroadcastFn;
-      broadcastSessionUpdate = mod.broadcastSessionUpdate;
-
-      setOnSessionStateChange(mockOnSessionStateChange);
-      setSettingsReader(mockGetSettings);
-      setBroadcastFn(mockBroadcastToWindows);
+      const handle = await buildHandle();
+      startSession = handle.startSession;
+      cancelSession = handle.cancelSession;
+      getStatus = handle.getStatus;
+      cleanup = handle.cleanup;
+      broadcastSessionUpdate = handle.broadcastSessionUpdate;
     });
 
     it("broadcasts pure status snapshot when no session is active (never null)", () => {
@@ -484,17 +464,10 @@ describe("session-timer", () => {
         sessionDuration: null,
       };
 
-      const mod = await import("../../src/main/session-timer.js");
-      startSession = mod.startSession;
-      cancelSession = mod.cancelSession;
-      getStatus = mod.getStatus;
-      setOnSessionStateChange = mod.setOnSessionStateChange;
-      setSettingsReader = mod.setSettingsReader;
-      setBroadcastFn = mod.setBroadcastFn;
-
-      setOnSessionStateChange(mockOnSessionStateChange);
-      setSettingsReader(mockGetSettings);
-      setBroadcastFn(mockBroadcastToWindows);
+      const handle = await buildHandle();
+      startSession = handle.startSession;
+      cancelSession = handle.cancelSession;
+      getStatus = handle.getStatus;
     });
 
     afterEach(() => {
@@ -550,9 +523,6 @@ describe("session-timer additional edge cases", () => {
   let startSession: (_durationMinutes: number | null) => SessionState;
   let cancelSession: () => SessionState;
   let getStatus: () => SessionStatusResponse;
-  let setOnSessionStateChange: (cb: (updates: Partial<typeof settingsState>) => void) => void;
-  let setSettingsReader: (getSettings: () => typeof settingsState) => void;
-  let setBroadcastFn: (fn: (channel: string, data: unknown) => void) => void;
 
   beforeEach(async () => {
     vi.useRealTimers();
@@ -565,17 +535,10 @@ describe("session-timer additional edge cases", () => {
     };
     vi.resetModules();
 
-    const mod = await import("../../src/main/session-timer.js");
-    startSession = mod.startSession;
-    cancelSession = mod.cancelSession;
-    getStatus = mod.getStatus;
-    setOnSessionStateChange = mod.setOnSessionStateChange;
-    setSettingsReader = mod.setSettingsReader;
-    setBroadcastFn = mod.setBroadcastFn;
-
-    setOnSessionStateChange(mockOnSessionStateChange);
-    setSettingsReader(mockGetSettings);
-    setBroadcastFn(mockBroadcastToWindows);
+    const handle = await buildHandle();
+    startSession = handle.startSession;
+    cancelSession = handle.cancelSession;
+    getStatus = handle.getStatus;
   });
 
   afterEach(() => {
@@ -595,17 +558,14 @@ describe("session-timer additional edge cases", () => {
       let nowValue = 0;
       const nowSpy = vi.spyOn(performance, "now").mockImplementation(() => nowValue);
 
-      const mod = await import("../../src/main/session-timer.js");
-      mod.setOnSessionStateChange(mockOnSessionStateChange);
-      mod.setSettingsReader(mockGetSettings);
-      mod.setBroadcastFn(mockBroadcastToWindows);
+      const handle = await buildHandle();
 
       nowValue = 0;
-      mod.startSession(2);
+      handle.startSession(2);
 
       // Advance the mocked clock by 60 seconds, then read status
       nowValue = 60000;
-      const status = mod.getStatus();
+      const status = handle.getStatus();
       expect(status.isRunning).toBe(true);
       expect(status.remainingSeconds).toBe(60);
 
@@ -624,18 +584,15 @@ describe("session-timer additional edge cases", () => {
         sessionDuration: null,
       };
 
-      const mod = await import("../../src/main/session-timer.js");
-      mod.setOnSessionStateChange(mockOnSessionStateChange);
-      mod.setSettingsReader(mockGetSettings);
-      mod.setBroadcastFn(mockBroadcastToWindows);
+      const handle = await buildHandle();
 
-      const first = mod.startSession(10);
-      const second = mod.startSession(10);
+      const first = handle.startSession(10);
+      const second = handle.startSession(10);
 
       expect(first.isRunning).toBe(true);
       expect(second.isRunning).toBe(true);
 
-      const status = mod.getStatus();
+      const status = handle.getStatus();
       expect(status.isRunning).toBe(true);
       expect(status.durationMinutes).toBe(10);
 
@@ -643,7 +600,7 @@ describe("session-timer additional edge cases", () => {
       vi.advanceTimersByTime(10 * 60 * 1000);
 
       const expiryCalls = mockOnSessionStateChange.mock.calls.filter(
-        (args) => args[0]?.sessionDuration === null && args[0]?.preventSleep === false,
+        (args) => args[0]?.sessionDuration === null,
       );
       expect(expiryCalls.length).toBe(1);
 
@@ -666,17 +623,14 @@ describe("session-timer additional edge cases", () => {
         sessionDuration: null,
       };
 
-      const mod = await import("../../src/main/session-timer.js");
-      mod.setOnSessionStateChange(mockOnSessionStateChange);
-      mod.setSettingsReader(mockGetSettings);
-      mod.setBroadcastFn(mockBroadcastToWindows);
+      const handle = await buildHandle();
 
-      mod.startSession(1);
+      handle.startSession(1);
       vi.advanceTimersByTime(60000 - 1);
 
       mockOnSessionStateChange.mockClear();
 
-      mod.cancelSession();
+      handle.cancelSession();
 
       const cancelCallCount = mockOnSessionStateChange.mock.calls.length;
       expect(cancelCallCount).toBe(1);
@@ -732,6 +686,51 @@ describe("session-timer additional edge cases", () => {
 
       // Reference cancelSession to satisfy noUnusedLocals
       void cancelSession;
+    });
+  });
+
+  describe("factory enforces required deps (no silent fallbacks)", () => {
+    it("createSessionTimer throws when onStateChange is missing", async () => {
+      const mod = await import("../../src/main/session-timer.js");
+      expect(() =>
+        mod.createSessionTimer({
+          // @ts-expect-error - intentionally missing required dep
+          onStateChange: undefined,
+          getSettings: mockGetSettings,
+          broadcast: mockBroadcastToWindows,
+        }),
+      ).toThrow(/onStateChange/);
+    });
+
+    it("createSessionTimer throws when getSettings is missing", async () => {
+      const mod = await import("../../src/main/session-timer.js");
+      expect(() =>
+        mod.createSessionTimer({
+          onStateChange: mockOnSessionStateChange,
+          // @ts-expect-error - intentionally missing required dep
+          getSettings: undefined,
+          broadcast: mockBroadcastToWindows,
+        }),
+      ).toThrow(/getSettings/);
+    });
+
+    it("createSessionTimer throws when broadcast is missing", async () => {
+      const mod = await import("../../src/main/session-timer.js");
+      expect(() =>
+        mod.createSessionTimer({
+          onStateChange: mockOnSessionStateChange,
+          getSettings: mockGetSettings,
+          // @ts-expect-error - intentionally missing required dep
+          broadcast: undefined,
+        }),
+      ).toThrow(/broadcast/);
+    });
+
+    it("module-level startSession throws when no active handle is registered", async () => {
+      vi.resetModules();
+      const mod = await import("../../src/main/session-timer.js");
+      mod.setActiveSessionTimer(null);
+      expect(() => mod.startSession(30)).toThrow(/No active handle/);
     });
   });
 });

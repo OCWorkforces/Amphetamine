@@ -9,6 +9,7 @@ import {
 import log from "electron-log";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { showAbout as openAboutWindow } from "./about-window.js";
 
 import {
   ACCELERATOR_QUIT,
@@ -45,9 +46,7 @@ const fallbackIconLight = nativeImage.createFromBuffer(
 );
 
 function showAbout(): void {
-  // Dynamically import to avoid circular dependency at module load time.
-  // showAbout creates a BrowserWindow singleton with alwaysOnTop: true.
-  void import("./about-window.js").then(({ showAbout }) => showAbout());
+  openAboutWindow();
 }
 
 /**

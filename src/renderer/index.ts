@@ -41,7 +41,7 @@ function getApp(): HTMLElement | null {
  * via wall-clock delta (Date.now() approximates the moment of receipt).
  */
 function updateSessionAnchors(status: SessionStatus): void {
-  if (status?.isRunning && status.expiresAt !== null && status.remainingSeconds !== null) {
+  if (status !== null && status.isRunning && status.remainingSeconds !== null) {
     const remainingMs = status.remainingSeconds * 1000;
     sessionExpiresAtPerf = asPerf(performance.now() + remainingMs);
   } else {

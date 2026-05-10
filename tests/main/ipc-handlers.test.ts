@@ -72,8 +72,22 @@ vi.mock("../../src/main/session-timer.js", () => ({
 }));
 
 describe("ipc-handlers", () => {
-  let registerIpcHandlers: (_win: unknown) => void;
+  let registerIpcHandlers: (_win: unknown, _deps: unknown) => void;
   let registeredHandlers: Map<string, (..._args: unknown[]) => unknown>;
+
+  function makeIpcDeps(): unknown {
+    return {
+      getSettings: mockGetSettings,
+      updateSettings: mockUpdateSettings,
+      createSettingsWindow: mockCreateSettingsWindow,
+      registerAutoUpdaterIpc: vi.fn(),
+      sessionTimer: {
+        startSession: mockStartSession,
+        cancelSession: mockCancelSession,
+        getStatus: mockGetStatus,
+      },
+    };
+  }
 
   beforeEach(async () => {
     vi.clearAllMocks();
@@ -104,13 +118,13 @@ describe("ipc-handlers", () => {
 
     // Import the module
     const mod = await import("../../src/main/ipc.js");
-    registerIpcHandlers = mod.registerIpcHandlers as unknown as (_win: unknown) => void;
+    registerIpcHandlers = mod.registerIpcHandlers as unknown as (_win: unknown, _deps: unknown) => void;
   });
 
   describe("WINDOW_SET_HEIGHT handler", () => {
     it("clamps height to MIN_WINDOW_HEIGHT if too small", async () => {
       const mockWindow = { setSize: vi.fn() };
-      registerIpcHandlers(mockWindow);
+      registerIpcHandlers(mockWindow, makeIpcDeps());
 
       const handler = registeredHandlers.get(IPC_CHANNELS.WINDOW_SET_HEIGHT);
       expect(handler).toBeDefined();
@@ -130,7 +144,7 @@ describe("ipc-handlers", () => {
 
     it("clamps height to MAX_WINDOW_HEIGHT if too large", async () => {
       const mockWindow = { setSize: vi.fn() };
-      registerIpcHandlers(mockWindow);
+      registerIpcHandlers(mockWindow, makeIpcDeps());
 
       const handler = registeredHandlers.get(IPC_CHANNELS.WINDOW_SET_HEIGHT);
       const mockEvent = {
@@ -148,7 +162,7 @@ describe("ipc-handlers", () => {
 
     it("accepts valid height within bounds", async () => {
       const mockWindow = { setSize: vi.fn() };
-      registerIpcHandlers(mockWindow);
+      registerIpcHandlers(mockWindow, makeIpcDeps());
 
       const handler = registeredHandlers.get(IPC_CHANNELS.WINDOW_SET_HEIGHT);
       const mockEvent = {
@@ -165,7 +179,7 @@ describe("ipc-handlers", () => {
 
     it("ignores non-positive height values", async () => {
       const mockWindow = { setSize: vi.fn() };
-      registerIpcHandlers(mockWindow);
+      registerIpcHandlers(mockWindow, makeIpcDeps());
 
       const handler = registeredHandlers.get(IPC_CHANNELS.WINDOW_SET_HEIGHT);
       const mockEvent = {
@@ -182,7 +196,7 @@ describe("ipc-handlers", () => {
   describe("APP_GET_VERSION handler", () => {
     it("returns app version for valid sender", async () => {
       const mockWindow = {};
-      registerIpcHandlers(mockWindow);
+      registerIpcHandlers(mockWindow, makeIpcDeps());
 
       const handler = registeredHandlers.get(IPC_CHANNELS.APP_GET_VERSION);
       expect(handler).toBeDefined();
@@ -202,7 +216,7 @@ describe("ipc-handlers", () => {
       mockGetSettings.mockReturnValue(mockSettings);
 
       const mockWindow = {};
-      registerIpcHandlers(mockWindow);
+      registerIpcHandlers(mockWindow, makeIpcDeps());
 
       const handler = registeredHandlers.get(IPC_CHANNELS.SETTINGS_GET);
       const mockEvent = {
@@ -217,7 +231,7 @@ describe("ipc-handlers", () => {
   describe("SETTINGS_SET handler", () => {
     it("calls updateSettings with partial settings", async () => {
       const mockWindow = {};
-      registerIpcHandlers(mockWindow);
+      registerIpcHandlers(mockWindow, makeIpcDeps());
 
       const handler = registeredHandlers.get(IPC_CHANNELS.SETTINGS_SET);
       const mockEvent = {
@@ -235,7 +249,7 @@ describe("ipc-handlers", () => {
   describe("SETTINGS_OPEN handler", () => {
     it("calls createSettingsWindow for valid sender", async () => {
       const mockWindow = {};
-      registerIpcHandlers(mockWindow);
+      registerIpcHandlers(mockWindow, makeIpcDeps());
 
       const handler = registeredHandlers.get(IPC_CHANNELS.SETTINGS_OPEN);
       const mockEvent = {
@@ -255,7 +269,7 @@ describe("ipc-handlers", () => {
 
     it("SESSION_START calls startSession", async () => {
       const mockWindow = {};
-      registerIpcHandlers(mockWindow);
+      registerIpcHandlers(mockWindow, makeIpcDeps());
 
       const handler = registeredHandlers.get(IPC_CHANNELS.SESSION_START);
 
@@ -266,7 +280,7 @@ describe("ipc-handlers", () => {
 
     it("SESSION_CANCEL calls cancelSession", async () => {
       const mockWindow = {};
-      registerIpcHandlers(mockWindow);
+      registerIpcHandlers(mockWindow, makeIpcDeps());
 
       const handler = registeredHandlers.get(IPC_CHANNELS.SESSION_CANCEL);
 
@@ -277,7 +291,7 @@ describe("ipc-handlers", () => {
 
     it("SESSION_CANCEL calls cancelSession", async () => {
       const mockWindow = {};
-      registerIpcHandlers(mockWindow);
+      registerIpcHandlers(mockWindow, makeIpcDeps());
 
       const handler = registeredHandlers.get(IPC_CHANNELS.SESSION_CANCEL);
 
@@ -288,7 +302,7 @@ describe("ipc-handlers", () => {
 
     it("SESSION_STATUS returns pure status snapshot (never null) when no session running", async () => {
       const mockWindow = {};
-      registerIpcHandlers(mockWindow);
+      registerIpcHandlers(mockWindow, makeIpcDeps());
 
       mockGetStatus.mockReturnValue({
         isRunning: false,

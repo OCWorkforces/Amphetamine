@@ -2,13 +2,14 @@
  * App Coordinator — Central orchestrator for settings-driven sync.
  *
  * Subscribes to settings changes and automatically synchronizes:
- * - Power-saver state (preventSleep) + battery monitoring
+ * - Power-saver state: shouldBlockSleep = settings.preventSleep || sessionTimer.sessionActive
+ *   (user's standing preference OR a live session)
  * - Auto-launch state (launchAtLogin)
- * - Session cancellation (preventSleep true→false transition)
  * - Settings broadcast to all renderer windows
  *
- * This decouples session-timer, shortcut, and ipc from power-saver/auto-launch,
- * reducing cross-module import edges and centralizing orchestration logic.
+ * settings.preventSleep is the persisted user intent ("prevent sleep at all times").
+ * sessionTimer.sessionActive is runtime state owned by session-timer.
+ * Sleep prevention is the OR of both — cancelling a session never clobbers user intent.
  */
 import log from "electron-log";
 import { IPC_CHANNELS } from "../shared/types.js";
@@ -16,32 +17,39 @@ import { broadcastToWindows } from "./utils/broadcast.js";
 import type { AppSettings } from "../shared/types.js";
 import { initSettings, getSettings, onSettingsChanged, updateSettings } from "./settings.js";
 import { syncAutoLaunch } from "./auto-launch.js";
-import { registerGlobalShortcut, type ShortcutDeps } from "./global-shortcut.js";
+import { registerGlobalShortcut, unregisterGlobalShortcut, type ShortcutDeps } from "./global-shortcut.js";
 import { isPreventingSleep, syncPreventSleep, stopPreventingSleep } from "./sleep-prevention.js";
 import {
-  setBatteryThresholdGetter,
-  setBatteryAutoStopCallback,
-  setSleepPreventionChecker,
-  setStopSleepPrevention,
-  initBatteryMonitoring,
-  cleanupBatteryMonitoring,
+  createBatteryMonitor,
+  type BatteryMonitorHandle,
 } from "./battery-monitor.js";
 import {
-  cancelSession,
-  reconcileSessionState,
-  setOnSessionStateChange,
-  setSettingsReader,
-  setBroadcastFn as setSessionBroadcastFn,
+  createSessionTimer,
+  setActiveSessionTimer,
+  type SessionTimerHandle,
 } from "./session-timer.js";
-import { setBroadcastFn as setUpdaterBroadcastFn } from "./auto-updater.js";
+import { setBroadcastFn as setUpdaterBroadcastFn, stopAutoUpdater } from "./auto-updater.js";
 import type { TrayDeps } from "./tray.js";
-import { createSettingsWindow } from "./settings-window.js";
+import { createSettingsWindow, closeSettingsWindow } from "./settings-window.js";
+import { closeAboutWindow } from "./about-window.js";
 
-let prevPreventSleep = false;
 let prevSettings: AppSettings | null = null;
 let shortcutDeps: ShortcutDeps | null = null;
 let unsubscribeSettings: (() => void) | null = null;
-let inSubscriber = false;
+let sessionTimer: SessionTimerHandle | null = null;
+let batteryMonitor: BatteryMonitorHandle | null = null;
+let sessionActiveCache = false;
+
+/**
+ * Compute the effective sleep-prevention state and apply it.
+ *
+ * shouldBlockSleep = userIntent (settings.preventSleep) OR sessionActive (runtime).
+ * Either source independently keeps sleep blocked.
+ */
+function recomputeSleepPrevention(userIntentOverride?: boolean): void {
+  const userIntent = userIntentOverride ?? getSettings().preventSleep;
+  syncPreventSleep(userIntent || sessionActiveCache);
+}
 
 function togglePreventSleep(): void {
   updateSettings({ preventSleep: !getSettings().preventSleep }).catch((err) =>
@@ -55,32 +63,43 @@ function togglePreventSleep(): void {
 export async function initCoordinator(): Promise<void> {
   await initSettings();
   const settings = getSettings();
-  prevPreventSleep = settings.preventSleep;
   prevSettings = { ...settings };
 
   // Sync system state with current settings
   syncAutoLaunch(settings.launchAtLogin);
-  syncPreventSleep(settings.preventSleep);
+  // Initial sleep state derives from user intent only (no session yet on init).
+  sessionActiveCache = false;
+  recomputeSleepPrevention();
 
-  // Wire battery threshold getter and auto-stop callback
-  setBatteryThresholdGetter(() => getSettings().batteryThreshold);
-  setBatteryAutoStopCallback(cancelSession);
-  setSleepPreventionChecker(isPreventingSleep);
-  setStopSleepPrevention(stopPreventingSleep);
-  void initBatteryMonitoring().catch((err) => log.error("[coordinator] Battery init failed:", err));
-
-  // Wire session state change callback (replaces direct updateSettings in session-timer)
-  setOnSessionStateChange((updates) => {
-    updateSettings(updates).catch((err) =>
-      log.error("[coordinator] Session state update failed:", err),
-    );
+  // Construct the session timer with explicit, required dependencies. The
+  // returned handle is stored locally for direct calls (cancelSession,
+  // reconcileSessionState) and registered as the module-level active handle
+  // so that ipc.ts's namespace import keeps working.
+  sessionTimer = createSessionTimer({
+    onStateChange: (updates) => {
+      updateSettings(updates).catch((err) =>
+        log.error("[coordinator] Session state update failed:", err),
+      );
+    },
+    getSettings,
+    broadcast: broadcastToWindows,
+    onSessionActiveChange: (active) => {
+      sessionActiveCache = active;
+      recomputeSleepPrevention();
+    },
   });
+  setActiveSessionTimer(sessionTimer);
 
-  // Wire settings reader (replaces direct getSettings import in session-timer)
-  setSettingsReader(getSettings);
-
-  // Wire broadcast function (replaces direct broadcastToWindows import in session-timer)
-  setSessionBroadcastFn(broadcastToWindows);
+  // Construct the battery monitor with explicit, required dependencies.
+  batteryMonitor = createBatteryMonitor({
+    getThreshold: () => getSettings().batteryThreshold,
+    onAutoStop: () => sessionTimer?.cancelSession(),
+    isPreventingSleep,
+    stopPreventingSleep,
+  });
+  void batteryMonitor
+    .initBatteryMonitoring()
+    .catch((err) => log.error("[coordinator] Battery init failed:", err));
 
   // Wire broadcast function (replaces direct broadcastToWindows import in auto-updater)
   setUpdaterBroadcastFn(broadcastToWindows);
@@ -93,12 +112,13 @@ export async function initCoordinator(): Promise<void> {
   };
   registerGlobalShortcut(shortcutDeps);
 
-  // Subscribe to settings changes for automatic system sync
+  // Subscribe to settings changes for automatic system sync.
+  //
+  // No re-entrancy guard is needed: session lifecycle no longer writes
+  // `preventSleep` to settings, so cancelSession() cannot re-enter this
+  // subscriber via updateSettings(). Sleep-prevention is derived from
+  // (settings.preventSleep || sessionActiveCache) by recomputeSleepPrevention().
   unsubscribeSettings = onSettingsChanged((settings: AppSettings) => {
-    // Re-entrancy guard: cancelSession()/updateSettings() can synchronously
-    // re-trigger this subscriber. Skip nested invocations.
-    if (inSubscriber) return;
-    inSubscriber = true;
     try {
       // Skip if nothing actually changed (prevents redundant syncs/broadcasts)
       if (prevSettings !== null) {
@@ -113,41 +133,31 @@ export async function initCoordinator(): Promise<void> {
         if (!changed) return;
       }
 
-      // Reconcile in-memory session state against settings (replaces the side
-      // effect formerly hidden inside getStatus()).
-      reconcileSessionState();
+      // Defensive reconcile (no-op when state is already consistent).
+      sessionTimer?.reconcileSessionState();
 
-      // Sync only what changed
+      // User intent toggle changed — recompute effective sleep-prevention.
+      // We do NOT cancel the active session here: settings.preventSleep is the
+      // user's standing preference, NOT "a session is active". The two are
+      // intentionally orthogonal now (this fix).
       if (!prevSettings || settings.preventSleep !== prevSettings.preventSleep) {
-        syncPreventSleep(settings.preventSleep);
+        recomputeSleepPrevention(settings.preventSleep);
       }
       if (!prevSettings || settings.launchAtLogin !== prevSettings.launchAtLogin) {
         syncAutoLaunch(settings.launchAtLogin);
       }
 
       // Re-register shortcut when user changes the keyboard shortcut setting.
-      // registerGlobalShortcut handles unregistering the previous accelerator internally.
       if (prevSettings && settings.shortcut !== prevSettings.shortcut && shortcutDeps) {
         registerGlobalShortcut(shortcutDeps);
       }
 
-      // Update prevPreventSleep BEFORE cancelSession() to prevent infinite recursion.
-      // cancelSession() calls updateSettings() which re-triggers this subscriber synchronously.
-      const wasPreventingSleep = prevPreventSleep;
-      prevPreventSleep = settings.preventSleep;
       prevSettings = { ...settings };
-
-      // Cancel active session when preventSleep transitions true → false
-      if (wasPreventingSleep && !settings.preventSleep) {
-        cancelSession();
-      }
 
       // Broadcast settings to all renderer windows
       broadcastToWindows(IPC_CHANNELS.SETTINGS_CHANGED, settings);
     } catch (err) {
       log.error("[coordinator] Settings subscriber error:", err);
-    } finally {
-      inSubscriber = false;
     }
   });
 
@@ -159,10 +169,19 @@ export async function initCoordinator(): Promise<void> {
  * Unsubscribes from settings changes and stops preventing sleep.
  */
 export function cleanupCoordinator(): void {
+  closeSettingsWindow();
+  closeAboutWindow();
   unsubscribeSettings?.();
   unsubscribeSettings = null;
-  cleanupBatteryMonitoring();
+  batteryMonitor?.cleanupBatteryMonitoring();
+  batteryMonitor = null;
+  sessionTimer = null;
+  setActiveSessionTimer(null);
+  sessionActiveCache = false;
+  prevSettings = null;
   stopPreventingSleep();
+  unregisterGlobalShortcut();
+  stopAutoUpdater();
   log.info("[coordinator] Cleaned up");
 }
 

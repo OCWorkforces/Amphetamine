@@ -19,7 +19,7 @@ import {
   isNonEmptyString,
   isValidAccelerator,
   mergeValidatedPartial,
-} from "../../src/main/settings.js";
+} from "../../src/shared/settings-validators.js";
 import { DEFAULT_SETTINGS } from "../../src/shared/types.js";
 
 describe("settings predicates", () => {

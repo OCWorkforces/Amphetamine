@@ -89,6 +89,7 @@ vi.mock("../../src/main/ipc.js", () => ({
 
 vi.mock("../../src/main/settings.js", () => ({
   getSettings: mockGetSettings,
+  updateSettings: vi.fn(),
 }));
 
 
@@ -100,6 +101,19 @@ vi.mock("../../src/main/coordinator.js", () => ({
 
 vi.mock("../../src/main/settings-window.js", () => ({
   closeSettingsWindow: mockCloseSettingsWindow,
+  createSettingsWindow: vi.fn(),
+}));
+
+  vi.mock("../../src/main/auto-updater.js", () => ({
+  initAutoUpdater: vi.fn(),
+  stopAutoUpdater: vi.fn(),
+  registerAutoUpdaterIpc: vi.fn(),
+}));
+
+  vi.mock("../../src/main/session-timer.js", () => ({
+  startSession: vi.fn(),
+  cancelSession: vi.fn(),
+  getStatus: vi.fn(),
 }));
 
 vi.mock("../../src/main/shortcut.js", () => ({

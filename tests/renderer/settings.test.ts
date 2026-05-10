@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import type { AppSettings, PerfTimestamp, SessionStatusResponse } from "../../src/shared/types.js";
+import type { AppSettings, SessionStatusResponse } from "../../src/shared/types.js";
 import { asPerf, DEFAULT_SETTINGS } from "../../src/shared/types.js";
 import { SAVED_INDICATOR } from "../../src/renderer/settings/constants.js";
 
@@ -57,8 +57,10 @@ describe("renderer settings", () => {
       value: {
         ...globalThis.window,
         api: mockApi,
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
         addEventListener: globalThis.window?.addEventListener?.bind(globalThis.window) ?? vi.fn(),
         removeEventListener:
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
           globalThis.window?.removeEventListener?.bind(globalThis.window) ?? vi.fn(),
       },
       writable: true,
@@ -286,7 +288,7 @@ describe("renderer settings", () => {
       expect(mockApi.session.start).toHaveBeenCalledWith(30);
     });
 
-    it("sets preventSleep: true and sessionDuration when duration selected", async () => {
+    it("sets sessionDuration when duration selected (no longer conflates preventSleep)", async () => {
       vi.resetModules();
       await import("../../src/renderer/settings/index.js");
       document.dispatchEvent(new Event("DOMContentLoaded"));
@@ -298,12 +300,14 @@ describe("renderer settings", () => {
 
       await vi.advanceTimersByTimeAsync(350);
 
-      expect(mockApi.settings.set).toHaveBeenCalledWith(
-        expect.objectContaining({
-          sessionDuration: 60,
-          preventSleep: true,
-        }),
+      // Renderer no longer writes preventSleep when starting a session.
+      // Sleep prevention is derived in the coordinator from
+      // (settings.preventSleep || sessionTimer.sessionActive).
+      const calls = mockApi.settings.set.mock.calls.map((c: unknown[]) => c[0]);
+      const durationCall = calls.find(
+        (c: Record<string, unknown> | undefined) => c && "sessionDuration" in c,
       );
+      expect(durationCall).toEqual(expect.objectContaining({ sessionDuration: 60, preventSleep: false }));
     });
 
     it("sends null duration when Indefinitely selected", async () => {

@@ -48,7 +48,6 @@ import {
   saveSettings,
   getSettings,
   updateSettings,
-  onSettingsChanged,
 } from "../../src/main/settings.js";
 import { DEFAULT_SETTINGS } from "../../src/shared/types.js";
 

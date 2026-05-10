@@ -1,209 +1,78 @@
 # Shared Types — Cross-Process Contracts
 
-Type definitions shared across main, preload, and renderer processes. Single source of truth for IPC channels and data models.
+Type definitions shared across main, preload, and renderer processes. Single source of truth for IPC channels and data models. Zero dependencies.
 
-## FILES
+## Files
 
-| File       | Role                                  |
-| ---------- | ------------------------------------- |
-| `types.ts` | IPC channels, interfaces, type unions |
+| File | Role |
+|------|------|
+| `types.ts` | IPC channels, interfaces, discriminated unions, branded types |
+| `settings-validators.ts` | Pure predicates + `VALIDATORS` dispatch table — reusable across processes |
 
-## IPC CHANNELS
+## IPC Channels
 
-```typescript
-// types.ts:2-16
-export const IPC_CHANNELS = {
-  WINDOW_SET_HEIGHT: "window:set-height",
-  WINDOW_HIDE: "window:hide", // push from main
-  APP_GET_VERSION: "app:get-version",
-  SETTINGS_GET: "settings:get",
-  SETTINGS_SET: "settings:set",
-  SESSION_START: "session:start",
-  SESSION_CANCEL: "session:cancel",
-  SESSION_STATUS: "session:status",
-  SESSION_STATUS_UPDATE: "session:status-update", // push from main
-  SETTINGS_CHANGED: "settings:changed", // push from main
-  SETTINGS_OPEN: "settings:open",
-  APP_QUIT: "app:quit",
-  AUTO_UPDATER_CHECK: "auto-updater:check",
-  AUTO_UPDATER_STATUS: "auto-updater:status", // push from main
-  SHORTCUT_REGISTRATION_FAILED: "shortcut:registration-failed", // push from main
-} as const;
-```
+15 channels total. 5 are one-way push channels (main-to-renderer).
 
-`IpcChannelMap` maps each channel to its `request` / `response` types (15 channels). Push channels (5): `WINDOW_HIDE`, `SETTINGS_CHANGED`, `SESSION_STATUS_UPDATE`, `AUTO_UPDATER_STATUS`, `SHORTCUT_REGISTRATION_FAILED`.
+| Channel | Direction | Request | Response |
+|---------|-----------|---------|----------|
+| `WINDOW_SET_HEIGHT` | req/res | `number` | `void` |
+| `WINDOW_HIDE` | push | — | — |
+| `APP_GET_VERSION` | req/res | `void` | `string` |
+| `SETTINGS_GET` | req/res | `void` | `AppSettings` |
+| `SETTINGS_SET` | req/res | `Partial<AppSettings>` | `{ settings, rejectedKeys }` |
+| `SESSION_START` | req/res | `{ durationMinutes }` | `SessionStartResponse` |
+| `SESSION_CANCEL` | req/res | `undefined` | `{ cancelled }` |
+| `SESSION_STATUS` | req/res | `undefined` | `SessionStatusResponse` |
+| `SESSION_STATUS_UPDATE` | push | — | `SessionStatusResponse` |
+| `SETTINGS_CHANGED` | push | — | `AppSettings` |
+| `SETTINGS_OPEN` | req/res | `undefined` | `void` |
+| `APP_QUIT` | req/res | `undefined` | `void` |
+| `AUTO_UPDATER_CHECK` | req/res | `undefined` | `{ version, releaseDate } \| null` |
+| `AUTO_UPDATER_STATUS` | push | — | `AutoUpdaterStatus` |
+| `SHORTCUT_REGISTRATION_FAILED` | push | — | `{ accelerator }` |
 
-`IpcChannelMap` maps each channel to its `request` / `response` types. Note: `SESSION_STATUS` and `SESSION_STATUS_UPDATE` always return `SessionStatusResponse` — never `null`.
+Push channels: `WINDOW_HIDE`, `SESSION_STATUS_UPDATE`, `SETTINGS_CHANGED`, `AUTO_UPDATER_STATUS`, `SHORTCUT_REGISTRATION_FAILED`.
 
-## DATA MODELS
+## Data Models
 
 ### AppSettings
 
 ```typescript
-export interface AppSettings {
-  launchAtLogin: boolean; // macOS login item toggle
-  preventSleep: boolean; // powerSaveBlocker toggle
+interface AppSettings {
+  launchAtLogin: boolean;        // macOS login item toggle
+  preventSleep: boolean;         // powerSaveBlocker enable/disable (user intent)
   sessionDuration: number | null; // null = indefinite, number = minutes
-  batteryThreshold: number; // auto-disable on battery below this %. 0 = disabled
-  shortcut: string; // global shortcut accelerator string. Empty = use default
+  batteryThreshold: number;      // auto-disable on battery below this %. 0 = disabled
+  shortcut: string;              // global shortcut accelerator string. Empty = use default
 }
-
-export const DEFAULT_SETTINGS: Readonly<AppSettings> = {
-  launchAtLogin: false,
-  preventSleep: false,
-  sessionDuration: null,
-  batteryThreshold: 0,
-  shortcut: "",
-};
 ```
 
-> **Note**: When adding a new field to `AppSettings`, it MUST be added to the `VALIDATORS` dispatch table in `src/main/settings.ts` — otherwise validation silently drops the field.
+`DEFAULT_SETTINGS` is `Readonly<AppSettings>` — always clone via spread.
 
-### SessionStatusResponse
+### SessionStatusResponse (3-arm discriminated union)
 
-Discriminated union with three arms (discriminated by `isRunning` + `expiresAt`):
+- **Not running:** `isRunning: false`, all fields `null`
+- **Timed session:** `isRunning: true`, all fields populated (`expiresAt`, `remainingSeconds`, `durationMinutes`)
+- **Indefinite session:** `isRunning: true`, `startedAt` only, rest `null`
 
-```typescript
-// types.ts — used by SESSION_STATUS and SESSION_STATUS_UPDATE
-export type SessionStatusResponse =
-  | {
-      // Not running
-      isRunning: false;
-      startedAt: null;
-      expiresAt: null;
-      remainingSeconds: null;
-      durationMinutes: null;
-    }
-  | {
-      // Timed session
-      isRunning: true;
-      startedAt: number;
-      expiresAt: number;
-      remainingSeconds: number;
-      durationMinutes: number;
-    }
-  | {
-      // Indefinite session
-      isRunning: true;
-      startedAt: number;
-      expiresAt: null;
-      remainingSeconds: null;
-      durationMinutes: null;
-    };
-```
+### SessionStartResponse (ok/fail discriminated union)
 
-> **Narrowing**: Access fields only after narrowing — first `if (status.isRunning)` to discriminate running vs not, then `if (status.expiresAt !== null)` to discriminate timed vs indefinite.
+- **Ok:** `{ ok: true, startedAt, durationMinutes, expiresAt }`
+- **Fail:** `{ ok: false, reason: "invalid-duration" | "rejected" | "Duration cannot exceed 24 hours" }`
 
-### SessionStartResponse
+### AutoUpdaterStatus (5-arm discriminated union)
 
-Discriminated union with two arms (discriminated by `ok`):
+- `checking`
+- `available` + `UpdateMeta`
+- `not-available` + `UpdateMeta`
+- `downloaded` + `UpdateMeta`
+- `downloading` + progress info
+- `check-error` | `download-error` | `error` + error `category`
 
-```typescript
-// types.ts — used by SESSION_START
-export type SessionStartResponse =
-  | {
-      // Success
-      ok: true;
-      startedAt: number;
-      durationMinutes: number | null;
-      expiresAt: number | null;
-    }
-  | {
-      // Failure
-      ok: false;
-      reason: "invalid-duration" | "rejected";
-    };
-```
+### PerfTimestamp (Branded type)
 
-> **Narrowing**: Always check `resp.ok` before accessing other fields. On `ok: false`, only `reason` is available.
+`number & { readonly __brand: unique symbol }` — compile-time branding for `performance.now()` values. Use `.AsType<PerfTimestamp>()` to cast, never raw `as PerfTimestamp`.
 
-### Session Cancel
+### Validation
 
-```typescript
-// Inline in IpcChannelMap — SESSION_CANCEL response
-{ cancelled: boolean }
-```
-
-## TYPE UTILITIES
-
-```typescript
-export type IpcChannel = keyof IpcChannelMap;
-export type IpcRequest<K extends IpcChannel> = IpcChannelMap[K]["request"];
-export type IpcResponse<K extends IpcChannel> = IpcChannelMap[K]["response"];
-```
-
-## PUSH CHANNELS
-
-```typescript
-export const PUSH_CHANNELS = [
-  IPC_CHANNELS.WINDOW_HIDE,
-  IPC_CHANNELS.SETTINGS_CHANGED,
-  IPC_CHANNELS.SESSION_STATUS_UPDATE,
-  IPC_CHANNELS.AUTO_UPDATER_STATUS,
-] as const;
-
-export type PushChannel = (typeof PUSH_CHANNELS)[number];
-```
-
-`PUSH_CHANNELS` is the single source of truth for push-style channels. `PushChannel` is derived from it — no manual union maintenance.
-
-## BRANDED TYPES
-
-### PerfTimestamp
-
-Phantom branded type for `performance.now()` monotonic millisecond timestamps.
-
-```typescript
-export type PerfTimestamp = number & { readonly __brand: unique symbol };
-```
-
-Re-attach the brand at IPC boundaries via `.AsType<PerfTimestamp>()` — type-safe alternative to raw `as`.
-
-### AsType<T extends number>()
-
-Type-safe branded casting extension on `Number`. Constrains `T` to extend `number` — only allows casting to branded numeric types.
-
-```typescript
-// Usage: (performance.now() + remainingMs).AsType<PerfTimestamp>()
-Number.prototype.AsType = function <T extends number>(): T { ... };
-```
-
-## AUTO-UPDATER TYPES
-
-### AutoUpdaterStatus
-
-Discriminated union for auto-updater push events (4 groups discriminated by `status`):
-
-```typescript
-export type AutoUpdaterStatus =
-  | { status: "checking" }
-  | { status: "available" | "not-available" | "downloaded"; info: UpdateMeta }
-  | { status: "downloading"; progress: { percent: number; transferred: number; total: number } }
-  | { status: "check-error" | "download-error" | "error"; category: "network" | "signature" | "io" | "unknown" };
-```
-
-### UpdateMeta
-
-```typescript
-export type UpdateMeta = {
-  version: string;
-  releaseDate: string;
-  releaseNotes?: string;
-};
-```
-
-## USAGE PATTERN
-
-1. **Add new channel**: Add to `IPC_CHANNELS` object + `IpcChannelMap` (both request and response)
-2. **Add new data type**: Define interface/type export
-3. **Use in processes**: `import { ... } from '../shared/types.js'`
-
-## IMPORT PATHS
-
-| Process  | Import Path             |
-| -------- | ----------------------- |
-| main     | `../shared/types.js`    |
-| preload  | `../shared/types.js`    |
-| renderer | `../../shared/types.js` |
-
-Note: `.js` extension required for ESM resolution even though source is `.ts`.
+`settings-validators.ts` uses a `VALIDATORS` dispatch table — one entry per `AppSettings` key. Adding a new settings field requires adding a validator entry; otherwise validation silently drops it.

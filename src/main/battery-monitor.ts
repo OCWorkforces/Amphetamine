@@ -9,86 +9,108 @@ const DEFAULT_BATTERY_THRESHOLD = 20;
 
 const execFileAsync = promisify(execFile);
 
-type GetBatteryThresholdFn = () => number;
-let getBatteryThreshold: GetBatteryThresholdFn = () => 0;
-
-export function setBatteryThresholdGetter(fn: GetBatteryThresholdFn): void {
-  getBatteryThreshold = fn;
+/**
+ * Dependencies for the battery monitor.
+ *
+ * All fields are required — there is no silent fallback. Wiring is enforced
+ * at construction time by `createBatteryMonitor`.
+ */
+export interface BatteryDeps {
+  /** Returns the configured battery threshold (%). 0 / non-positive ⇒ default. */
+  getThreshold: () => number;
+  /** Invoked once after the monitor auto-stops sleep prevention. */
+  onAutoStop: () => void;
+  /** Returns true if sleep prevention is currently active. */
+  isPreventingSleep: () => boolean;
+  /** Stops sleep prevention. */
+  stopPreventingSleep: () => void;
 }
 
-type BatteryAutoStopCallback = () => void;
-let onBatteryAutoStop: BatteryAutoStopCallback | null = null;
-
-export function setBatteryAutoStopCallback(callback: BatteryAutoStopCallback): void {
-  onBatteryAutoStop = callback;
+/** Public handle returned by `createBatteryMonitor`. */
+export interface BatteryMonitorHandle {
+  initBatteryMonitoring: () => Promise<void>;
+  cleanupBatteryMonitoring: () => void;
 }
 
-type SleepPreventionChecker = () => boolean;
-let checkSleepPrevention: SleepPreventionChecker | null = null;
-
-export function setSleepPreventionChecker(fn: SleepPreventionChecker): void {
-  checkSleepPrevention = fn;
-}
-
-type StopSleepPreventionFn = () => void;
-let stopSleepPrevention: StopSleepPreventionFn | null = null;
-
-export function setStopSleepPrevention(fn: StopSleepPreventionFn): void {
-  stopSleepPrevention = fn;
-}
-
-let isCheckingBattery = false;
-let onBatteryListener: (() => void) | null = null;
-let onAcListener: (() => void) | null = null;
-
-/** @internal Power monitor listeners persist for app lifetime by design. */
-export async function initBatteryMonitoring(): Promise<void> {
-  onBatteryListener = () => {
-    if (isCheckingBattery) return;
-    isCheckingBattery = true;
-    checkBatteryAndStop()
-      .catch((err) => log.error("[battery-monitor] Battery check error:", err))
-      .finally(() => {
-        isCheckingBattery = false;
-      });
-  };
-  onAcListener = () => {
-    log.info("[battery-monitor] On AC power, battery monitoring reset");
-  };
-  powerMonitor.on("on-battery", onBatteryListener);
-  powerMonitor.on("on-ac", onAcListener);
-}
-
-/** Remove power monitor listeners. For completeness in cleanup paths. */
-export function cleanupBatteryMonitoring(): void {
-  if (onBatteryListener) {
-    powerMonitor.off?.("on-battery", onBatteryListener);
-    onBatteryListener = null;
+/**
+ * Create a battery monitor instance bound to the given dependencies.
+ *
+ * Throws synchronously if any dependency is missing — there are no silent
+ * fallbacks. Replaces the previous 4-setter DI pattern.
+ */
+export function createBatteryMonitor(deps: BatteryDeps): BatteryMonitorHandle {
+  if (typeof deps.getThreshold !== "function") {
+    throw new TypeError("createBatteryMonitor: deps.getThreshold must be a function");
   }
-  if (onAcListener) {
-    powerMonitor.off?.("on-ac", onAcListener);
-    onAcListener = null;
+  if (typeof deps.onAutoStop !== "function") {
+    throw new TypeError("createBatteryMonitor: deps.onAutoStop must be a function");
   }
-}
+  if (typeof deps.isPreventingSleep !== "function") {
+    throw new TypeError("createBatteryMonitor: deps.isPreventingSleep must be a function");
+  }
+  if (typeof deps.stopPreventingSleep !== "function") {
+    throw new TypeError("createBatteryMonitor: deps.stopPreventingSleep must be a function");
+  }
 
-async function checkBatteryAndStop(): Promise<void> {
-  const rawThreshold = getBatteryThreshold();
-  const threshold =
-    typeof rawThreshold === "number" && Number.isFinite(rawThreshold) && rawThreshold > 0
-      ? rawThreshold
-      : DEFAULT_BATTERY_THRESHOLD;
-  if (!(checkSleepPrevention?.() ?? false)) return;
+  const { getThreshold, onAutoStop, isPreventingSleep, stopPreventingSleep } = deps;
 
-  try {
-    const percent = await getBatteryPercent();
-    if (percent !== null && percent <= threshold) {
-      stopSleepPrevention?.();
-      log.info(`[battery-monitor] Auto-stopped: battery at ${percent}% (threshold: ${threshold}%)`);
-      onBatteryAutoStop?.();
+  let isCheckingBattery = false;
+  let onBatteryListener: (() => void) | null = null;
+  let onAcListener: (() => void) | null = null;
+
+  const checkBatteryAndStop = async (): Promise<void> => {
+    const rawThreshold = getThreshold();
+    const threshold =
+      typeof rawThreshold === "number" && Number.isFinite(rawThreshold) && rawThreshold > 0
+        ? rawThreshold
+        : DEFAULT_BATTERY_THRESHOLD;
+    if (!isPreventingSleep()) return;
+
+    try {
+      const percent = await getBatteryPercent();
+      if (percent !== null && percent <= threshold) {
+        stopPreventingSleep();
+        log.info(
+          `[battery-monitor] Auto-stopped: battery at ${percent}% (threshold: ${threshold}%)`,
+        );
+        onAutoStop();
+      }
+    } catch (err) {
+      log.warn("[battery-monitor] Failed to check battery level:", err);
     }
-  } catch (err) {
-    log.warn("[battery-monitor] Failed to check battery level:", err);
-  }
+  };
+
+  /** @internal Power monitor listeners persist for app lifetime by design. */
+  const initBatteryMonitoring = async (): Promise<void> => {
+    onBatteryListener = () => {
+      if (isCheckingBattery) return;
+      isCheckingBattery = true;
+      checkBatteryAndStop()
+        .catch((err) => log.error("[battery-monitor] Battery check error:", err))
+        .finally(() => {
+          isCheckingBattery = false;
+        });
+    };
+    onAcListener = () => {
+      log.info("[battery-monitor] On AC power, battery monitoring reset");
+    };
+    powerMonitor.on("on-battery", onBatteryListener);
+    powerMonitor.on("on-ac", onAcListener);
+  };
+
+  /** Remove power monitor listeners. For completeness in cleanup paths. */
+  const cleanupBatteryMonitoring = (): void => {
+    if (onBatteryListener) {
+      powerMonitor.off("on-battery", onBatteryListener);
+      onBatteryListener = null;
+    }
+    if (onAcListener) {
+      powerMonitor.off("on-ac", onAcListener);
+      onAcListener = null;
+    }
+  };
+
+  return { initBatteryMonitoring, cleanupBatteryMonitoring };
 }
 
 /**

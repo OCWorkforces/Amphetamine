@@ -5,52 +5,56 @@ import type {
   PushChannel,
   SessionStatusResponse,
 } from "../shared/types.js";
-import { asPerf, DEFAULT_SETTINGS, IPC_CHANNELS } from "../shared/types.js";
-
-const perfNow = (): PerfTimestamp => asPerf(performance.now());
+import { asPerf, IPC_CHANNELS } from "../shared/types.js";
 import log from "electron-log";
 import { MS_PER_MINUTE } from "./constants.js";
 
-function assertNever(value: never): never {
-  throw new Error("Unreachable: expected never, got " + JSON.stringify(value));
-}
+const perfNow = (): PerfTimestamp => asPerf(performance.now());
 
-let onSessionStateChange: ((updates: Partial<AppSettings>) => void) | null = null;
-let getSettingsRef: () => AppSettings = () => ({ ...DEFAULT_SETTINGS });
-
-/**
- * Inject a callback that handles session state changes.
- * Called by coordinator on init. Replaces direct updateSettings() calls.
- */
-export function setOnSessionStateChange(cb: (updates: Partial<AppSettings>) => void): void {
-  onSessionStateChange = cb;
-}
-
-/**
- * Inject a settings reader for getStatus() consistency checks.
- * Called by coordinator on init. Replaces direct getSettings() import.
- */
-export function setSettingsReader(getSettings: () => AppSettings): void {
-  getSettingsRef = getSettings;
-}
-
-let broadcastFn: (<K extends PushChannel>(channel: K, data: IpcResponse<K>) => void) | null = null;
-
-/**
- * Inject a broadcast function for session status updates.
- * Called by coordinator on init. Replaces direct broadcastToWindows() import.
- */
-export function setBroadcastFn(
-  fn: <K extends PushChannel>(channel: K, data: IpcResponse<K>) => void,
-): void {
-  broadcastFn = fn;
-}
 
 export interface SessionState {
   isRunning: boolean;
   startedAt: number | null;
   expiresAt: number | null;
   durationMinutes: number | null;
+}
+
+/**
+ * Dependencies for the session timer.
+ *
+ * All fields are required — there is no silent fallback. Wiring is enforced at
+ * construction time by `createSessionTimer`.
+ */
+export interface SessionTimerDeps {
+  /** Called when session state transitions trigger a settings update. */
+  onStateChange: (updates: Partial<AppSettings>) => void;
+  /** Reads the current settings snapshot for reconciliation. */
+  getSettings: () => AppSettings;
+  /** Broadcasts session status pushes to renderer windows. */
+  broadcast: <K extends PushChannel>(channel: K, data: IpcResponse<K>) => void;
+  /**
+   * Notifies when `sessionActive` (state.kind !== "idle") transitions.
+   * Coordinator uses this to recompute `shouldBlockSleep` without overloading
+   * `settings.preventSleep` (which now means "user's standing preference" only).
+   */
+  onSessionActiveChange?: (active: boolean) => void;
+}
+
+/**
+ * Public handle returned by `createSessionTimer`.
+ *
+ * The handle owns the timer state in a closure. Replaces the previous
+ * setter-based DI pattern.
+ */
+export interface SessionTimerHandle {
+  startSession: (durationMinutes: number | null) => SessionState;
+  cancelSession: () => SessionState;
+  getStatus: () => SessionStatusResponse;
+  cleanup: () => void;
+  reconcileSessionState: () => void;
+  broadcastSessionUpdate: () => void;
+  /** True when a session is running (timed or indefinite). Authoritative runtime state. */
+  readonly sessionActive: boolean;
 }
 
 /** Internal discriminated union — single source of truth for session state. */
@@ -65,135 +69,228 @@ type InternalSessionState =
       expiryTimer: ReturnType<typeof setTimeout>;
     };
 
-let state: InternalSessionState = { kind: "idle" };
-
-function clearTimedExpiryTimer(): void {
-  if (state.kind === "timed") {
-    clearTimeout(state.expiryTimer);
-  }
-}
-
 /**
- * Reconcile in-memory session state against settings.
+ * Create a session timer instance bound to the given dependencies.
  *
- * The discriminated-union state is now authoritative — settings drift is no
- * longer possible because state transitions always notify the coordinator.
- * Kept exported as a no-op safety shim: if settings somehow report no session
- * but module state still holds one, clear it to match.
+ * Throws synchronously if any dependency is missing — there are no silent
+ * fallbacks. This is the only way to obtain a working timer; the previous
+ * setter-based DI is gone.
  */
-export function reconcileSessionState(): void {
-  if (state.kind !== "idle" && getSettingsRef().sessionDuration === null) {
-    clearTimedExpiryTimer();
-    state = { kind: "idle" };
+export function createSessionTimer(deps: SessionTimerDeps): SessionTimerHandle {
+  if (typeof deps.onStateChange !== "function") {
+    throw new TypeError("createSessionTimer: deps.onStateChange must be a function");
   }
-}
+  if (typeof deps.getSettings !== "function") {
+    throw new TypeError("createSessionTimer: deps.getSettings must be a function");
+  }
+  if (typeof deps.broadcast !== "function") {
+    throw new TypeError("createSessionTimer: deps.broadcast must be a function");
+  }
 
-export function startSession(durationMinutes: number | null): SessionState {
-  clearTimedExpiryTimer();
+  const { onStateChange, getSettings, broadcast } = deps;
+  const onSessionActiveChange = deps.onSessionActiveChange;
 
-  if (durationMinutes === null) {
+  let state: InternalSessionState = { kind: "idle" };
+
+  const clearTimedExpiryTimer = (): void => {
+    if (state.kind === "timed") {
+      clearTimeout(state.expiryTimer);
+    }
+  };
+
+  /**
+   * Pure status reader — no side effects, never returns null.
+   * Maps the internal discriminated union to the public SessionStatusResponse shape.
+   */
+  const getStatus = (): SessionStatusResponse => {
+    switch (state.kind) {
+      case "idle":
+        return {
+          isRunning: false,
+          startedAt: null,
+          expiresAt: null,
+          remainingSeconds: null,
+          durationMinutes: null,
+        };
+      case "indefinite":
+        return {
+          isRunning: true,
+          startedAt: state.startedAt,
+          expiresAt: null,
+          remainingSeconds: null,
+          durationMinutes: null,
+        };
+      case "timed": {
+        const remainingMs = Math.max(0, state.expiresAt - perfNow());
+        const remainingSeconds = Math.floor(remainingMs / 1000);
+        return {
+          isRunning: true,
+          startedAt: state.startedAt,
+          expiresAt: state.expiresAt,
+          remainingSeconds,
+          durationMinutes: state.durationMinutes,
+        };
+      }
+    }
+  }
+
+  /** Compute and broadcast current session status to all renderer windows. */
+  const broadcastSessionUpdate = (): void => {
+    broadcast(IPC_CHANNELS.SESSION_STATUS_UPDATE, getStatus());
+  };
+
+  /**
+   * Reconcile in-memory session state against settings.
+   *
+   * The discriminated-union state is now authoritative — settings drift is no
+   * longer possible because state transitions always notify the coordinator.
+   * Kept as a no-op safety shim: if settings somehow report no session
+   * but module state still holds one, clear it to match.
+   */
+  const reconcileSessionState = (): void => {
+    if (state.kind !== "idle" && getSettings().sessionDuration === null) {
+      clearTimedExpiryTimer();
+      state = { kind: "idle" };
+      onSessionActiveChange?.(false);
+    }
+  };
+
+  const startSession = (durationMinutes: number | null): SessionState => {
+    const wasActive = state.kind !== "idle";
+    clearTimedExpiryTimer();
+
+    if (durationMinutes === null) {
+      const startedAt = perfNow();
+      state = { kind: "indefinite", startedAt };
+      onStateChange({ sessionDuration: null });
+      if (!wasActive) onSessionActiveChange?.(true);
+      broadcastSessionUpdate();
+      return {
+        isRunning: true,
+        startedAt,
+        expiresAt: null,
+        durationMinutes: null,
+      };
+    }
+
+    // Timed session
     const startedAt = perfNow();
-    state = { kind: "indefinite", startedAt };
-    onSessionStateChange?.({ sessionDuration: null, preventSleep: true });
+    const expiresAt = asPerf(startedAt + durationMinutes * MS_PER_MINUTE);
+
+    const expiryTimer = setTimeout(() => {
+      try {
+        state = { kind: "idle" };
+        onStateChange({ sessionDuration: null });
+        onSessionActiveChange?.(false);
+        broadcastSessionUpdate();
+      } catch (err) {
+        log.error("[session-timer] Error in session expiry callback:", err);
+      }
+    }, durationMinutes * MS_PER_MINUTE);
+    // unref so the timer doesn't pin the event loop (test/cleanup safety)
+    expiryTimer.unref();
+
+    state = { kind: "timed", startedAt, expiresAt, durationMinutes, expiryTimer };
+
+    onStateChange({ sessionDuration: durationMinutes });
+    if (!wasActive) onSessionActiveChange?.(true);
     broadcastSessionUpdate();
+
     return {
       isRunning: true,
       startedAt,
-      expiresAt: null,
-      durationMinutes: null,
+      expiresAt,
+      durationMinutes,
     };
-  }
-
-  // Timed session
-  const startedAt = perfNow();
-  const expiresAt = asPerf(startedAt + durationMinutes * MS_PER_MINUTE);
-
-  const expiryTimer = setTimeout(() => {
-    try {
-      state = { kind: "idle" };
-      onSessionStateChange?.({ sessionDuration: null, preventSleep: false });
-      broadcastSessionUpdate();
-    } catch (err) {
-      log.error("[session-timer] Error in session expiry callback:", err);
-    }
-  }, durationMinutes * MS_PER_MINUTE);
-  // unref so the timer doesn't pin the event loop (test/cleanup safety)
-  if (typeof expiryTimer === "object" && expiryTimer !== null && "unref" in expiryTimer) {
-    (expiryTimer as { unref: () => void }).unref();
-  }
-
-  state = { kind: "timed", startedAt, expiresAt, durationMinutes, expiryTimer };
-
-  onSessionStateChange?.({ sessionDuration: durationMinutes, preventSleep: true });
-  broadcastSessionUpdate();
-
-  return {
-    isRunning: true,
-    startedAt,
-    expiresAt,
-    durationMinutes,
   };
-}
 
-export function cancelSession(): SessionState {
-  clearTimedExpiryTimer();
-  state = { kind: "idle" };
-  onSessionStateChange?.({ sessionDuration: null, preventSleep: false });
-  broadcastSessionUpdate();
-  return {
-    isRunning: false,
-    startedAt: null,
-    expiresAt: null,
-    durationMinutes: null,
-  };
-}
-
-/**
- * Pure status reader — no side effects, never returns null.
- * Maps the internal discriminated union to the public SessionStatusResponse shape.
- */
-export function getStatus(): SessionStatusResponse {
-  if (state.kind === "idle") {
+  const cancelSession = (): SessionState => {
+    const wasActive = state.kind !== "idle";
+    clearTimedExpiryTimer();
+    state = { kind: "idle" };
+    onStateChange({ sessionDuration: null });
+    if (wasActive) onSessionActiveChange?.(false);
+    broadcastSessionUpdate();
     return {
       isRunning: false,
       startedAt: null,
       expiresAt: null,
-      remainingSeconds: null,
       durationMinutes: null,
     };
-  }
+  };
 
-  if (state.kind === "indefinite") {
-    return {
-      isRunning: true,
-      startedAt: state.startedAt,
-      expiresAt: null,
-      remainingSeconds: null,
-      durationMinutes: null,
-    };
-  }
+  const cleanup = (): void => {
+    clearTimedExpiryTimer();
+    state = { kind: "idle" };
+  };
 
-  if (state.kind === "timed") {
-    const remainingMs = Math.max(0, state.expiresAt - perfNow());
-    const remainingSeconds = Math.floor(remainingMs / 1000);
-    return {
-      isRunning: true,
-      startedAt: state.startedAt,
-      expiresAt: state.expiresAt,
-      remainingSeconds,
-      durationMinutes: state.durationMinutes,
-    };
-  }
+  return {
+    startSession,
+    cancelSession,
+    getStatus,
+    cleanup,
+    reconcileSessionState,
+    broadcastSessionUpdate,
+    get sessionActive(): boolean {
+      return state.kind !== "idle";
+    },
+  };
+}
 
-  return assertNever(state);
+// ---------------------------------------------------------------------------
+// Module-level delegators
+// ---------------------------------------------------------------------------
+//
+// `ipc.ts` consumes session-timer via `import * as sessionTimer from "./session-timer.js"`
+// and calls `sessionTimer.startSession()` / `cancelSession()` / `getStatus()`
+// directly. To preserve that API surface without leaking the old setter-DI
+// pattern, the coordinator publishes the active handle into this module-level
+// slot via `setActiveSessionTimer`. The exported delegator functions below
+// throw an explicit error if the timer has not been wired — there is no
+// silent fallback.
+//
+// This is a stricter contract than the previous `let getSettingsRef = () => ({ ...DEFAULT_SETTINGS })`
+// behaviour, which silently swallowed missing wiring.
+
+let activeHandle: SessionTimerHandle | null = null;
+
+/**
+ * Publish the active session-timer handle. Called by the coordinator after
+ * `createSessionTimer`. Pass `null` to detach (used by tests / cleanup).
+ */
+export function setActiveSessionTimer(handle: SessionTimerHandle | null): void {
+  activeHandle = handle;
+}
+
+function requireHandle(): SessionTimerHandle {
+  if (activeHandle === null) {
+    throw new Error(
+      "[session-timer] No active handle. Call createSessionTimer() and setActiveSessionTimer() first.",
+    );
+  }
+  return activeHandle;
+}
+
+export function startSession(durationMinutes: number | null): SessionState {
+  return requireHandle().startSession(durationMinutes);
+}
+
+export function cancelSession(): SessionState {
+  return requireHandle().cancelSession();
+}
+
+export function getStatus(): SessionStatusResponse {
+  return requireHandle().getStatus();
 }
 
 export function cleanup(): void {
-  clearTimedExpiryTimer();
-  state = { kind: "idle" };
+  requireHandle().cleanup();
 }
 
-/** Compute and broadcast current session status to all renderer windows. Never broadcasts null. */
+export function reconcileSessionState(): void {
+  requireHandle().reconcileSessionState();
+}
+
 export function broadcastSessionUpdate(): void {
-  broadcastFn?.(IPC_CHANNELS.SESSION_STATUS_UPDATE, getStatus());
+  requireHandle().broadcastSessionUpdate();
 }

@@ -21,9 +21,9 @@ function getAllowedOrigins(): ReadonlySet<string> {
 }
 /** Returns true if the sender's origin is the app's own renderer */
 export function validateSender(event: IpcMainEvent | IpcMainInvokeEvent): boolean {
-  const frame = event.senderFrame;
   // Reject child frames; main frame has parent === null. Tests may omit (undefined) — allow.
-  if (frame !== null && frame !== undefined && frame.parent !== null && frame.parent !== undefined) return false;
+  // eslint-disable-next-line eqeqeq
+  if (event.senderFrame?.parent != null) return false;
   const senderUrl = event.senderFrame?.url ?? "";
   const valid = validateSenderUrl(senderUrl);
   if (!valid) {
