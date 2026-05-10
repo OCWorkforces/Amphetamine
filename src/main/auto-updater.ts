@@ -13,7 +13,7 @@ import {
   MAX_UPDATE_CHECK_INTERVAL_MS,
 } from "./constants.js";
 import { typedHandle, validateSender } from "./ipc-utils.js";
-import { getPackageInfo } from "./utils/packageInfo.js";
+import { categorizeUpdaterError, getReleaseUrlBase } from "./auto-updater-utils.js";
 
 let checkIntervalId: ReturnType<typeof setInterval> | null = null;
 
@@ -23,35 +23,6 @@ let lastNotifiedVersion: string | null = null;
 
 let consecutiveFailures = 0;
 
-let cachedReleaseUrlBase: string | null = null;
-
-/**
- * Lazily compute the GitHub release URL base from package.json's `repository` field.
- * Cached after first successful read. Returns `null` if the repository URL is missing
- * or malformed (caller should skip opening the URL in that case).
- * Must be called after `app.isReady()` (depends on `app.getAppPath()`).
- */
-function getReleaseUrlBase(): string | null {
-  if (cachedReleaseUrlBase !== null) {
-    return cachedReleaseUrlBase;
-  }
-  try {
-    const pkg = getPackageInfo();
-    const repoUrlStr = pkg.repository;
-    // Validate it's an https github URL before trusting it
-    const parsed = new URL(repoUrlStr);
-    if (parsed.protocol !== "https:" || parsed.hostname !== "github.com") {
-      log.warn("[auto-updater] package.json repository is not an https github.com URL:", repoUrlStr);
-      return null;
-    }
-    const normalized = repoUrlStr.replace(/\.git$/, "").replace(/\/$/, "");
-    cachedReleaseUrlBase = `${normalized}/releases/tag/v`;
-    return cachedReleaseUrlBase;
-  } catch (err) {
-    log.warn("[auto-updater] Failed to derive release URL from package.json:", err);
-    return null;
-  }
-}
 
 /** Inject broadcast function (called from coordinator) */
 export function setBroadcastFn(
@@ -73,7 +44,7 @@ function onUpdateAvailable(info: UpdateInfo): void {
   rescheduleCheckLoop();
   const meta: UpdateMeta = {
     version: info.version,
-    releaseDate: info.releaseDate ?? "",
+    releaseDate: typeof info.releaseDate === "string" ? info.releaseDate : "",
     ...(typeof info.releaseNotes === "string" ? { releaseNotes: info.releaseNotes } : {}),
   };
   broadcastFn?.(IPC_CHANNELS.AUTO_UPDATER_STATUS, {
@@ -102,7 +73,7 @@ function onUpdateNotAvailable(info: UpdateInfo): void {
   log.info("[auto-updater] No update available. Current version:", info.version);
   consecutiveFailures = 0;
   rescheduleCheckLoop();
-  const meta: UpdateMeta = { version: info.version, releaseDate: info.releaseDate ?? "" };
+  const meta: UpdateMeta = { version: info.version, releaseDate: typeof info.releaseDate === "string" ? info.releaseDate : "" };
   broadcastFn?.(IPC_CHANNELS.AUTO_UPDATER_STATUS, {
     status: "not-available",
     info: meta,
@@ -112,46 +83,13 @@ function onUpdateNotAvailable(info: UpdateInfo): void {
 /** Handle "update-downloaded" event */
 function onUpdateDownloaded(info: UpdateInfo): void {
   log.info("[auto-updater] Update downloaded:", info.version);
-  const meta: UpdateMeta = { version: info.version, releaseDate: info.releaseDate ?? "" };
+  const meta: UpdateMeta = { version: info.version, releaseDate: typeof info.releaseDate === "string" ? info.releaseDate : "" };
   broadcastFn?.(IPC_CHANNELS.AUTO_UPDATER_STATUS, {
     status: "downloaded",
     info: meta,
   });
 }
 
-/**
-  * Sanitize an auto-updater error into a fixed category to avoid leaking
-  * filesystem paths, proxy URLs, or tokens into the renderer/UI. The raw
-  * `err.message` is still logged via electron-log for diagnostics.
-  */
-export function categorizeUpdaterError(err: Error): "network" | "signature" | "io" | "unknown" {
-  const haystack = `${err.name} ${err.message}`.toLowerCase();
-  if (
-    haystack.includes("enotfound") ||
-    haystack.includes("econnrefused") ||
-    haystack.includes("etimedout") ||
-    haystack.includes("net")
-  ) {
-    return "network";
-  }
-  if (
-    haystack.includes("signature") ||
-    haystack.includes("certificate") ||
-    haystack.includes("code-signing")
-  ) {
-    return "signature";
-  }
-  if (
-    haystack.includes("eacces") ||
-    haystack.includes("enospc") ||
-    haystack.includes("eio") ||
-    haystack.includes("write") ||
-    haystack.includes("read")
-  ) {
-    return "io";
-  }
-  return "unknown";
-}
 
 /** Handle "error" event */
 function onError(err: Error): void {
@@ -198,7 +136,7 @@ function rescheduleCheckLoop(): void {
     log.info("[auto-updater] Running periodic update check...");
     void autoUpdater.checkForUpdates();
   }, nextInterval);
-  checkIntervalId?.unref();
+  checkIntervalId.unref();
 }
 
 /** Start initial delayed check and periodic update check loop */
@@ -214,7 +152,7 @@ function startUpdateCheckLoop(): void {
     log.info("[auto-updater] Running periodic update check...");
     void autoUpdater.checkForUpdates();
   }, PERIODIC_UPDATE_CHECK_INTERVAL_MS);
-  checkIntervalId?.unref();
+  checkIntervalId.unref();
 }
 /**
  * Initialize the auto-updater.
@@ -270,7 +208,7 @@ export function registerAutoUpdaterIpc(): void {
       if (result?.updateInfo) {
         return {
           version: result.updateInfo.version,
-          releaseDate: result.updateInfo.releaseDate ?? "",
+          releaseDate: typeof result.updateInfo.releaseDate === "string" ? result.updateInfo.releaseDate : "",
         };
       }
       return null;
