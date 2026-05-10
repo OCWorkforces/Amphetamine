@@ -8,13 +8,31 @@ import {
 } from "../shared/types.js";
 import { MAIN_WINDOW_WIDTH, MIN_POPOVER_HEIGHT, MAX_POPOVER_HEIGHT } from "./constants.js";
 
-import { getSettings, updateSettings } from "./settings.js";
-import { createSettingsWindow } from "./settings-window.js";
-import { registerAutoUpdaterIpc } from "./auto-updater.js";
-import * as sessionTimer from "./session-timer.js";
+import type { AppSettings } from "../shared/types.js";
+import type { SessionTimerHandle } from "./session-timer.js";
 
 import { validateSender, typedHandle } from "./ipc-utils.js";
 export { validateSender } from "./ipc-utils.js";
+
+/**
+ * Dependencies required by the IPC layer.
+ *
+ * Replaces direct sibling-module imports so that ipc.ts has no compile-time
+ * edges to settings, settings-window, auto-updater, or session-timer.
+ *
+ * `sessionTimer` is the subset of `SessionTimerHandle` actually consumed by
+ * IPC handlers. The coordinator owns the live handle; ipc receives it (or an
+ * equivalent namespace import) here.
+ */
+export interface IpcDeps {
+  getSettings: () => AppSettings;
+  updateSettings: (
+    partial: Partial<AppSettings>,
+  ) => Promise<{ settings: AppSettings; rejectedKeys: string[] }>;
+  createSettingsWindow: () => void;
+  registerAutoUpdaterIpc: () => void;
+  sessionTimer: Pick<SessionTimerHandle, "startSession" | "cancelSession" | "getStatus">;
+}
 
 /** Window IPC handlers (fire-and-forget) */
 function registerWindowIpc(win: BrowserWindow): void {
@@ -62,10 +80,10 @@ function registerAppIpc(): void {
 }
 
 /** Settings IPC handlers */
-function registerSettingsIpc(): void {
+function registerSettingsIpc(deps: IpcDeps): void {
   typedHandle(IPC_CHANNELS.SETTINGS_GET, (event): IpcResponse<typeof IPC_CHANNELS.SETTINGS_GET> => {
     if (!validateSender(event)) return { ...DEFAULT_SETTINGS };
-    return getSettings();
+    return deps.getSettings();
   });
   typedHandle(
     IPC_CHANNELS.SETTINGS_SET,
@@ -73,24 +91,24 @@ function registerSettingsIpc(): void {
       event,
       partial: IpcRequest<typeof IPC_CHANNELS.SETTINGS_SET>,
     ): Promise<IpcResponse<typeof IPC_CHANNELS.SETTINGS_SET>> => {
-      if (!validateSender(event)) return { settings: getSettings(), rejectedKeys: [] };
+      if (!validateSender(event)) return { settings: deps.getSettings(), rejectedKeys: [] };
       // Coordinator handles system sync (power-saver, auto-launch, session cancel, broadcast) via settings change
-      return await updateSettings(partial);
+      return await deps.updateSettings(partial);
     },
   );
   typedHandle(IPC_CHANNELS.SETTINGS_OPEN, async (event) => {
     if (!validateSender(event)) return;
-    createSettingsWindow();
+    deps.createSettingsWindow();
   });
 }
 
 /** Session timer IPC handlers */
-function registerSessionIpc(): void {
+function registerSessionIpc(deps: IpcDeps): void {
   typedHandle(IPC_CHANNELS.SESSION_START, async (event, request) => {
     if (!validateSender(event)) {
       return { ok: false, reason: "rejected" };
     }
-    if (request.durationMinutes !== null && request.durationMinutes !== undefined) {
+    if (request.durationMinutes !== null) {
       if (
         !Number.isFinite(request.durationMinutes) ||
         request.durationMinutes <= 0 ||
@@ -100,11 +118,11 @@ function registerSessionIpc(): void {
         return { ok: false, reason: "invalid-duration" };
       }
     }
-    if (request.durationMinutes !== null && request.durationMinutes !== undefined && request.durationMinutes > 1440) {
+    if (request.durationMinutes !== null && request.durationMinutes > 1440) {
       log.warn("[ipc] SESSION_START rejected: duration exceeds 24h:", request.durationMinutes);
       return { ok: false, reason: "Duration cannot exceed 24 hours" };
     }
-    const result = sessionTimer.startSession(request.durationMinutes);
+    const result = deps.sessionTimer.startSession(request.durationMinutes);
     // startSession() guarantees non-null startedAt; SessionState type is widened for getStatus() reuse.
     if (result.startedAt === null) {
       log.error("[ipc] SESSION_START: startSession returned null startedAt (invariant violation)");
@@ -119,7 +137,7 @@ function registerSessionIpc(): void {
   });
   typedHandle(IPC_CHANNELS.SESSION_CANCEL, async (event) => {
     if (!validateSender(event)) return { cancelled: false };
-    sessionTimer.cancelSession();
+    deps.sessionTimer.cancelSession();
     return { cancelled: true };
   });
   typedHandle(IPC_CHANNELS.SESSION_STATUS, (event) => {
@@ -132,15 +150,15 @@ function registerSessionIpc(): void {
         durationMinutes: null,
       };
     }
-    return sessionTimer.getStatus();
+    return deps.sessionTimer.getStatus();
   });
 }
 
 /** Register all IPC handlers (orchestrator) */
-export function registerIpcHandlers(win: BrowserWindow): void {
+export function registerIpcHandlers(win: BrowserWindow, deps: IpcDeps): void {
   registerWindowIpc(win);
   registerAppIpc();
-  registerSettingsIpc();
-  registerSessionIpc();
-  registerAutoUpdaterIpc();
+  registerSettingsIpc(deps);
+  registerSessionIpc(deps);
+  deps.registerAutoUpdaterIpc();
 }
