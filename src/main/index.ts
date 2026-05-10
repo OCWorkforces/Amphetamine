@@ -4,14 +4,14 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { setupTray } from "./tray.js";
-import { registerIpcHandlers } from "./ipc.js";
+import { registerIpcHandlers, type IpcDeps } from "./ipc.js";
 import { getPackageInfo } from "./utils/packageInfo.js";
 import { initCoordinator, cleanupCoordinator, getTrayDeps } from "./coordinator.js";
-import { unregisterGlobalShortcut } from "./global-shortcut.js";
+import { getSettings, updateSettings } from "./settings.js";
+import { createSettingsWindow } from "./settings-window.js";
+import { initAutoUpdater, registerAutoUpdaterIpc } from "./auto-updater.js";
+import * as sessionTimer from "./session-timer.js";
 import { stopPreventingSleep } from "./sleep-prevention.js";
-import { closeSettingsWindow } from "./settings-window.js";
-import { closeAboutWindow } from "./about-window.js";
-import { initAutoUpdater, stopAutoUpdater } from "./auto-updater.js";
 import { broadcastToWindows } from "./utils/broadcast.js";
 import { IPC_CHANNELS } from "../shared/types.js";
 import {
@@ -125,7 +125,18 @@ void app.whenReady().then(async () => {
   // Register as accessory app — no Dock icon, no menu bar
   app.setActivationPolicy("accessory");
   mainWindow = createWindow();
-  registerIpcHandlers(mainWindow);
+  const ipcDeps: IpcDeps = {
+    getSettings,
+    updateSettings,
+    createSettingsWindow,
+    registerAutoUpdaterIpc,
+    sessionTimer: {
+      startSession: sessionTimer.startSession,
+      cancelSession: sessionTimer.cancelSession,
+      getStatus: sessionTimer.getStatus,
+    },
+  };
+  registerIpcHandlers(mainWindow, ipcDeps);
   // Initialize coordinator — handles syncPreventSleep, syncAutoLaunch, session cancel, broadcast, shortcut
   await initCoordinator();
   cleanupTray = setupTray(getTrayDeps());
@@ -137,11 +148,7 @@ app.on("window-all-closed", () => {
 app.on("before-quit", () => {
   isQuitting = true;
   cleanupTray?.();
-  closeSettingsWindow();
-  closeAboutWindow();
   cleanupCoordinator();
-  unregisterGlobalShortcut();
-  stopAutoUpdater();
   if (mainWindow) {
     mainWindow.destroy();
   }
