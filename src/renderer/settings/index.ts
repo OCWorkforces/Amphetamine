@@ -254,10 +254,7 @@ function attachFormListeners(): void {
           setErrorMessage("Failed to start session");
         }
       })();
-      void saveSettings(
-        { sessionDuration: duration, preventSleep: true },
-        "duration-save-indicator",
-      );
+      void saveSettings({ sessionDuration: duration }, "duration-save-indicator");
     });
   }
 
@@ -391,7 +388,7 @@ async function init(): Promise<void> {
 
   try {
     const status = await window.api.session.getStatus();
-    if (!isSaving && status?.isRunning) {
+    if (!isSaving && status.isRunning) {
       runningSessionDuration = status.durationMinutes;
       settings.sessionDuration = runningSessionDuration;
     }
