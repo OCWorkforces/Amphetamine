@@ -10,7 +10,7 @@ macOS tray-only Electron app. Prevents system sleep. Session timer, battery-awar
 | Electron | 41                                        |
 | Build    | Rslib (main/preload) + Rsbuild (renderer) |
 | Test     | Vitest 4 workspace, ~391 tests            |
-| Lint     | ESLint 10 flat, `no-explicit-any: error`  |
+| Lint     | ESLint 10 flat: `no-explicit-any`, `no-floating-promises`, `strict-boolean-expressions`, `consistent-type-imports` (all `error`) |
 
 macOS only. No cross-platform code. No UI framework — vanilla TS in renderer.
 
@@ -142,3 +142,6 @@ bun run format           # Prettier
 - **`DEV_SERVER_URL`** used in 3 files (legacy from Vite era — `VITE_DEV_SERVER_URL`)
 - **Runtime deps**: only `electron-log` and `electron-updater` (externalized in rslib configs, not bundled)
 - **Packaging**: electron-builder, hardened runtime disabled, Gatekeeper disabled, `LSUIElement: 1` (agent app). flip-fuses disables RunAsNode, enables cookie encryption + ASAR integrity
+- **Electron pin**: `^41.3.0` for CVE-2026-34780 (see `src/main/constants.ts`). Do not downgrade
+- **Prod minify**: Rslib/Rsbuild use SwcJsMinimizer with `drop_console` in production builds
+- **CI**: GitHub Actions uses `concurrency` with `cancel-in-progress` to dedupe in-flight runs per ref
