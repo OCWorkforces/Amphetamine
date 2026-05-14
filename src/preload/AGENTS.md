@@ -24,13 +24,15 @@ Electron preload script in sandboxed renderer context. Exposes a typed IPC API t
 | `session.cancel` | `cancel()` | `ipcRenderer.invoke` |
 | `session.getStatus` | `getStatus()` | `ipcRenderer.invoke` |
 | `onSettingsChanged` | `(callback) => unsubscribe()` | `ipcRenderer.on` + cleanup |
+| `onWindowHide` | `(callback) => unsubscribe()` | `ipcRenderer.on` + cleanup |
 | `onSessionStatusUpdate` | `(callback) => unsubscribe()` | `ipcRenderer.on` + cleanup |
+| `onShortcutRegistrationFailed` | `(callback) => unsubscribe()` | `ipcRenderer.on` + cleanup |
 | `autoUpdater.checkForUpdates` | `checkForUpdates()` | `ipcRenderer.invoke` |
 | `autoUpdater.onStatus` | `(callback) => unsubscribe()` | `ipcRenderer.on` + cleanup |
 
 ## Push Subscription Pattern
 
-Three push channels use the same pattern:
+Five push channels use the same pattern:
 
 ```typescript
 onXxx: (callback: (data: T) => void) => {

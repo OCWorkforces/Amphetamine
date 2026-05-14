@@ -58,7 +58,7 @@ Electron main process (Bun / Node.js). App lifecycle, system tray, IPC routing, 
 ## Conventions
 
 - **ESM source -> CJS output** (`.js` extensions on all imports)
-- **`performance.now()`** for all timing, branded as `PerfTimestamp` via `.AsType<PerfTimestamp>()`
+- **`performance.now()`** for all timing, branded as `PerfTimestamp` via `asPerf(n)`
 - **Never `Date.now()`** for session duration
 - **`typedHandle()`** wraps all IPC; validates sender origin via exact path match
 - **`writeChain` mutex** serializes concurrent `updateSettings()` calls
@@ -73,7 +73,7 @@ Electron main process (Bun / Node.js). App lifecycle, system tray, IPC routing, 
 - **Never** bypass `validateSender()` in IPC handlers
 - **Never** expose mutable `settingsCache` ref — always return `{ ...settingsCache }`
 - **Never** use `Date.now()` for session timing — use `perfNow()`
-- **Never** use raw `as PerfTimestamp` — use `.AsType<PerfTimestamp>()`
+- **Never** use raw `as PerfTimestamp` — use `asPerf(n)`
 - **Never** add per-field `if/else` to `mergeValidatedPartial` — extend `VALIDATORS` table
 - **Never** hardcode UI strings — use `constants.ts` menu label constants
 - **Never** mutate `DEFAULT_SETTINGS` — it is `Readonly<AppSettings>`
@@ -83,7 +83,7 @@ Electron main process (Bun / Node.js). App lifecycle, system tray, IPC routing, 
 ```bash
 bun run dev              # Dev: 3 rslib/rsbuild processes + Electron
 bun run build            # Build all (main + preload -> CJS, renderer -> static)
-bun run test             # Vitest (391 tests)
+bun run test             # Vitest (~391 tests)
 bun run typecheck        # tsc -b
 ```
 
@@ -95,4 +95,3 @@ bun run typecheck        # tsc -b
 - Popover hides on blur via typed `window:hide` push channel, not DOM events
 - `DEV_SERVER_URL` is the renamed successor of the Vite-era `VITE_DEV_SERVER_URL`
 - Runtime deps externalized: `electron-log`, `electron-updater` (not bundled)
-

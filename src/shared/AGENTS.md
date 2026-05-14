@@ -71,7 +71,7 @@ interface AppSettings {
 
 ### PerfTimestamp (Branded type)
 
-`number & { readonly __brand: unique symbol }` — compile-time branding for `performance.now()` values. Use `.AsType<PerfTimestamp>()` to cast, never raw `as PerfTimestamp`.
+`number & { readonly __brand: unique symbol }` — compile-time branding for `performance.now()` values. Use `asPerf(n)` to cast, never raw `as PerfTimestamp`.
 
 ### Validation
 

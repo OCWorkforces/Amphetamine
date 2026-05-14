@@ -7,10 +7,10 @@ Two-project Vitest workspace for Electron app testing. Main process uses Node en
 ```
 tests/
 ├── setup.main.ts                # Global Electron API mocks (BrowserWindow, app, ipcMain, Tray, Menu)
-├── main/                        # 305 tests — Node env, mocked Electron
+├── main/                        # 20 test files — Node env, mocked Electron
 │   ├── index.test.ts            # createWindow config, error handlers
 │   ├── ipc.test.ts              # validateSender, ALLOWED_ORIGINS, path-traversal, SESSION_START validation
-│   ├── ipc-handlers.test.ts     # All 13 IPC channel handlers
+│   ├── ipc-handlers.test.ts     # Typed IPC handler registration + deps
 │   ├── coordinator.test.ts      # Coordinator init/cleanup/settings sync
 │   ├── sleep-prevention.test.ts # powerSaveBlocker start/stop/sync
 │   ├── battery-monitor.test.ts  # Battery parsing, auto-stop, pmset
@@ -28,7 +28,7 @@ tests/
 │   ├── constants.test.ts        # Extracted constants (window dims, timeouts, colors)
 │   ├── broadcast.test.ts        # broadcastToWindows<T>() utility
 │   └── preload.test.ts          # Preload context bridge API
-└── renderer/                    # 46 tests — jsdom
+└── renderer/                    # 3 test files — jsdom
     ├── index.test.ts            # Popover UI rendering, push subscription, session display
     ├── settings.test.ts         # Settings form rendering, toggle/select
     └── delegation.test.ts       # Event delegation on #app
@@ -79,6 +79,6 @@ bun run test:coverage    # v8 coverage report
 
 ## Notes
 
-- Main test count: ~305 | Renderer test count: ~46 | Total: ~391
+- Test files: 20 main + 3 renderer (`*.test.ts`); total test count is ~391
 - `setup.main.ts` is the single Electron mock entry point — do not add `vi.mock("electron")` in individual test files
 - Coverage excludes `src/assets.d.ts`, `src/renderer/env.d.ts`, `src/renderer/css.d.ts` (type-only files)
