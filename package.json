@@ -1,8 +1,9 @@
 {
   "name": "amphetamine",
-  "version": "1.7.2",
+  "version": "1.7.3",
   "author": "OCWorkforces Engineers",
   "authorEmail": "kennydizi@ocworkforces.com",
+  "description": "A macOS menu bar app that keeps your Mac awake. Lives in the system tray, prevents the system from going to sleep, and stays out of the Dock.",
   "repository": "https://github.com/OCWorkforces/Amphetamine",
   "main": "lib/main/index.cjs",
   "devDependencies": {
@@ -13,7 +14,7 @@
     "@rslib/core": "^0.21.5",
     "@rspack/core": "^2.0.3",
     "@tsconfig/node24": "^24.0.4",
-    "@types/node": "^25.7.0",
+    "@types/node": "^25.8.0",
     "@typescript-eslint/eslint-plugin": "^8.59.3",
     "@typescript-eslint/parser": "^8.59.3",
     "@vitest/browser": "^4.1.6",
@@ -32,7 +33,6 @@
     "typescript-eslint": "^8.59.3",
     "vitest": "^4.1.6"
   },
-  "description": "Amphetamine is a desktop application that helps macOS always stay awake.",
   "engineStrict": true,
   "engines": {
     "node": ">=22.0.0",
