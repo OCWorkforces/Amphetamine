@@ -30,14 +30,14 @@ Interactive session status display. Shows prevent-sleep state, session timer cou
 
 ## Timing Architecture
 
-- `sessionExpiresAtPerf: PerfTimestamp | null` — module-level anchor; stores `performance.now() + remainingMs` branded via `.AsType<PerfTimestamp>()`
+- `sessionExpiresAtPerf: PerfTimestamp | null` — module-level anchor; stores `performance.now() + remainingMs` branded via `asPerf(n)`
 - `updateSessionAnchors(status)` — maps main-process `expiresAt` (PerfTimestamp) to renderer clock via wall-clock delta, re-attaching brand at IPC boundary
 - `computeRemainingSeconds()` — `Math.floor((sessionExpiresAtPerf - performance.now()) / 1000)` — purely renderer-side, no IPC round-trip
 - `startCountdownTicker()` / `stopCountdownTicker()` — `setInterval`/`clearInterval` every 1000ms, fires `updateStatusUI()` only when anchor changes
 
 ## Settings Form
 
-- 5 controls: launch-at-login toggle, prevent-sleep toggle, session duration dropdown, battery threshold slider, shortcut field
+- 5 controls: launch-at-login toggle, prevent-sleep toggle, session duration dropdown, battery threshold dropdown, shortcut recorder
 - Each control calls `window.api.settings.set({key: value})` immediately on change
 - Listens for `window.api.onSettingsChanged` to sync cross-window updates
 - `#app` uses event delegation — `click` and `change` events bubble to root
@@ -64,5 +64,5 @@ Interactive session status display. Shows prevent-sleep state, session timer cou
 ```bash
 bun run dev        # Dev: rsbuild watches + Electron reloads
 bun run build      # Build renderer → static assets
-bun run test       # Vitest (jsdom env, 46 tests)
+bun run test       # Vitest (jsdom renderer project)
 ```
