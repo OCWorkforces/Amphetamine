@@ -106,7 +106,7 @@ Amphetamine/
 - Never call `powerSaveBlocker.start/stop` directly — use `startPreventingSleep()`/`stopPreventingSleep()` wrappers
 - Never bypass `validateSender()` in IPC handlers — origin uses exact path match via `path.resolve()` + NFC normalization
 - Never expose mutable settings ref — always return `{ ...settingsCache }`
-- Never use `Date.now()` for session timing — always `performance.now()` (immune to clock jumps)
+- Never use `Date.now()` for session timing — always `performance.now()` (immune to clock jumps). EXCEPTION: `session-timer.ts` captures a `Date.now()` wall-clock anchor so timed sessions survive macOS sleep.
 - Never use raw `as PerfTimestamp` — use `asPerf(n)` branded helper
 - Never add per-field if/else to `mergeValidatedPartial` — add to `VALIDATORS` table
 - Never use `JSON.parse(...) as T` — use runtime guards (`isPackageInfo` pattern)
@@ -135,7 +135,7 @@ bun run clean            # Remove lib/dist outputs
 
 - **Coordinator fix**: `prevPreventSleep` updated before `cancelSession()` to prevent infinite recursion (cancelSession → updateSettings → subscriber → cancelSession)
 - **Tray icon**: `nativeImage.createFromPath()` only — `fs.readFileSync()` breaks asar virtual paths. SVG fallback buffer hoisted module-scope
-- **Timing**: Never `Date.now()` — always `performance.now()` (monotonic). Session expiry uses `setTimeout` + `unref()` so it doesn't pin event loop
+- **Timing**: Never `Date.now()` for elapsed measurement — always `performance.now()` (monotonic). EXCEPTION: wall-clock anchor in `session-timer.ts` for sleep resilience. Session expiry uses `setTimeout` + `unref()` so it doesn't pin event loop
 - **Settings atomicity**: UUID temp file + rename. `writeChain` mutex serializes concurrent updates
 - **Settings window**: shows in Dock when open, hides when closed (tray-only otherwise)
 - **Popover hide on blur**: uses typed `window:hide` push, not DOM CustomEvent

@@ -1,7 +1,7 @@
 import { app, dialog } from "electron";
 import log from "electron-log";
 
-import { readFile, writeFile, rename, mkdir, chmod } from "node:fs/promises";
+import { readFile, writeFile, rename, mkdir } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { join } from "path";
 import { EventEmitter } from "node:events";
@@ -95,8 +95,6 @@ export async function saveSettings(settings: AppSettings): Promise<void> {
   const raw = JSON.stringify(settings, null, 2);
   await writeFile(tmpPath, raw, { encoding: "utf-8", mode: 0o600 });
   await rename(tmpPath, settingsPath);
-  // Defensive: ensure final file mode is 0o600 even if rename inherited prior perms.
-  await chmod(settingsPath, 0o600);
 }
 
 export function getSettings(): AppSettings {

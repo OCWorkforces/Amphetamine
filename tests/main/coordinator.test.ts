@@ -17,10 +17,12 @@ const mockIsPreventingSleep = vi.hoisted(() => vi.fn());
 // Battery-monitor factory mocks
 const mockBatteryInit = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 const mockBatteryCleanup = vi.hoisted(() => vi.fn());
+const mockBatteryOnPreventSleepChange = vi.hoisted(() => vi.fn());
 const mockCreateBatteryMonitor = vi.hoisted(() =>
   vi.fn(() => ({
     initBatteryMonitoring: mockBatteryInit,
     cleanupBatteryMonitoring: mockBatteryCleanup,
+    onPreventSleepChange: mockBatteryOnPreventSleepChange,
   })),
 );
 
@@ -51,6 +53,11 @@ vi.mock("electron", async (importOriginal) => {
     ...actual,
     app: { isPackaged: false },
     BrowserWindow: { getAllWindows: mockGetAllWindows },
+    powerMonitor: {
+      on: vi.fn(),
+      off: vi.fn(),
+      isOnBatteryPower: vi.fn().mockReturnValue(false),
+    },
   };
 });
 
@@ -124,6 +131,7 @@ describe("coordinator", () => {
     mockCreateBatteryMonitor.mockReturnValue({
       initBatteryMonitoring: mockBatteryInit,
       cleanupBatteryMonitoring: mockBatteryCleanup,
+      onPreventSleepChange: mockBatteryOnPreventSleepChange,
     });
     mockCreateSessionTimer.mockReturnValue({
       startSession: mockSessionStart,

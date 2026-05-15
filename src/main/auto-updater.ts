@@ -142,10 +142,11 @@ function rescheduleCheckLoop(): void {
 /** Start initial delayed check and periodic update check loop */
 function startUpdateCheckLoop(): void {
   // Initial check after 3-second delay (avoid startup slowdown) — not subject to backoff
-  setTimeout(() => {
+  const initialCheckTimer = setTimeout(() => {
     log.info("[auto-updater] Running initial update check...");
     void autoUpdater.checkForUpdates();
   }, INITIAL_UPDATE_CHECK_DELAY_MS);
+  initialCheckTimer.unref();
 
   // Periodic check (base 4 hours, exponential backoff on failures up to 24 hours)
   checkIntervalId = setInterval(() => {

@@ -119,10 +119,12 @@ export function setupTray(deps: TrayDeps): () => void {
   // Store unsubscribe for cleanup robustness
   let lastPreventSleep = initialPreventSleep;
   const unsubscribe = deps.onSettingsChanged(() => {
-    refreshTrayIcon();
+    // Only refresh tray icon when preventSleep (the visible state) actually changed.
+    // Theme-driven icon updates are handled by the nativeTheme listener above.
     const currentPreventSleep = deps.getPreventSleep();
     if (currentPreventSleep !== lastPreventSleep) {
       lastPreventSleep = currentPreventSleep;
+      refreshTrayIcon();
       cachedMenu = buildMenu();
     }
   });

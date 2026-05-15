@@ -81,6 +81,8 @@ function formatTimerValue(): string {
   return ` ${minuteValue}m remaining`;
 }
 
+let lastRenderedTimerText: string | null = null;
+
 function startCountdownTicker(): void {
   if (countdownIntervalId !== null) return;
   countdownIntervalId = setInterval(() => {
@@ -95,6 +97,8 @@ function stopCountdownTicker(): void {
     clearInterval(countdownIntervalId);
     countdownIntervalId = null;
   }
+  // Clear cache so next tick forces a fresh render.
+  lastRenderedTimerText = null;
 }
 
 function resizeToContent(): void {
@@ -107,11 +111,30 @@ function resizeToContent(): void {
 
 function updateStatusUI(): void {
   if (isLoading) return;
+  // Skip rAF when timer text unchanged (59/60 ticks produce identical display)
+  const currentTimerText = formatTimerValue();
+  if (currentTimerText === lastRenderedTimerText) {
+    // Still update status dot/error since those can change independently
+    if (statusDotEl) {
+      statusDotEl.classList.toggle("active", settings.preventSleep);
+    }
+    if (statusTextEl) {
+      statusTextEl.textContent = settings.preventSleep
+        ? STATUS_PREVENTING_SLEEP
+        : STATUS_SLEEP_PREVENTION_OFF;
+    }
+    if (statusErrorEl) {
+      statusErrorEl.textContent = statusError ?? "";
+      statusErrorEl.classList.toggle("visible", statusError !== null);
+    }
+    return;
+  }
   if (rafId !== null) {
     cancelAnimationFrame(rafId);
   }
   rafId = requestAnimationFrame(() => {
     rafId = null;
+    lastRenderedTimerText = currentTimerText;
     statusDotEl?.classList.toggle("active", settings.preventSleep);
     if (statusTextEl) {
       statusTextEl.textContent = settings.preventSleep
@@ -119,7 +142,7 @@ function updateStatusUI(): void {
         : STATUS_SLEEP_PREVENTION_OFF;
     }
     if (timerValueEl) {
-      timerValueEl.textContent = formatTimerValue();
+      timerValueEl.textContent = currentTimerText;
     }
     if (statusErrorEl) {
       statusErrorEl.textContent = statusError ?? "";

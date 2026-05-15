@@ -7,6 +7,7 @@ import type {
 } from "../shared/types.js";
 import { asPerf, IPC_CHANNELS } from "../shared/types.js";
 import log from "electron-log";
+import type { powerMonitor } from "electron";
 import { MS_PER_MINUTE } from "./constants.js";
 
 const perfNow = (): PerfTimestamp => asPerf(performance.now());
@@ -38,6 +39,14 @@ export interface SessionTimerDeps {
    * `settings.preventSleep` (which now means "user's standing preference" only).
    */
   onSessionActiveChange?: (active: boolean) => void;
+  /**
+   * Optional Electron `powerMonitor`. When provided, the timer registers a
+   * `resume` listener so timed sessions can recover from system sleep — macOS
+   * pauses both `setTimeout` (libuv `uv_timer` / `mach_absolute_time`) and
+   * `performance.now()` while asleep, so a 60-min session started before sleep
+   * would otherwise fire late by exactly the sleep duration.
+   */
+  powerMonitor?: typeof powerMonitor;
 }
 
 /**
@@ -65,6 +74,9 @@ type InternalSessionState =
       kind: "timed";
       startedAt: PerfTimestamp;
       expiresAt: PerfTimestamp;
+      // Intentional Date.now(): wall-clock anchor for sleep-resilient expiry.
+      // performance.now() is monotonic and pauses during macOS sleep.
+      wallClockExpiresAt: number;
       durationMinutes: number;
       expiryTimer: ReturnType<typeof setTimeout>;
     };
@@ -89,12 +101,26 @@ export function createSessionTimer(deps: SessionTimerDeps): SessionTimerHandle {
 
   const { onStateChange, getSettings, broadcast } = deps;
   const onSessionActiveChange = deps.onSessionActiveChange;
+  const powerMonitor = deps.powerMonitor;
 
   let state: InternalSessionState = { kind: "idle" };
 
   const clearTimedExpiryTimer = (): void => {
     if (state.kind === "timed") {
       clearTimeout(state.expiryTimer);
+    }
+  };
+
+  /** Single source of truth for session expiry — clears state, notifies, broadcasts. */
+  const fireExpiry = (): void => {
+    clearTimedExpiryTimer();
+    state = { kind: "idle" };
+    try {
+      onStateChange({ sessionDuration: null });
+      onSessionActiveChange?.(false);
+      broadcastSessionUpdate();
+    } catch (err) {
+      log.error("[session-timer] Error in session expiry callback:", err);
     }
   };
 
@@ -175,22 +201,26 @@ export function createSessionTimer(deps: SessionTimerDeps): SessionTimerHandle {
 
     // Timed session
     const startedAt = perfNow();
-    const expiresAt = asPerf(startedAt + durationMinutes * MS_PER_MINUTE);
+    const durationMs = durationMinutes * MS_PER_MINUTE;
+    const expiresAt = asPerf(startedAt + durationMs);
+    // Intentional Date.now(): wall-clock anchor for sleep-resilient expiry.
+    // performance.now() is monotonic and pauses during macOS sleep.
+    const wallClockExpiresAt = Date.now() + durationMs;
 
     const expiryTimer = setTimeout(() => {
-      try {
-        state = { kind: "idle" };
-        onStateChange({ sessionDuration: null });
-        onSessionActiveChange?.(false);
-        broadcastSessionUpdate();
-      } catch (err) {
-        log.error("[session-timer] Error in session expiry callback:", err);
-      }
-    }, durationMinutes * MS_PER_MINUTE);
+      fireExpiry();
+    }, durationMs);
     // unref so the timer doesn't pin the event loop (test/cleanup safety)
     expiryTimer.unref();
 
-    state = { kind: "timed", startedAt, expiresAt, durationMinutes, expiryTimer };
+    state = {
+      kind: "timed",
+      startedAt,
+      expiresAt,
+      wallClockExpiresAt,
+      durationMinutes,
+      expiryTimer,
+    };
 
     onStateChange({ sessionDuration: durationMinutes });
     if (!wasActive) onSessionActiveChange?.(true);
@@ -219,9 +249,40 @@ export function createSessionTimer(deps: SessionTimerDeps): SessionTimerHandle {
     };
   };
 
+  /**
+   * Handle macOS system resume from sleep. Both `setTimeout` and
+   * `performance.now()` pause during sleep on macOS, so a timed session's
+   * expiry timer would otherwise fire late by the sleep duration. We re-arm
+   * the timer using the wall-clock anchor captured at start.
+   */
+  const handleResume = (): void => {
+    if (state.kind !== "timed") return;
+    const remainingMs = state.wallClockExpiresAt - Date.now();
+    if (remainingMs <= 0) {
+      // Sleep outlasted the session — fire expiry now.
+      fireExpiry();
+      return;
+    }
+    // Re-arm the expiry timer so it fires at the correct wall-clock time.
+    clearTimeout(state.expiryTimer);
+    const newTimer = setTimeout(() => {
+      fireExpiry();
+    }, remainingMs);
+    newTimer.unref();
+    state = { ...state, expiryTimer: newTimer };
+    broadcastSessionUpdate();
+  };
+
+  if (powerMonitor !== undefined) {
+    powerMonitor.on("resume", handleResume);
+  }
+
   const cleanup = (): void => {
     clearTimedExpiryTimer();
     state = { kind: "idle" };
+    if (powerMonitor !== undefined) {
+      powerMonitor.off("resume", handleResume);
+    }
   };
 
   return {

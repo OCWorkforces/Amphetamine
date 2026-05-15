@@ -3,6 +3,8 @@ import type { BatteryMonitorHandle } from "../../src/main/battery-monitor.js";
 
 const mockPowerMonitor = vi.hoisted(() => ({
   on: vi.fn(),
+  off: vi.fn(),
+  isOnBatteryPower: vi.fn().mockReturnValue(false),
 }));
 const mockLogInfo = vi.hoisted(() => vi.fn());
 const mockLogWarn = vi.hoisted(() => vi.fn());
@@ -468,6 +470,126 @@ describe("battery-monitor", () => {
 
     it("returns null for missing battery format", () => {
       expect(parsePmsetOutput("Now drawing from 'AC Power'\n -SomethingElse-0 75%")).toBeNull();
+    });
+  });
+
+  describe("periodic battery checks (FIX 1)", () => {
+    it("starts setInterval when on battery power and preventing sleep", async () => {
+      mockPowerMonitor.isOnBatteryPower.mockReturnValue(true);
+      mockIsActive.mockReturnValue(true);
+      const setIntervalSpy = vi.spyOn(globalThis, "setInterval");
+
+      await handle.initBatteryMonitoring();
+
+      expect(setIntervalSpy).toHaveBeenCalledWith(expect.any(Function), 60_000);
+      setIntervalSpy.mockRestore();
+    });
+
+    it("does NOT start setInterval when not on battery power", async () => {
+      mockPowerMonitor.isOnBatteryPower.mockReturnValue(false);
+      mockIsActive.mockReturnValue(true);
+      const setIntervalSpy = vi.spyOn(globalThis, "setInterval");
+
+      await handle.initBatteryMonitoring();
+
+      expect(setIntervalSpy).not.toHaveBeenCalled();
+      setIntervalSpy.mockRestore();
+    });
+
+    it("does NOT start setInterval when not preventing sleep", async () => {
+      mockPowerMonitor.isOnBatteryPower.mockReturnValue(true);
+      mockIsActive.mockReturnValue(false);
+      const setIntervalSpy = vi.spyOn(globalThis, "setInterval");
+
+      await handle.initBatteryMonitoring();
+
+      expect(setIntervalSpy).not.toHaveBeenCalled();
+      setIntervalSpy.mockRestore();
+    });
+
+    it("calls .unref() on the interval", async () => {
+      mockPowerMonitor.isOnBatteryPower.mockReturnValue(true);
+      mockIsActive.mockReturnValue(true);
+      const fakeInterval = { unref: vi.fn() } as unknown as ReturnType<typeof setInterval>;
+      const setIntervalSpy = vi
+        .spyOn(globalThis, "setInterval")
+        .mockReturnValue(fakeInterval);
+
+      await handle.initBatteryMonitoring();
+
+      expect(fakeInterval.unref).toHaveBeenCalled();
+      setIntervalSpy.mockRestore();
+    });
+
+    it("registers a resume listener that re-starts polling", async () => {
+      await handle.initBatteryMonitoring();
+
+      const resumeCall = mockPowerMonitor.on.mock.calls.find(
+        (call: unknown[]) => call[0] === "resume",
+      );
+      expect(resumeCall).toBeDefined();
+
+      mockPowerMonitor.isOnBatteryPower.mockReturnValue(true);
+      mockIsActive.mockReturnValue(true);
+      const setIntervalSpy = vi.spyOn(globalThis, "setInterval");
+      const resumeCallback = resumeCall![1] as () => void;
+      resumeCallback();
+
+      expect(setIntervalSpy).toHaveBeenCalledWith(expect.any(Function), 60_000);
+      setIntervalSpy.mockRestore();
+    });
+
+    it("clears interval when on-ac fires", async () => {
+      mockPowerMonitor.isOnBatteryPower.mockReturnValue(true);
+      mockIsActive.mockReturnValue(true);
+      const clearIntervalSpy = vi.spyOn(globalThis, "clearInterval");
+
+      await handle.initBatteryMonitoring();
+
+      const onAcCall = mockPowerMonitor.on.mock.calls.find(
+        (call: unknown[]) => call[0] === "on-ac",
+      );
+      const onAcCallback = onAcCall![1] as () => void;
+      onAcCallback();
+
+      expect(clearIntervalSpy).toHaveBeenCalled();
+      clearIntervalSpy.mockRestore();
+    });
+
+    it("onPreventSleepChange(true) starts polling when on battery", () => {
+      mockPowerMonitor.isOnBatteryPower.mockReturnValue(true);
+      mockIsActive.mockReturnValue(true);
+      const setIntervalSpy = vi.spyOn(globalThis, "setInterval");
+
+      handle.onPreventSleepChange(true);
+
+      expect(setIntervalSpy).toHaveBeenCalledWith(expect.any(Function), 60_000);
+      setIntervalSpy.mockRestore();
+    });
+
+    it("onPreventSleepChange(false) clears the interval", async () => {
+      mockPowerMonitor.isOnBatteryPower.mockReturnValue(true);
+      mockIsActive.mockReturnValue(true);
+      const clearIntervalSpy = vi.spyOn(globalThis, "clearInterval");
+
+      await handle.initBatteryMonitoring();
+      handle.onPreventSleepChange(false);
+
+      expect(clearIntervalSpy).toHaveBeenCalled();
+      clearIntervalSpy.mockRestore();
+    });
+
+    it("cleanup removes resume listener and clears interval", async () => {
+      mockPowerMonitor.isOnBatteryPower.mockReturnValue(true);
+      mockIsActive.mockReturnValue(true);
+      const clearIntervalSpy = vi.spyOn(globalThis, "clearInterval");
+
+      await handle.initBatteryMonitoring();
+      handle.cleanupBatteryMonitoring();
+
+      expect(mockPowerMonitor.off).toHaveBeenCalledWith("resume", expect.any(Function));
+      expect(clearIntervalSpy).toHaveBeenCalled();
+      clearIntervalSpy.mockRestore();
     });
   });
 });
