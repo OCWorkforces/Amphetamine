@@ -63,13 +63,38 @@ For your top 4 or 5 candidates, consult Oracle in a single batched call:
 task(subagent_type="oracle", run_in_background=false, load_skills=[], prompt="<for each candidate: the proposed prompt, the affected files, your hardness hypothesis, and the rubric draft. Ask: which of these would actually stall Opus past ten minutes or cause a wrong-but-plausible solution? Which feel artificial?>")
 ```
 
-Use Oracle's verdict to keep three. The three need to be distinct from each other. Three variants of "fix this race" count as one proposal, not three.
+Use Oracle's verdict to drop the artificial or weak ones. You should still have at least three candidates standing for the next phase. The three need to be distinct from each other.
 
-### Phase 4, Drafting
+### Phase 4, Empirical Hardness Probe (parallel, background)
 
-Draft each winner using the per-proposal template. Then run the self-audit gate before writing the file.
+Oracle's opinion is a sanity check. The real question is whether a strong model actually struggles. Probe the surviving candidates with `ultrabrain` running the prompts as the eval model would receive them.
 
-### Phase 5, Self-Audit Gate
+For each surviving candidate, fire one probe in parallel:
+
+```
+task(category="ultrabrain", run_in_background=true, load_skills=[], prompt="<the candidate prompt, exactly as it would be sent to the eval model, plus a short note: 'This is a hardness probe. Solve the task. Report the time you spent reasoning, your confidence, and any place you got stuck or had to guess.'>")
+```
+
+End your turn after firing. Wait for the completion notifications.
+
+Score each candidate from the probe results:
+
+- Solved correctly in well under the budget, high confidence: **too easy**, drop it.
+- Solved correctly but only after long reasoning, or with low confidence: **borderline**, keep but flag.
+- Solved incorrectly, partially, or not at all: **strong candidate**, keep.
+
+Cuts can take you below three. If that happens, loop back to Phase 2, generate more candidates, and re-probe. Do not lower the bar to fill the slate.
+
+Caveats to keep in mind, do not pretend they don't exist:
+
+- `ultrabrain` is not `Claude Opus`. A prompt ultrabrain solves may still stall `Claude Opus`, and the reverse. The probe is a useful filter, not a verdict.
+- Treat `ultrabrain's` self-reported time and confidence as soft signals. Weight the correctness of its diff much more heavily.
+
+### Phase 5, Drafting
+
+Draft each survivor using the per-proposal template. Then run the self-audit gate before writing the file.
+
+### Phase 6, Self-Audit Gate
 
 Before writing output, walk through every item in `./Project-Proposals-Checklist.md` for each of the three proposals. If anything fails, revise. Re-check at minimum:
 
@@ -80,7 +105,7 @@ Before writing output, walk through every item in `./Project-Proposals-Checklist
 - The final goal of each prompt is unambiguous and concrete
 - No prompt requires the model to invent its own acceptance criteria
 
-### Phase 6, Output
+### Phase 7, Output
 
 Write the final document to `one-shot-hard-prompts.md` in the repository root, using the format below.
 
@@ -187,11 +212,12 @@ Capture the current commit hash in the header so the proposal is reproducible.
 - `task(subagent_type="explore")` for codebase grep with context. Fire several in parallel.
 - `task(subagent_type="librarian")` for external docs, OSS reference implementations, and API correctness.
 - `task(subagent_type="oracle")` for calibration. "Is this actually hard? Are any of my constraints artificial?"
+- `task(category="ultrabrain")` for the empirical hardness probe in Phase 4. Used as a difficulty floor, not as a reviewer.
 - `sentrux-mcp` for `health`, `dsm`, `git_stats`, `hotspots`, and `test_gaps`. Useful for finding real risk areas backed by churn, coupling, and coverage data.
 - `tavily-mcp` for current best practices, recent CVEs, or library behavior changes that may have invalidated assumptions baked into the repo.
 - `tracelattice_sequentialthinking_tools` for ranking 8+ candidates against multiple criteria.
 
-Default to background parallel fanout in Phases 1 and 2. Default to a synchronous Oracle call in Phase 3.
+Default to background parallel fanout in Phases 1, 2, and 4. Default to a synchronous `Oracle` agent call in Phase 3.
 
 ---
 
