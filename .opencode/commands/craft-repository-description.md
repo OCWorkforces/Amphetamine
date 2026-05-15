@@ -17,4 +17,4 @@ Analyze the current codebase thoroughly and produce a repository description of 
 
 ## Output Format
 
-Return only the description text — no headings, no bullet points, no preamble, no trailing commentary.
+Write the description to a file named `repository-brief.md` at the repository root. The file must contain only the description text — no headings, no bullet points, no preamble, no trailing commentary.
