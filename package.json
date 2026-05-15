@@ -1,6 +1,6 @@
 {
   "name": "amphetamine",
-  "version": "1.7.3",
+  "version": "1.7.4",
   "author": "OCWorkforces Engineers",
   "authorEmail": "kennydizi@ocworkforces.com",
   "description": "A macOS menu bar app that keeps your Mac awake. Lives in the system tray, prevents the system from going to sleep, and stays out of the Dock.",
@@ -20,7 +20,7 @@
     "@vitest/browser": "^4.1.6",
     "@vitest/coverage-v8": "^4.1.6",
     "@vitest/ui": "^4.1.6",
-    "electron": "^42.0.1",
+    "electron": "^42.1.0",
     "electron-builder": "^26.8.1",
     "eslint": "^10.3.0",
     "eslint-config-prettier": "^10.1.8",
@@ -44,10 +44,10 @@
   "productName": "Amphetamine",
   "scripts": {
     "dev": "bun run scripts/dev.ts",
-    "build": "bun run build:main && bun run build:preload && bun run build:renderer",
-    "build:main": "rslib build -c rslib.config.ts",
-    "build:preload": "rslib build -c rslib.config.preload.ts",
-    "build:renderer": "rsbuild build",
+    "build": "NODE_ENV=production bun run build:main && NODE_ENV=production bun run build:preload && NODE_ENV=production bun run build:renderer",
+    "build:main": "NODE_ENV=production rslib build -c rslib.config.ts",
+    "build:preload": "NODE_ENV=production rslib build -c rslib.config.preload.ts",
+    "build:renderer": "NODE_ENV=production rsbuild build",
     "package": "bun run build && electron-builder --mac --arm64 && node build/flip-fuses.cjs arm64",
     "package:x64": "bun run build && electron-builder --mac --x64 && node build/flip-fuses.cjs x64",
     "package:universal": "bun run build && electron-builder --mac --universal && node build/flip-fuses.cjs arm64",
@@ -66,7 +66,7 @@
   "sideEffects": false,
   "type": "module",
   "dependencies": {
-    "electron-log": "^5.4.3",
+    "electron-log": "^5.4.4",
     "electron-updater": "^6.8.3"
   }
 }

@@ -11,7 +11,7 @@ directories:
 
 files:
   - lib/**/*
-  - src/assets/**/*
+  - src/assets/!(*Template).png
   - package.json
   - assets/**/*
   - "!**/*.map"
