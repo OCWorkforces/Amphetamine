@@ -106,6 +106,11 @@ export interface MockElectronAPI {
     stop: Mock<(id: number) => void>;
     isStarted: Mock<(id: number) => boolean>;
   };
+  powerMonitor: {
+    on: Mock<(event: string, listener: (...args: unknown[]) => void) => void>;
+    off: Mock<(event: string, listener: (...args: unknown[]) => void) => void>;
+    isOnBatteryPower: Mock<() => boolean>;
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -211,6 +216,11 @@ const electronMock: MockElectronAPI = {
     start: vi.fn<(type: string) => number>().mockReturnValue(1),
     stop: vi.fn<(id: number) => void>(),
     isStarted: vi.fn<(id: number) => boolean>().mockReturnValue(true),
+  },
+  powerMonitor: {
+    on: vi.fn<(event: string, listener: (...args: unknown[]) => void) => void>(),
+    off: vi.fn<(event: string, listener: (...args: unknown[]) => void) => void>(),
+    isOnBatteryPower: vi.fn<() => boolean>().mockReturnValue(false),
   },
 };
 

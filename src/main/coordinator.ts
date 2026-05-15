@@ -12,6 +12,7 @@
  * Sleep prevention is the OR of both — cancelling a session never clobbers user intent.
  */
 import log from "electron-log";
+import { powerMonitor } from "electron";
 import { IPC_CHANNELS } from "../shared/types.js";
 import { broadcastToWindows } from "./utils/broadcast.js";
 import type { AppSettings } from "../shared/types.js";
@@ -48,7 +49,12 @@ let sessionActiveCache = false;
  */
 function recomputeSleepPrevention(userIntentOverride?: boolean): void {
   const userIntent = userIntentOverride ?? getSettings().preventSleep;
-  syncPreventSleep(userIntent || sessionActiveCache);
+  const next = userIntent || sessionActiveCache;
+  const prev = isPreventingSleep();
+  syncPreventSleep(next);
+  if (prev !== next) {
+    batteryMonitor?.onPreventSleepChange(next);
+  }
 }
 
 function togglePreventSleep(): void {
@@ -87,6 +93,7 @@ export async function initCoordinator(): Promise<void> {
       sessionActiveCache = active;
       recomputeSleepPrevention();
     },
+    powerMonitor,
   });
   setActiveSessionTimer(sessionTimer);
 
@@ -152,10 +159,15 @@ export async function initCoordinator(): Promise<void> {
         registerGlobalShortcut(shortcutDeps);
       }
 
-      prevSettings = { ...settings };
+      // Only broadcast to renderers when a field they display actually changed.
+      // launchAtLogin is main-only — broadcasting it wastes renderer cycles.
+      const rendererVisibleKeys: (keyof AppSettings)[] = ["preventSleep", "batteryThreshold", "shortcut"];
+      const hasRendererChange = prevSettings === null || rendererVisibleKeys.some((k) => settings[k] !== (prevSettings as AppSettings)[k]);
+      if (hasRendererChange) {
+        broadcastToWindows(IPC_CHANNELS.SETTINGS_CHANGED, settings);
+      }
 
-      // Broadcast settings to all renderer windows
-      broadcastToWindows(IPC_CHANNELS.SETTINGS_CHANGED, settings);
+      prevSettings = { ...settings };
     } catch (err) {
       log.error("[coordinator] Settings subscriber error:", err);
     }
