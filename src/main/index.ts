@@ -117,11 +117,11 @@ function createWindow(): BrowserWindow {
 app.on("second-instance", () => {
   mainWindow?.show();
 });
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+  process.exit(0);
+}
 void app.whenReady().then(async () => {
-  if (!app.requestSingleInstanceLock()) {
-    app.quit();
-    return;
-  }
   // Register as accessory app — no Dock icon, no menu bar
   app.setActivationPolicy("accessory");
   mainWindow = createWindow();
@@ -137,7 +137,6 @@ void app.whenReady().then(async () => {
     },
   };
   registerIpcHandlers(mainWindow, ipcDeps);
-  // Initialize coordinator — handles syncPreventSleep, syncAutoLaunch, session cancel, broadcast, shortcut
   await initCoordinator();
   cleanupTray = setupTray(getTrayDeps());
   initAutoUpdater();
