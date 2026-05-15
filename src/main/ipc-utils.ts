@@ -16,8 +16,12 @@ function getAllowedFilePaths(): ReadonlySet<string> {
   }
   return _allowedFilePaths;
 }
+let _allowedOrigins: ReadonlySet<string> | null = null;
 function getAllowedOrigins(): ReadonlySet<string> {
-  return new Set(app.isPackaged ? [] : DEV_ORIGINS);
+  if (_allowedOrigins === null) {
+    _allowedOrigins = new Set(app.isPackaged ? [] : DEV_ORIGINS);
+  }
+  return _allowedOrigins;
 }
 /** Returns true if the sender's origin is the app's own renderer */
 export function validateSender(event: IpcMainEvent | IpcMainInvokeEvent): boolean {

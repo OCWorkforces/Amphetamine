@@ -134,7 +134,7 @@ describe("settings", () => {
       expect(saved.launchAtLogin).toBe(true);
       expect(saved.preventSleep).toBe(true);
     });
-    it("writes settings file with mode 0o600 (owner-only) and chmods after rename", async () => {
+    it("writes settings file with mode 0o600 (owner-only)", async () => {
       const fsPromises = await import("node:fs/promises");
       const writeFileMock = fsPromises.writeFile as unknown as ReturnType<typeof vi.fn>;
       writeFileMock.mockClear();
