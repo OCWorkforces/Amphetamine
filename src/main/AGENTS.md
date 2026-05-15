@@ -59,7 +59,7 @@ Electron main process (Bun / Node.js). App lifecycle, system tray, IPC routing, 
 
 - **ESM source -> CJS output** (`.js` extensions on all imports)
 - **`performance.now()`** for all timing, branded as `PerfTimestamp` via `asPerf(n)`
-- **Never `Date.now()`** for session duration
+- **Never `Date.now()`** for session duration — EXCEPTION: `session-timer.ts` captures a `Date.now()` wall-clock anchor for sleep-resilient expiry.
 - **`typedHandle()`** wraps all IPC; validates sender origin via exact path match
 - **`writeChain` mutex** serializes concurrent `updateSettings()` calls
 - **Settings corruption**: backup to `settings.corrupt-{timestamp}.json`, fall back to defaults
@@ -72,7 +72,7 @@ Electron main process (Bun / Node.js). App lifecycle, system tray, IPC routing, 
 - **Never** call `powerSaveBlocker.start()`/`stop()` directly — use `sleep-prevention.ts` wrappers
 - **Never** bypass `validateSender()` in IPC handlers
 - **Never** expose mutable `settingsCache` ref — always return `{ ...settingsCache }`
-- **Never** use `Date.now()` for session timing — use `perfNow()`
+- **Never** use `Date.now()` for session timing — use `perfNow()`. EXCEPTION: wall-clock anchor in `session-timer.ts` for sleep resilience.
 - **Never** use raw `as PerfTimestamp` — use `asPerf(n)`
 - **Never** add per-field `if/else` to `mergeValidatedPartial` — extend `VALIDATORS` table
 - **Never** hardcode UI strings — use `constants.ts` menu label constants

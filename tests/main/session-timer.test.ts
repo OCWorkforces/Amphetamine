@@ -1,3 +1,4 @@
+import type { powerMonitor } from "electron";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { AppSettings, SessionStatusResponse } from "../../src/shared/types.js";
 import { DEFAULT_SETTINGS } from "../../src/shared/types.js";
@@ -731,6 +732,149 @@ describe("session-timer additional edge cases", () => {
       const mod = await import("../../src/main/session-timer.js");
       mod.setActiveSessionTimer(null);
       expect(() => mod.startSession(30)).toThrow(/No active handle/);
+    });
+  });
+
+  describe("handleResume — sleep-resilient expiry (FIX 2)", () => {
+    it("re-arms timer with correct remaining when timed and remaining > 0", async () => {
+      const mockPowerMonitor = { on: vi.fn(), off: vi.fn() };
+      vi.resetModules();
+      vi.useRealTimers();
+      const mod = await import("../../src/main/session-timer.js");
+      const handle = mod.createSessionTimer({
+        onStateChange: mockOnSessionStateChange,
+        getSettings: mockGetSettings,
+        broadcast: mockBroadcastToWindows,
+        powerMonitor: mockPowerMonitor as unknown as typeof powerMonitor,
+      });
+      mod.setActiveSessionTimer(handle);
+
+      // Start a 30-min timed session.
+      handle.startSession(30);
+      const beforeStatus = handle.getStatus();
+      expect(beforeStatus.isRunning).toBe(true);
+
+      // Find resume listener.
+      const resumeCall = mockPowerMonitor.on.mock.calls.find(
+        (c: unknown[]) => c[0] === "resume",
+      );
+      expect(resumeCall).toBeDefined();
+      const handleResume = resumeCall![1] as () => void;
+
+      // Simulate resume immediately — remaining ~30 min, session should still be running.
+      handleResume();
+      const afterStatus = handle.getStatus();
+      expect(afterStatus.isRunning).toBe(true);
+      expect(afterStatus.durationMinutes).toBe(30);
+
+      handle.cleanup();
+    });
+
+    it("fires expiry immediately when remaining <= 0 (slept past expiry)", async () => {
+      const mockPowerMonitor = { on: vi.fn(), off: vi.fn() };
+      vi.resetModules();
+      vi.useRealTimers();
+      const dateNowSpy = vi.spyOn(Date, "now");
+      const mod = await import("../../src/main/session-timer.js");
+      const handle = mod.createSessionTimer({
+        onStateChange: mockOnSessionStateChange,
+        getSettings: mockGetSettings,
+        broadcast: mockBroadcastToWindows,
+        powerMonitor: mockPowerMonitor as unknown as typeof powerMonitor,
+      });
+      mod.setActiveSessionTimer(handle);
+
+      // Anchor wallClockExpiresAt at 0 + 30*60_000.
+      dateNowSpy.mockReturnValue(0);
+      handle.startSession(30);
+      expect(handle.getStatus().isRunning).toBe(true);
+
+      // Now jump wall clock past expiry.
+      dateNowSpy.mockReturnValue(31 * 60 * 1000);
+      const resumeCall = mockPowerMonitor.on.mock.calls.find(
+        (c: unknown[]) => c[0] === "resume",
+      );
+      const handleResume = resumeCall![1] as () => void;
+
+      mockOnSessionStateChange.mockClear();
+      handleResume();
+
+      expect(handle.getStatus().isRunning).toBe(false);
+      expect(mockOnSessionStateChange).toHaveBeenCalledWith({ sessionDuration: null });
+
+      dateNowSpy.mockRestore();
+      handle.cleanup();
+    });
+
+    it("is a no-op when state is idle", async () => {
+      const mockPowerMonitor = { on: vi.fn(), off: vi.fn() };
+      vi.resetModules();
+      vi.useRealTimers();
+      const mod = await import("../../src/main/session-timer.js");
+      const handle = mod.createSessionTimer({
+        onStateChange: mockOnSessionStateChange,
+        getSettings: mockGetSettings,
+        broadcast: mockBroadcastToWindows,
+        powerMonitor: mockPowerMonitor as unknown as typeof powerMonitor,
+      });
+      mod.setActiveSessionTimer(handle);
+
+      const resumeCall = mockPowerMonitor.on.mock.calls.find(
+        (c: unknown[]) => c[0] === "resume",
+      );
+      const handleResume = resumeCall![1] as () => void;
+
+      mockOnSessionStateChange.mockClear();
+      handleResume();
+
+      expect(handle.getStatus().isRunning).toBe(false);
+      expect(mockOnSessionStateChange).not.toHaveBeenCalled();
+      handle.cleanup();
+    });
+
+    it("is a no-op when state is indefinite", async () => {
+      const mockPowerMonitor = { on: vi.fn(), off: vi.fn() };
+      vi.resetModules();
+      vi.useRealTimers();
+      const mod = await import("../../src/main/session-timer.js");
+      const handle = mod.createSessionTimer({
+        onStateChange: mockOnSessionStateChange,
+        getSettings: mockGetSettings,
+        broadcast: mockBroadcastToWindows,
+        powerMonitor: mockPowerMonitor as unknown as typeof powerMonitor,
+      });
+      mod.setActiveSessionTimer(handle);
+      handle.startSession(null);
+
+      const resumeCall = mockPowerMonitor.on.mock.calls.find(
+        (c: unknown[]) => c[0] === "resume",
+      );
+      const handleResume = resumeCall![1] as () => void;
+
+      mockOnSessionStateChange.mockClear();
+      handleResume();
+
+      expect(handle.getStatus().isRunning).toBe(true);
+      expect(handle.getStatus().expiresAt).toBeNull();
+      expect(mockOnSessionStateChange).not.toHaveBeenCalled();
+      handle.cleanup();
+    });
+
+    it("cleanup removes resume listener", async () => {
+      const mockPowerMonitor = { on: vi.fn(), off: vi.fn() };
+      vi.resetModules();
+      const mod = await import("../../src/main/session-timer.js");
+      const handle = mod.createSessionTimer({
+        onStateChange: mockOnSessionStateChange,
+        getSettings: mockGetSettings,
+        broadcast: mockBroadcastToWindows,
+        powerMonitor: mockPowerMonitor as unknown as typeof powerMonitor,
+      });
+      mod.setActiveSessionTimer(handle);
+
+      handle.cleanup();
+
+      expect(mockPowerMonitor.off).toHaveBeenCalledWith("resume", expect.any(Function));
     });
   });
 });
