@@ -6,7 +6,7 @@ macOS tray-only Electron app. Prevents system sleep. Session timer, battery-awar
 
 | Layer    | Tech                                      |
 |----------|-------------------------------------------|
-| Runtime  | Bun 1.3.13+ / Node 22+                    |
+| Runtime  | Bun 1.3.14+ / Node 22+                    |
 | Electron | 42                                        |
 | Build    | Rslib (main/preload) + Rsbuild (renderer) |
 | Test     | Vitest 4 workspace, ~391 tests            |
@@ -53,6 +53,7 @@ Amphetamine/
 │   │       └── constants.ts     # UI string constants
 │   ├── preload/                 # Context bridge (sandboxed)
 │   │   └── index.ts             # Exposes typed window.api to renderer
+│   ├── assets/                  # Generated tray/app PNGs consumed by tray + settings UI
 │   └── shared/                  # Types shared across processes
 │       ├── types.ts             # IPC_CHANNELS, IpcChannelMap, AppSettings, union types
 │       └── settings-validators.ts # Pure predicates + VALIDATORS dispatch table
@@ -83,6 +84,7 @@ Amphetamine/
 | Tray menu changes | `src/main/tray.ts` | `cachedMenu` rebuilt on settings change; theme debounced 50ms |
 | Sleep prevention | `src/main/sleep-prevention.ts` | `syncPreventSleep()` only — never call `powerSaveBlocker` directly |
 | Renderer push events | `src/renderer/index.ts` | Subscribe via `window.api.onXxx()` — no DOM CustomEvent |
+| Tray/settings assets | `src/assets/AGENTS.md`, `scripts/AGENTS.md` | Generated filenames are coupled to `src/main/tray.ts` lookups |
 | Test mocking | `tests/setup.main.ts` | Full Electron mock via `vi.hoisted()` + `vi.mock("electron")` |
 | Dev/build scripts | `scripts/AGENTS.md` | `dev.ts` waits for CJS outputs + TCP port 5173 before Electron launch |
 | Packaging/signing | `build/AGENTS.md`, `electron-builder.yml`, `build-macOS-dmg.sh` | Hardened runtime off; notarize disabled; flip fuses after packaging |

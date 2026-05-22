@@ -47,7 +47,7 @@ interface AppSettings {
 }
 ```
 
-`DEFAULT_SETTINGS` is `Readonly<AppSettings>` — always clone via spread.
+`DEFAULT_SETTINGS` is defined in `types.ts` and is `Readonly<AppSettings>` — always clone via spread.
 
 ### SessionStatusResponse (3-arm discriminated union)
 
@@ -75,4 +75,6 @@ interface AppSettings {
 
 ### Validation
 
-`settings-validators.ts` uses a `VALIDATORS` dispatch table — one entry per `AppSettings` key. Adding a new settings field requires adding a validator entry; otherwise validation silently drops it.
+`IPC_CHANNELS`, `PUSH_CHANNELS`, `IpcChannelMap`, `AppSettings`, and `DEFAULT_SETTINGS` all live in `types.ts`.
+
+`settings-validators.ts` uses a `VALIDATORS` dispatch table — one entry per `AppSettings` key. Adding a new settings field requires adding a validator entry. `validateRawSettings()` is the only allowed inline per-field validator because disk JSON starts as `Record<string, unknown>`.

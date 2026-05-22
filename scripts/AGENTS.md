@@ -28,7 +28,7 @@ Developer-only Bun/Node scripts. No application runtime code imports from here. 
 - `Date.now()` is OK here for process wait timeouts; session timing rules apply only to app session logic.
 - Use raw TCP readiness checks for rsbuild dev server — do not revert to fixed sleeps.
 - Icon scripts use ESM `fileURLToPath(import.meta.url)` for `__dirname`.
-- Generated icon assets are checked-in source/build resources; keep filenames stable.
+- Generated icon assets are checked-in source/build resources; see `src/assets/AGENTS.md` for filenames and consumers.
 
 ## Anti-Patterns
 

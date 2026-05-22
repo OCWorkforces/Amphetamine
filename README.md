@@ -5,7 +5,7 @@ A macOS menu bar app that keeps your Mac awake. Lives in the system tray, preven
 ## Features
 
 - **Sleep Prevention**: blocks system and display sleep via Electron's `powerSaveBlocker` (`prevent-display-sleep`).
-- **Session Timer**: start timed sessions (configurable duration) or run indefinitely. Internal state machine uses monotonic `performance.now()` so it's immune to wall-clock jumps.
+- **Session Timer**: start timed sessions (configurable duration) or run indefinitely. Runtime state uses monotonic `performance.now()`; timed sessions also keep a wall-clock anchor so expiry survives macOS sleep.
 - **Battery-Aware Auto-Disable**: polls `pmset` and automatically stops sleep prevention when battery drops below a configurable threshold.
 - **Global Shortcut**: toggle sleep prevention with `Cmd+Shift+A` (configurable).
 - **Launch at Login**: optional macOS login item, managed through native APIs.
@@ -23,7 +23,7 @@ _Configure launch-at-login, sleep prevention, session duration, battery threshol
 ## Requirements
 
 - macOS 11 or later (Apple Silicon arm64 or Intel x64)
-- Bun ≥ 1.3.13 (recommended) or Node.js ≥ 22
+- Bun ≥ 1.3.14 (recommended) or Node.js ≥ 22
 
 ## Development
 
@@ -67,7 +67,9 @@ bun run package:dir         # Unpacked .app directory only (faster, for local te
 bun run flip-fuses arm64    # Apply fuses manually if needed
 ```
 
-Outputs are written to `dist/` (e.g. `Amphetamine-1.7.2-arm64.dmg`, `Amphetamine-1.7.2-arm64-mac.zip`).
+Outputs are written to `dist/` (e.g. `Amphetamine-1.7.5-arm64.dmg`, `Amphetamine-1.7.5-arm64-mac.zip`).
+
+For local DMG builds, `./build-macOS-dmg.sh --arch arm64 --environment prd` wraps the same build, handles ad-hoc signing when no Developer ID certificate is available, and appends the environment suffix to the DMG name.
 
 Notes on packaging:
 
@@ -134,6 +136,7 @@ Amphetamine/
 │   │                # sleep prevention, battery monitor, global shortcut, auto-updater
 │   ├── preload/     # Sandboxed context bridge exposing typed window.api
 │   ├── renderer/    # Vanilla TS UI (popover + settings window, two rsbuild entries)
+│   ├── assets/      # Generated tray icons and settings hero image packaged at runtime
 │   └── shared/      # Cross-process types, IPC channel map, settings validators
 ├── tests/           # Vitest workspace (main + renderer projects)
 ├── scripts/         # dev orchestration + icon generators
@@ -152,7 +155,7 @@ Amphetamine/
 | Runtime     | Electron 42                                      |
 | Language    | TypeScript 6.0 (strict, ESM source → CJS output) |
 | Build       | Rslib (main + preload), Rsbuild (renderer)       |
-| Package Mgr | Bun 1.3.14 (`engines`: Bun ≥ 1.3.13, Node ≥ 22)  |
+| Package Mgr | Bun 1.3.14 (`engines`: Bun ≥ 1.3.14, Node ≥ 22)  |
 | Test        | Vitest 4 workspace (~391 tests across 23 files)  |
 | Lint/Format | ESLint 10 (flat config) + Prettier 3             |
 | UI          | Vanilla TypeScript, no UI framework              |

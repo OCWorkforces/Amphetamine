@@ -46,7 +46,9 @@ Always return an unsubscribe function. Renderer is responsible for calling clean
 
 ## Type Safety
 
-The `Api` type is derived from `IpcChannelMap` in `shared/types.ts`. Each method signature is auto-generated from the channel map — never hand-write IPC method signatures.
+The `Api` type is derived from the `api` object. Each method signature is parameterized by `IpcChannelMap` in `shared/types.ts` — never hand-write IPC request/response shapes.
+
+`WiredChannels` + `_ExhaustivenessCheck` at the bottom of `index.ts` intentionally list every channel literal. Adding a channel in `shared/types.ts` without adding it here breaks the build.
 
 ## Conventions
 
@@ -54,6 +56,7 @@ The `Api` type is derived from `IpcChannelMap` in `shared/types.ts`. Each method
 - **`contextBridge` is mandatory** — never disable `contextIsolation`
 - **Return unsubscribe functions** from all `on*` methods
 - **Typed events only** — no stringly channel names in renderer
+- **Main validates senders** with `validateSender()`; preload still exposes only the narrow `window.api` surface
 
 ## Commands
 
