@@ -40,10 +40,11 @@ Located under `tests/fixtures/` when present. Mock settings files use the `setti
 
 ## Conventions
 
-- **Mock restoration**: All `vi.hoisted()` mocks are restored via `vi.resetModules()` + dynamic re-import between tests
-- **No real filesystem access**: All `fs` operations go through `vi.mock("node:fs/promises")`
-- **Electron fully mocked**: `vi.mock("electron")` in `setup.main.ts` — no native calls in tests
-- **Assert exhaustive**: Use `expect.assert(0)` / discriminated union checks where `assertNever` is used in source
+- **Mock restoration**: `vi.resetModules()` + dynamic re-import is used in main and renderer tests when module state matters
+- **No real filesystem access**: All `fs` operations go through `vi.mock("node:fs/promises")` or local `fs` mocks
+- **Electron mocked by default**: `setup.main.ts` provides the base mock; individual main tests may re-mock `electron` for narrower BrowserWindow/app shapes
+- **Log mocking**: modules importing `electron-log` mock `default.info/warn/error/debug` locally
+- **Assert exhaustive**: When source adds `assertNever` branches, cover impossible/default paths with explicit discriminated-union tests
 - **Prefer `vi.advanceTimersByTimeAsync`** over real waits for setTimeout-based tests (session timer, auto-updater)
 - **Test filenames** match source filenames exactly (e.g., `session-timer.test.ts` for `session-timer.ts`)
 
@@ -80,5 +81,5 @@ bun run test:coverage    # v8 coverage report
 ## Notes
 
 - Test files: 20 main + 3 renderer (`*.test.ts`); total test count is ~391
-- `setup.main.ts` is the single Electron mock entry point — do not add `vi.mock("electron")` in individual test files
+- `setup.main.ts` is the baseline Electron mock; local `vi.mock("electron")` overrides are allowed when a test needs a tighter API surface
 - Coverage excludes `src/assets.d.ts`, `src/renderer/env.d.ts`, `src/renderer/css.d.ts` (type-only files)

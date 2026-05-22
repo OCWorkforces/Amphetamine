@@ -30,8 +30,8 @@ Interactive session status display. Shows prevent-sleep state, session timer cou
 
 ## Timing Architecture
 
-- `sessionExpiresAtPerf: PerfTimestamp | null` — module-level anchor; stores `performance.now() + remainingMs` branded via `asPerf(n)`
-- `updateSessionAnchors(status)` — maps main-process `expiresAt` (PerfTimestamp) to renderer clock via wall-clock delta, re-attaching brand at IPC boundary
+- `sessionExpiresAtPerf: PerfTimestamp | null` — renderer-clock expiry anchor derived from `status.remainingSeconds`
+- `updateSessionAnchors(status)` — stores `asPerf(performance.now() + remainingSeconds * 1000)` when a timed session is active
 - `computeRemainingSeconds()` — `Math.floor((sessionExpiresAtPerf - performance.now()) / 1000)` — purely renderer-side, no IPC round-trip
 - `startCountdownTicker()` / `stopCountdownTicker()` — `setInterval`/`clearInterval` every 1000ms, fires `updateStatusUI()` only when anchor changes
 
@@ -46,6 +46,7 @@ Interactive session status display. Shows prevent-sleep state, session timer cou
 
 - **No DOM `CustomEvent`** — all cross-process communication via `window.api` push subscriptions
 - **No `as EventListener`** casts — event handlers typed via `addEventListener` generics
+- **DOM updates**: `updateStatusUI()` skips unchanged timer text and batches changed writes in `requestAnimationFrame`
 - **Popover sizing**: `MAIN_WINDOW_WIDTH` (320px) constant; height set dynamically
 - **Dark mode**: follows `nativeTheme.shouldUseDarkColors`; CSS variables swap automatically
 - **UI strings**: all in `constants.ts` / `settings/constants.ts` — never hardcoded in logic

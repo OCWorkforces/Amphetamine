@@ -23,6 +23,8 @@ Root package scripts:
 
 `build-macOS-dmg.sh` is the local macOS wrapper: install deps, clean `dist/`, build, package DMG, sign Developer ID if available, otherwise deep ad-hoc re-sign without hardened runtime, then rename with environment suffix.
 
+Ad-hoc path: `CSC_IDENTITY_AUTO_DISCOVERY=false` → electron-builder DMG → `codesign --force --deep --sign -` on the `.app` without `--runtime` → ad-hoc sign DMG → append `--environment` suffix. This avoids dyld Team ID mismatch for unsigned local builds.
+
 ## electron-builder Constraints
 
 - `hardenedRuntime: false` is intentional. Re-enable only with notarization + JIT entitlements.
