@@ -58,13 +58,13 @@ jobs:
       - uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: ${{ runner.temp }}/.cache/electron
-          key: ${{ runner.os }}-${{ matrix.arch }}-electron-${{ hashFiles('bun.lockb') }}
+          key: ${{ runner.os }}-${{ matrix.arch }}-electron-${{ hashFiles('bun.lock') }}
           restore-keys: |
             ${{ runner.os }}-${{ matrix.arch }}-electron-
       - uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: ${{ runner.temp }}/.cache/electron-builder
-          key: ${{ runner.os }}-${{ matrix.arch }}-electron-builder-${{ hashFiles('bun.lockb') }}
+          key: ${{ runner.os }}-${{ matrix.arch }}-electron-builder-${{ hashFiles('bun.lock') }}
           restore-keys: |
             ${{ runner.os }}-${{ matrix.arch }}-electron-builder-
       - run: bun install --frozen-lockfile
