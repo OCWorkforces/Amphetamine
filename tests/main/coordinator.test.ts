@@ -1,5 +1,20 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
+// Helper: extracts the first argument of the first call of a hoisted mock with
+// type assertion. vi.hoisted(() => vi.fn(() => ...)) infers an empty-args
+// signature, so mock.calls[0]?.[0] is typed as `undefined`. Routing through a
+// generic helper that accepts a mock with `unknown[][]` calls lets us assert
+// the deps shape captured at call-site without `as any`.
+function firstCallArg<T>(mock: {
+  mock: { calls: ReadonlyArray<ReadonlyArray<unknown>> };
+}): T {
+  const call = mock.mock.calls[0];
+  if (!call || call.length === 0) {
+    throw new Error("Expected mock to have been called at least once");
+  }
+  return call[0] as T;
+}
+
 // Hoisted mocks
 const mockGetSettings = vi.hoisted(() => vi.fn());
 const mockOnSettingsChanged = vi.hoisted(() => vi.fn());
@@ -176,7 +191,7 @@ describe("coordinator", () => {
       await initCoordinator();
 
       expect(mockCreateSessionTimer).toHaveBeenCalledTimes(1);
-      const deps = mockCreateSessionTimer.mock.calls[0]?.[0] as Record<string, unknown>;
+      const deps = firstCallArg<Record<string, unknown>>(mockCreateSessionTimer);
       expect(typeof deps.onStateChange).toBe("function");
       expect(typeof deps.getSettings).toBe("function");
       expect(typeof deps.broadcast).toBe("function");
@@ -197,29 +212,64 @@ describe("coordinator", () => {
       await initCoordinator();
 
       expect(mockCreateBatteryMonitor).toHaveBeenCalledTimes(1);
-      const deps = mockCreateBatteryMonitor.mock.calls[0]?.[0] as Record<string, unknown>;
+      const deps = firstCallArg<Record<string, unknown>>(mockCreateBatteryMonitor);
       expect(typeof deps.getThreshold).toBe("function");
       expect(typeof deps.onAutoStop).toBe("function");
       expect(typeof deps.isPreventingSleep).toBe("function");
-      expect(typeof deps.stopPreventingSleep).toBe("function");
+      // Battery monitor is a pure detector — it must NOT receive a direct
+      // sleep-prevention stop wrapper. Policy lives in the coordinator.
+      expect(deps.stopPreventingSleep).toBeUndefined();
     });
 
-    it("battery onAutoStop is wired to session cancel", async () => {
+    it("battery onAutoStop cancels session and clears standing preventSleep when set", async () => {
+      mockGetSettings.mockReturnValue({ ...defaultSettings, preventSleep: true });
       await initCoordinator();
 
-      const deps = mockCreateBatteryMonitor.mock.calls[0]?.[0] as { onAutoStop: () => void };
+      const deps = firstCallArg<{ onAutoStop: () => void }>(mockCreateBatteryMonitor);
       mockSessionCancel.mockClear();
+      mockUpdateSettings.mockClear();
+      mockUpdateSettings.mockResolvedValueOnce(undefined);
+
       deps.onAutoStop();
 
+      expect(mockUpdateSettings).toHaveBeenCalledWith({ preventSleep: false });
       expect(mockSessionCancel).toHaveBeenCalledTimes(1);
+      // The detector must NOT have been given a direct stopPreventingSleep wrapper.
+      expect(mockStopPreventingSleep).not.toHaveBeenCalled();
+    });
+
+    it("battery onAutoStop skips updateSettings when preventSleep is already false but still cancels session", async () => {
+      mockGetSettings.mockReturnValue({ ...defaultSettings, preventSleep: false });
+      await initCoordinator();
+
+      const deps = firstCallArg<{ onAutoStop: () => void }>(mockCreateBatteryMonitor);
+      mockSessionCancel.mockClear();
+      mockUpdateSettings.mockClear();
+
+      deps.onAutoStop();
+
+      expect(mockUpdateSettings).not.toHaveBeenCalled();
+      expect(mockSessionCancel).toHaveBeenCalledTimes(1);
+    });
+
+    it("battery onAutoStop swallows updateSettings rejection without floating", async () => {
+      mockGetSettings.mockReturnValue({ ...defaultSettings, preventSleep: true });
+      await initCoordinator();
+
+      const deps = firstCallArg<{ onAutoStop: () => void }>(mockCreateBatteryMonitor);
+      mockUpdateSettings.mockClear();
+      mockUpdateSettings.mockRejectedValueOnce(new Error("disk full"));
+
+      // Must not throw synchronously and must not produce an unhandled rejection.
+      expect(() => deps.onAutoStop()).not.toThrow();
+      await Promise.resolve();
+      await Promise.resolve();
     });
 
     it("battery getThreshold reads current settings", async () => {
       await initCoordinator();
 
-      const deps = mockCreateBatteryMonitor.mock.calls[0]?.[0] as {
-        getThreshold: () => number;
-      };
+      const deps = firstCallArg<{ getThreshold: () => number }>(mockCreateBatteryMonitor);
       mockGetSettings.mockReturnValue({ ...defaultSettings, batteryThreshold: 42 });
       expect(deps.getThreshold()).toBe(42);
     });

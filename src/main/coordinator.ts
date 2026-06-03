@@ -62,6 +62,30 @@ function togglePreventSleep(): void {
     log.error("[coordinator] togglePreventSleep failed:", err),
   );
 }
+
+/**
+ * Low-battery auto-stop policy handler.
+ *
+ * The battery monitor only DETECTS the threshold; the coordinator owns the
+ * response. Two effective sources keep sleep blocked:
+ *   1. `settings.preventSleep` — the user's standing preference.
+ *   2. `sessionActiveCache` — a live session timer.
+ *
+ * If we only stopped the blocker, the persisted `settings.preventSleep=true`
+ * would let `recomputeSleepPrevention()` immediately re-enable it. So we
+ * must disable both: persist `preventSleep: false` and cancel any active
+ * session. `recomputeSleepPrevention()` is then invoked via the normal
+ * settings/session change paths.
+ */
+function handleLowBatteryAutoStop(): void {
+  if (getSettings().preventSleep) {
+    updateSettings({ preventSleep: false }).catch((err) =>
+      log.error("[coordinator] Low-battery auto-stop: updateSettings failed:", err),
+    );
+  }
+  sessionTimer?.cancelSession();
+}
+
 /**
  * Initialize the coordinator.
  * Syncs system state on startup and subscribes to settings changes.
@@ -97,12 +121,13 @@ export async function initCoordinator(): Promise<void> {
   });
   setActiveSessionTimer(sessionTimer);
 
-  // Construct the battery monitor with explicit, required dependencies.
+  // Construct the battery monitor. The monitor is a pure detector — when the
+  // threshold is crossed it calls `onAutoStop()` and the coordinator owns the
+  // policy response (disable standing user intent, cancel any active session).
   batteryMonitor = createBatteryMonitor({
     getThreshold: () => getSettings().batteryThreshold,
-    onAutoStop: () => sessionTimer?.cancelSession(),
+    onAutoStop: handleLowBatteryAutoStop,
     isPreventingSleep,
-    stopPreventingSleep,
   });
   void batteryMonitor
     .initBatteryMonitoring()

@@ -7,26 +7,32 @@ import { BATTERY_CHECK_TIMEOUT_MS } from "./constants.js";
 /** Interval (ms) between periodic battery polls while on battery and preventing sleep. */
 const PERIODIC_BATTERY_CHECK_MS = 60_000;
 
-/** Fallback threshold (%) used when the configured threshold is missing or non-positive. */
-const DEFAULT_BATTERY_THRESHOLD = 20;
+/** Returns true when `threshold` is a positive, finite percentage. 0 / non-positive ⇒ disabled. */
+function isThresholdEnabled(threshold: number): boolean {
+  return Number.isFinite(threshold) && threshold > 0;
+}
 
 const execFileAsync = promisify(execFile);
 
 /**
  * Dependencies for the battery monitor.
  *
+ * The battery monitor is a pure detector: when the threshold is crossed,
+ * it notifies the coordinator via `onAutoStop()` and the coordinator owns
+ * the policy response (cancelling sessions, disabling standing preferences,
+ * and stopping sleep prevention). The monitor never touches sleep-prevention
+ * state directly.
+ *
  * All fields are required — there is no silent fallback. Wiring is enforced
  * at construction time by `createBatteryMonitor`.
  */
 export interface BatteryDeps {
-  /** Returns the configured battery threshold (%). 0 / non-positive ⇒ default. */
+  /** Returns the configured battery threshold (%). 0 / non-positive ⇒ auto-disable is OFF. */
   getThreshold: () => number;
-  /** Invoked once after the monitor auto-stops sleep prevention. */
+  /** Invoked when battery drops at or below threshold; coordinator owns the response. */
   onAutoStop: () => void;
-  /** Returns true if sleep prevention is currently active. */
+  /** Returns true if sleep prevention is currently active (used to gate polling). */
   isPreventingSleep: () => boolean;
-  /** Stops sleep prevention. */
-  stopPreventingSleep: () => void;
 }
 
 /** Public handle returned by `createBatteryMonitor`. */
@@ -56,11 +62,8 @@ export function createBatteryMonitor(deps: BatteryDeps): BatteryMonitorHandle {
   if (typeof deps.isPreventingSleep !== "function") {
     throw new TypeError("createBatteryMonitor: deps.isPreventingSleep must be a function");
   }
-  if (typeof deps.stopPreventingSleep !== "function") {
-    throw new TypeError("createBatteryMonitor: deps.stopPreventingSleep must be a function");
-  }
 
-  const { getThreshold, onAutoStop, isPreventingSleep, stopPreventingSleep } = deps;
+  const { getThreshold, onAutoStop, isPreventingSleep } = deps;
 
   let isCheckingBattery = false;
   let onBatteryListener: (() => void) | null = null;
@@ -69,19 +72,15 @@ export function createBatteryMonitor(deps: BatteryDeps): BatteryMonitorHandle {
   let batteryCheckInterval: ReturnType<typeof setInterval> | null = null;
 
   const checkBatteryAndStop = async (): Promise<void> => {
-    const rawThreshold = getThreshold();
-    const threshold =
-      typeof rawThreshold === "number" && Number.isFinite(rawThreshold) && rawThreshold > 0
-        ? rawThreshold
-        : DEFAULT_BATTERY_THRESHOLD;
+    const threshold = getThreshold();
+    if (!isThresholdEnabled(threshold)) return;
     if (!isPreventingSleep()) return;
 
     try {
       const percent = await getBatteryPercent();
       if (percent !== null && percent <= threshold) {
-        stopPreventingSleep();
         log.info(
-          `[battery-monitor] Auto-stopped: battery at ${percent}% (threshold: ${threshold}%)`,
+          `[battery-monitor] Auto-stop triggered: battery at ${percent}% (threshold: ${threshold}%)`,
         );
         onAutoStop();
       }
@@ -91,11 +90,12 @@ export function createBatteryMonitor(deps: BatteryDeps): BatteryMonitorHandle {
   };
   /**
    * Start the periodic battery polling loop.
-   * Gated: only runs when on battery power AND sleep prevention is active.
+   * Gated: only runs when threshold is enabled (> 0), on battery power, AND sleep prevention is active.
    * Idempotent — safe to call repeatedly.
    */
   const startPeriodicBatteryChecks = (): void => {
     if (batteryCheckInterval !== null) return;
+    if (!isThresholdEnabled(getThreshold())) return;
     if (!powerMonitor.isOnBatteryPower()) return;
     if (!isPreventingSleep()) return;
     batteryCheckInterval = setInterval(() => {
