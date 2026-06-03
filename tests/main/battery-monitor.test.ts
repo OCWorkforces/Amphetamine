@@ -30,7 +30,6 @@ describe("battery-monitor", () => {
   let mockGetThreshold: ReturnType<typeof vi.fn<() => number>>;
   let mockOnAutoStop: ReturnType<typeof vi.fn<() => void>>;
   let mockIsActive: ReturnType<typeof vi.fn<() => boolean>>;
-  let mockStopSleep: ReturnType<typeof vi.fn<() => void>>;
 
   /** Build a fresh battery-monitor handle wired to the current mocks. */
   async function buildHandle(): Promise<BatteryMonitorHandle> {
@@ -39,7 +38,6 @@ describe("battery-monitor", () => {
       getThreshold: () => mockGetThreshold(),
       onAutoStop: () => mockOnAutoStop(),
       isPreventingSleep: () => mockIsActive(),
-      stopPreventingSleep: () => mockStopSleep(),
     });
   }
 
@@ -52,7 +50,6 @@ describe("battery-monitor", () => {
     mockGetThreshold = vi.fn<() => number>().mockReturnValue(0);
     mockOnAutoStop = vi.fn<() => void>();
     mockIsActive = vi.fn<() => boolean>().mockReturnValue(false);
-    mockStopSleep = vi.fn<() => void>();
 
     mockExecFile.mockImplementation(
       (
@@ -146,7 +143,6 @@ describe("battery-monitor", () => {
           getThreshold: undefined,
           onAutoStop: () => {},
           isPreventingSleep: () => false,
-          stopPreventingSleep: () => {},
         }),
       ).toThrow(/getThreshold/);
     });
@@ -159,7 +155,6 @@ describe("battery-monitor", () => {
           // @ts-expect-error - intentionally missing required dep
           onAutoStop: undefined,
           isPreventingSleep: () => false,
-          stopPreventingSleep: () => {},
         }),
       ).toThrow(/onAutoStop/);
     });
@@ -172,22 +167,8 @@ describe("battery-monitor", () => {
           onAutoStop: () => {},
           // @ts-expect-error - intentionally missing required dep
           isPreventingSleep: undefined,
-          stopPreventingSleep: () => {},
         }),
       ).toThrow(/isPreventingSleep/);
-    });
-
-    it("throws when stopPreventingSleep is missing", async () => {
-      const mod = await import("../../src/main/battery-monitor.js");
-      expect(() =>
-        mod.createBatteryMonitor({
-          getThreshold: () => 0,
-          onAutoStop: () => {},
-          isPreventingSleep: () => false,
-          // @ts-expect-error - intentionally missing required dep
-          stopPreventingSleep: undefined,
-        }),
-      ).toThrow(/stopPreventingSleep/);
     });
   });
 
@@ -237,15 +218,14 @@ describe("battery-monitor", () => {
 
       await vi.advanceTimersByTimeAsync(50);
 
-      expect(mockStopSleep).toHaveBeenCalled();
       expect(mockOnAutoStop).toHaveBeenCalled();
     });
 
-    it("treats threshold 0 as the default (20%) and DOES auto-stop below default", async () => {
+    it("treats threshold 0 as disabled and does NOT auto-stop even at low battery", async () => {
       mockIsActive.mockReturnValue(true);
       mockGetThreshold.mockReturnValue(0);
 
-      // Battery at 15% < default 20% → should auto-stop.
+      // Battery at 5% but threshold 0 (disabled) → must NOT auto-stop.
       mockExecFile.mockImplementation(
         (
           _cmd: string,
@@ -255,7 +235,7 @@ describe("battery-monitor", () => {
         ) => {
           cb(null, {
             stdout:
-              "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=1234)\t15%; discharging",
+              "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=1234)\t5%; discharging",
           });
         },
       );
@@ -270,15 +250,27 @@ describe("battery-monitor", () => {
 
       await vi.advanceTimersByTimeAsync(50);
 
-      expect(mockStopSleep).toHaveBeenCalled();
-      expect(mockOnAutoStop).toHaveBeenCalled();
+      expect(mockOnAutoStop).not.toHaveBeenCalled();
     });
 
-    it("treats threshold 0 as the default (20%) and does NOT auto-stop above default", async () => {
+    it("treats negative threshold as disabled and does NOT auto-stop", async () => {
       mockIsActive.mockReturnValue(true);
-      mockGetThreshold.mockReturnValue(0);
+      mockGetThreshold.mockReturnValue(-10);
 
-      // Battery at 75% > default 20% → should NOT auto-stop.
+      mockExecFile.mockImplementation(
+        (
+          _cmd: string,
+          _args: string[],
+          _opts: Record<string, unknown>,
+          cb: (_err: Error | null, _result: { stdout: string }) => void,
+        ) => {
+          cb(null, {
+            stdout:
+              "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=1234)\t1%; discharging",
+          });
+        },
+      );
+
       await handle.initBatteryMonitoring();
 
       const onBatteryCall = mockPowerMonitor.on.mock.calls.find(
@@ -289,7 +281,6 @@ describe("battery-monitor", () => {
 
       await vi.advanceTimersByTimeAsync(50);
 
-      expect(mockStopSleep).not.toHaveBeenCalled();
       expect(mockOnAutoStop).not.toHaveBeenCalled();
     });
 
@@ -307,7 +298,6 @@ describe("battery-monitor", () => {
 
       await vi.advanceTimersByTimeAsync(50);
 
-      expect(mockStopSleep).not.toHaveBeenCalled();
       expect(mockOnAutoStop).not.toHaveBeenCalled();
     });
 
@@ -325,7 +315,6 @@ describe("battery-monitor", () => {
 
       await vi.advanceTimersByTimeAsync(50);
 
-      expect(mockStopSleep).not.toHaveBeenCalled();
       expect(mockOnAutoStop).not.toHaveBeenCalled();
     });
   });
@@ -474,6 +463,10 @@ describe("battery-monitor", () => {
   });
 
   describe("periodic battery checks (FIX 1)", () => {
+    beforeEach(() => {
+      mockGetThreshold.mockReturnValue(20);
+    });
+
     it("starts setInterval when on battery power and preventing sleep", async () => {
       mockPowerMonitor.isOnBatteryPower.mockReturnValue(true);
       mockIsActive.mockReturnValue(true);
@@ -502,6 +495,19 @@ describe("battery-monitor", () => {
       const setIntervalSpy = vi.spyOn(globalThis, "setInterval");
 
       await handle.initBatteryMonitoring();
+
+      expect(setIntervalSpy).not.toHaveBeenCalled();
+      setIntervalSpy.mockRestore();
+    });
+
+    it("does NOT start setInterval when threshold is 0 (disabled), even on battery + preventing", async () => {
+      mockPowerMonitor.isOnBatteryPower.mockReturnValue(true);
+      mockIsActive.mockReturnValue(true);
+      mockGetThreshold.mockReturnValue(0);
+      const setIntervalSpy = vi.spyOn(globalThis, "setInterval");
+
+      await handle.initBatteryMonitoring();
+      handle.onPreventSleepChange(true);
 
       expect(setIntervalSpy).not.toHaveBeenCalled();
       setIntervalSpy.mockRestore();

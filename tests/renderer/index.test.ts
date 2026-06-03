@@ -419,7 +419,7 @@ describe("renderer popover (index.ts)", () => {
       expect(text).toContain("m remaining");
     });
 
-    it("clears session status when preventSleep is turned off via push", async () => {
+    it("keeps session active when preventSleep is turned off via push while session running", async () => {
       mockApi.settings.get.mockResolvedValue({ ...DEFAULT_SETTINGS,
         launchAtLogin: false,
         preventSleep: true,
@@ -438,7 +438,7 @@ describe("renderer popover (index.ts)", () => {
       document.dispatchEvent(new Event("DOMContentLoaded"));
       await vi.advanceTimersByTimeAsync(0);
 
-      // Turn off preventSleep via push
+      // Turn off preventSleep via push — session still running
       const settingsCallback = mockApi.onSettingsChanged.mock.calls[0]![0];
       settingsCallback({
         ...DEFAULT_SETTINGS,
@@ -449,8 +449,54 @@ describe("renderer popover (index.ts)", () => {
 
       await vi.advanceTimersByTimeAsync(16);
 
-      expect(getTimerText()).toBe("Timer Indefinitely");
-      expect(getStatusText()).toBe(STATUS_SLEEP_PREVENTION_OFF);
+      // Effective active state stays true while session.isRunning is true.
+      expect(getStatusText()).toBe(STATUS_PREVENTING_SLEEP);
+      expect(getStatusDot()?.classList.contains("active")).toBe(true);
+      const text = getTimerText();
+      expect(text).toContain("Timer");
+      expect(text).toContain("m remaining");
+    });
+
+    it("shows active status and remaining timer for running timed session even when preventSleep is false", async () => {
+      mockApi.settings.get.mockResolvedValue({ ...DEFAULT_SETTINGS,
+        launchAtLogin: false,
+        preventSleep: false,
+        sessionDuration: 30,
+      });
+      mockApi.session.getStatus.mockResolvedValue({
+        isRunning: true,
+        startedAt: asPerf(Date.now()),
+        expiresAt: asPerf(Date.now() + 20 * 60 * 1000),
+        remainingSeconds: 1200,
+        durationMinutes: 30,
+      });
+
+      vi.resetModules();
+      await import("../../src/renderer/index.js");
+      document.dispatchEvent(new Event("DOMContentLoaded"));
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(getStatusDot()?.classList.contains("active")).toBe(true);
+      expect(getStatusText()).toBe(STATUS_PREVENTING_SLEEP);
+      const text = getTimerText();
+      expect(text).toContain("Timer");
+      expect(text).toContain("m remaining");
+    });
+
+    it("fetches session.getStatus during init even when preventSleep is false", async () => {
+      mockApi.settings.get.mockResolvedValue({ ...DEFAULT_SETTINGS,
+        launchAtLogin: false,
+        preventSleep: false,
+        sessionDuration: null,
+      });
+      mockApi.session.getStatus.mockResolvedValue(null);
+
+      vi.resetModules();
+      await import("../../src/renderer/index.js");
+      document.dispatchEvent(new Event("DOMContentLoaded"));
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(mockApi.session.getStatus).toHaveBeenCalled();
     });
   });
 

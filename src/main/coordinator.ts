@@ -40,6 +40,20 @@ let unsubscribeSettings: (() => void) | null = null;
 let sessionTimer: SessionTimerHandle | null = null;
 let batteryMonitor: BatteryMonitorHandle | null = null;
 let sessionActiveCache = false;
+let effectiveActive = false;
+const effectiveActiveListeners = new Set<() => void>();
+
+function notifyEffectiveActiveChange(next: boolean): void {
+  if (next === effectiveActive) return;
+  effectiveActive = next;
+  for (const listener of effectiveActiveListeners) {
+    try {
+      listener();
+    } catch (err) {
+      log.error("[coordinator] effective-active listener threw:", err);
+    }
+  }
+}
 
 /**
  * Compute the effective sleep-prevention state and apply it.
@@ -55,6 +69,7 @@ function recomputeSleepPrevention(userIntentOverride?: boolean): void {
   if (prev !== next) {
     batteryMonitor?.onPreventSleepChange(next);
   }
+  notifyEffectiveActiveChange(next);
 }
 
 function togglePreventSleep(): void {
@@ -62,6 +77,30 @@ function togglePreventSleep(): void {
     log.error("[coordinator] togglePreventSleep failed:", err),
   );
 }
+
+/**
+ * Low-battery auto-stop policy handler.
+ *
+ * The battery monitor only DETECTS the threshold; the coordinator owns the
+ * response. Two effective sources keep sleep blocked:
+ *   1. `settings.preventSleep` — the user's standing preference.
+ *   2. `sessionActiveCache` — a live session timer.
+ *
+ * If we only stopped the blocker, the persisted `settings.preventSleep=true`
+ * would let `recomputeSleepPrevention()` immediately re-enable it. So we
+ * must disable both: persist `preventSleep: false` and cancel any active
+ * session. `recomputeSleepPrevention()` is then invoked via the normal
+ * settings/session change paths.
+ */
+function handleLowBatteryAutoStop(): void {
+  if (getSettings().preventSleep) {
+    updateSettings({ preventSleep: false }).catch((err) =>
+      log.error("[coordinator] Low-battery auto-stop: updateSettings failed:", err),
+    );
+  }
+  sessionTimer?.cancelSession();
+}
+
 /**
  * Initialize the coordinator.
  * Syncs system state on startup and subscribes to settings changes.
@@ -75,6 +114,7 @@ export async function initCoordinator(): Promise<void> {
   syncAutoLaunch(settings.launchAtLogin);
   // Initial sleep state derives from user intent only (no session yet on init).
   sessionActiveCache = false;
+  effectiveActive = false;
   recomputeSleepPrevention();
 
   // Construct the session timer with explicit, required dependencies. The
@@ -97,12 +137,13 @@ export async function initCoordinator(): Promise<void> {
   });
   setActiveSessionTimer(sessionTimer);
 
-  // Construct the battery monitor with explicit, required dependencies.
+  // Construct the battery monitor. The monitor is a pure detector — when the
+  // threshold is crossed it calls `onAutoStop()` and the coordinator owns the
+  // policy response (disable standing user intent, cancel any active session).
   batteryMonitor = createBatteryMonitor({
     getThreshold: () => getSettings().batteryThreshold,
-    onAutoStop: () => sessionTimer?.cancelSession(),
+    onAutoStop: handleLowBatteryAutoStop,
     isPreventingSleep,
-    stopPreventingSleep,
   });
   void batteryMonitor
     .initBatteryMonitoring()
@@ -190,6 +231,8 @@ export function cleanupCoordinator(): void {
   sessionTimer = null;
   setActiveSessionTimer(null);
   sessionActiveCache = false;
+  effectiveActive = false;
+  effectiveActiveListeners.clear();
   prevSettings = null;
   stopPreventingSleep();
   unregisterGlobalShortcut();
@@ -203,11 +246,18 @@ export function cleanupCoordinator(): void {
 export function getTrayDeps(): TrayDeps {
   return {
     getPreventSleep: () => getSettings().preventSleep,
+    getEffectiveActive: () => effectiveActive,
     togglePreventSleep,
     onSettingsChanged: (cb: () => void) =>
       onSettingsChanged((_settings) => {
         cb();
       }),
+    onActiveStateChanged: (cb: () => void) => {
+      effectiveActiveListeners.add(cb);
+      return () => {
+        effectiveActiveListeners.delete(cb);
+      };
+    },
     openSettings: () => createSettingsWindow(),
   };
 }

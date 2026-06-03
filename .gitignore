@@ -145,3 +145,4 @@ dist/
 .opencode/
 # CocoIndex Code (ccc)
 /.cocoindex_code/
+.omo/

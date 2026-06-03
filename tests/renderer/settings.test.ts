@@ -305,7 +305,8 @@ describe("renderer settings", () => {
       // (settings.preventSleep || sessionTimer.sessionActive).
       const calls = mockApi.settings.set.mock.calls.map((c: unknown[]) => c[0]);
       const durationCall = calls.find(
-        (c: Record<string, unknown> | undefined) => c && "sessionDuration" in c,
+        (c): c is Record<string, unknown> =>
+          typeof c === "object" && c !== null && "sessionDuration" in c,
       );
       expect(durationCall).toEqual(expect.objectContaining({ sessionDuration: 60, preventSleep: false }));
     });
@@ -413,13 +414,13 @@ describe("renderer settings", () => {
 
   });
 
-  describe("isSaving guard", () => {
-    it("does not double-save when already saving", async () => {
-      let resolveSet: ((v: AppSettings) => void) | null = null;
+  describe("latest-snapshot save queue", () => {
+    it("queues the latest snapshot when a save is already in flight", async () => {
+      const resolvers: Array<(v: AppSettings) => void> = [];
       mockApi.settings.set.mockImplementation(
-        () =>
+        (s: AppSettings) =>
           new Promise<AppSettings>((resolve) => {
-            resolveSet = resolve;
+            resolvers.push(() => resolve(s));
           }),
       );
 
@@ -432,17 +433,117 @@ describe("renderer settings", () => {
       toggle.checked = true;
       toggle.dispatchEvent(new Event("change"));
 
+      // Let the debounce fire — first save is now in flight (unresolved).
       await vi.advanceTimersByTimeAsync(350);
+      expect(mockApi.settings.set).toHaveBeenCalledTimes(1);
+      expect(mockApi.settings.set.mock.calls[0]![0].launchAtLogin).toBe(true);
 
+      // While the first save is still pending, the user flips it again.
       toggle.checked = false;
       toggle.dispatchEvent(new Event("change"));
-
       await vi.advanceTimersByTimeAsync(350);
 
-      // Only the first save should have been called (isSaving guard)
+      // The second save must NOT have been issued yet — it should be queued.
       expect(mockApi.settings.set).toHaveBeenCalledTimes(1);
 
-      (resolveSet as ((v: AppSettings) => void) | null)?.({ ...defaultSettings, launchAtLogin: true });
+      // Resolve the in-flight save; the queued latest snapshot must now flush.
+      resolvers[0]!({ ...defaultSettings, launchAtLogin: true });
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(mockApi.settings.set).toHaveBeenCalledTimes(2);
+      expect(mockApi.settings.set.mock.calls[1]![0].launchAtLogin).toBe(false);
+
+      // Resolve the queued save so no dangling promises remain.
+      resolvers[1]!({ ...defaultSettings, launchAtLogin: false });
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    it("collapses multiple in-flight changes into a single latest-snapshot save", async () => {
+      const resolvers: Array<(v: AppSettings) => void> = [];
+      mockApi.settings.set.mockImplementation(
+        (s: AppSettings) =>
+          new Promise<AppSettings>((resolve) => {
+            resolvers.push(() => resolve(s));
+          }),
+      );
+
+      vi.resetModules();
+      await import("../../src/renderer/settings/index.js");
+      document.dispatchEvent(new Event("DOMContentLoaded"));
+      await vi.advanceTimersByTimeAsync(0);
+
+      const toggle = document.getElementById("launch-at-login-toggle") as HTMLInputElement;
+      toggle.checked = true;
+      toggle.dispatchEvent(new Event("change"));
+      await vi.advanceTimersByTimeAsync(350);
+      expect(mockApi.settings.set).toHaveBeenCalledTimes(1);
+
+      // Several rapid changes while the first save is still pending.
+      const batterySelect = document.getElementById(
+        "battery-threshold-select",
+      ) as HTMLSelectElement;
+      batterySelect.value = "10";
+      batterySelect.dispatchEvent(new Event("change"));
+      await vi.advanceTimersByTimeAsync(350);
+      batterySelect.value = "20";
+      batterySelect.dispatchEvent(new Event("change"));
+      await vi.advanceTimersByTimeAsync(350);
+
+      // Still only one in-flight save; the rest collapsed into the queue.
+      expect(mockApi.settings.set).toHaveBeenCalledTimes(1);
+
+      resolvers[0]!({ ...defaultSettings, launchAtLogin: true });
+      await vi.advanceTimersByTimeAsync(0);
+
+      // Exactly one follow-up save with the LATEST snapshot is issued.
+      expect(mockApi.settings.set).toHaveBeenCalledTimes(2);
+      expect(mockApi.settings.set.mock.calls[1]![0].batteryThreshold).toBe(20);
+      expect(mockApi.settings.set.mock.calls[1]![0].launchAtLogin).toBe(true);
+
+      resolvers[1]!({ ...defaultSettings, launchAtLogin: true, batteryThreshold: 20 });
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    it("does not permanently block queued saves when an in-flight save fails", async () => {
+      let callCount = 0;
+      const resolvers: Array<() => void> = [];
+      const rejectors: Array<(e: Error) => void> = [];
+      mockApi.settings.set.mockImplementation(
+        (s: AppSettings) =>
+          new Promise<AppSettings>((resolve, reject) => {
+            callCount += 1;
+            if (callCount === 1) {
+              rejectors.push(() => reject(new Error("Disk full")));
+            } else {
+              resolvers.push(() => resolve(s));
+            }
+          }),
+      );
+
+      vi.resetModules();
+      await import("../../src/renderer/settings/index.js");
+      document.dispatchEvent(new Event("DOMContentLoaded"));
+      await vi.advanceTimersByTimeAsync(0);
+
+      const toggle = document.getElementById("launch-at-login-toggle") as HTMLInputElement;
+      toggle.checked = true;
+      toggle.dispatchEvent(new Event("change"));
+      await vi.advanceTimersByTimeAsync(350);
+
+      // Queue a follow-up change while the first save is in flight.
+      toggle.checked = false;
+      toggle.dispatchEvent(new Event("change"));
+      await vi.advanceTimersByTimeAsync(350);
+      expect(mockApi.settings.set).toHaveBeenCalledTimes(1);
+
+      // Fail the in-flight save — the queued snapshot must still get a chance.
+      rejectors[0]!(new Error("Disk full"));
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(mockApi.settings.set).toHaveBeenCalledTimes(2);
+      expect(mockApi.settings.set.mock.calls[1]![0].launchAtLogin).toBe(false);
+
+      resolvers[0]!();
       await vi.advanceTimersByTimeAsync(0);
     });
   });

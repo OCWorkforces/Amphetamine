@@ -57,8 +57,20 @@ const iconCache = new Map<string, Electron.NativeImage>();
 
 export interface TrayDeps {
   getPreventSleep: () => boolean;
+  /**
+   * Effective sleep-prevention active state used to drive the tray icon.
+   * Computed by the coordinator as (settings.preventSleep || sessionActive).
+   * The menu checkbox still mirrors user intent via getPreventSleep().
+   */
+  getEffectiveActive: () => boolean;
   togglePreventSleep: () => void;
   onSettingsChanged: (callback: () => void) => () => void;
+  /**
+   * Notifies the tray when the effective active state changes for reasons other
+   * than a settings update (e.g., a session starting or expiring without any
+   * user-intent change). Used to refresh the tray icon without rebuilding the menu.
+   */
+  onActiveStateChanged: (callback: () => void) => () => void;
   openSettings: () => void;
 }
 
@@ -99,11 +111,12 @@ export function setupTray(deps: TrayDeps): () => void {
 
   function refreshTrayIcon(): void {
     if (!tray) return;
-    tray.setImage(buildIcon(nativeTheme.shouldUseDarkColors, deps.getPreventSleep()));
+    tray.setImage(buildIcon(nativeTheme.shouldUseDarkColors, deps.getEffectiveActive()));
   }
 
   const initialPreventSleep = deps.getPreventSleep();
-  tray = new Tray(buildIcon(nativeTheme.shouldUseDarkColors, initialPreventSleep));
+  const initialEffectiveActive = deps.getEffectiveActive();
+  tray = new Tray(buildIcon(nativeTheme.shouldUseDarkColors, initialEffectiveActive));
   tray.setToolTip("Amphetamine");
 
   // Update icon whenever the system theme changes or settings change (debounced)
@@ -116,16 +129,37 @@ export function setupTray(deps: TrayDeps): () => void {
   };
   nativeTheme.on("updated", onThemeUpdated);
 
-  // Store unsubscribe for cleanup robustness
+  // Store unsubscribes for cleanup robustness.
+  // Track BOTH user intent (drives menu checkbox + cache rebuild) and effective
+  // active state (drives icon) so each updates only when its own input changes.
   let lastPreventSleep = initialPreventSleep;
-  const unsubscribe = deps.onSettingsChanged(() => {
-    // Only refresh tray icon when preventSleep (the visible state) actually changed.
-    // Theme-driven icon updates are handled by the nativeTheme listener above.
+  let lastEffectiveActive = initialEffectiveActive;
+  const unsubscribeSettings = deps.onSettingsChanged(() => {
     const currentPreventSleep = deps.getPreventSleep();
+    const currentEffectiveActive = deps.getEffectiveActive();
+    let iconNeedsRefresh = false;
+    if (currentEffectiveActive !== lastEffectiveActive) {
+      lastEffectiveActive = currentEffectiveActive;
+      iconNeedsRefresh = true;
+    }
     if (currentPreventSleep !== lastPreventSleep) {
       lastPreventSleep = currentPreventSleep;
-      refreshTrayIcon();
+      // User intent changed — rebuild menu so the checkbox reflects it.
       cachedMenu = buildMenu();
+      iconNeedsRefresh = true;
+    }
+    if (iconNeedsRefresh) {
+      refreshTrayIcon();
+    }
+  });
+  const unsubscribeActiveState = deps.onActiveStateChanged(() => {
+    // Effective active state can change without any settings change (e.g.,
+    // session start/expire while user intent stays false). Refresh icon only —
+    // menu checkbox is bound to user intent, not effective state.
+    const currentEffectiveActive = deps.getEffectiveActive();
+    if (currentEffectiveActive !== lastEffectiveActive) {
+      lastEffectiveActive = currentEffectiveActive;
+      refreshTrayIcon();
     }
   });
 
@@ -161,7 +195,8 @@ export function setupTray(deps: TrayDeps): () => void {
     }
   });
   return () => {
-    unsubscribe();
+    unsubscribeSettings();
+    unsubscribeActiveState();
     nativeTheme.removeListener("updated", onThemeUpdated);
     if (themeDebounceTimer) {
       clearTimeout(themeDebounceTimer);

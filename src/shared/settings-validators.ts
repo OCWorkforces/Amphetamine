@@ -22,28 +22,47 @@ export const isNonEmptyString = (v: unknown): v is string => typeof v === "strin
 export const isValidAccelerator = (s: unknown): s is string => {
   if (!isNonEmptyString(s)) return false;
 
-  const MODIFIERS = ["Cmd", "Command", "Ctrl", "Control", "Option", "Alt", "Shift", "Super"];
-  const modifierPattern = /(Cmd|Command|Ctrl|Control|Option|Alt|Shift|Super)/;
+  const MODIFIERS = [
+    "Cmd",
+    "Command",
+    "CommandOrControl",
+    "CmdOrCtrl",
+    "Ctrl",
+    "Control",
+    "Option",
+    "Alt",
+    "Shift",
+    "Super",
+  ];
+  const modifierPattern =
+    /(CommandOrControl|CmdOrCtrl|Command|Cmd|Control|Ctrl|Option|Alt|Shift|Super)/;
   if (!modifierPattern.test(s)) return false;
 
   const parts = s.split("+").map((p) => p.trim());
   const nonModifiers = parts.filter((p) => !MODIFIERS.includes(p));
   if (nonModifiers.length === 0) return false;
 
-  const forbiddenCombos = [
-    /^Cmd\+Q$/i,
-    /^Cmd\+W$/i,
-    /^Cmd\+Tab$/i,
-    /^Command\+Q$/i,
-    /^Command\+W$/i,
-    /^Command\+Tab$/i,
-    /^Cmd\+Space$/i,
-    /^Command\+Space$/i,
-  ];
+  // Reserved/system shortcuts across all Cmd-alias spellings.
+  const RESERVED_KEYS = ["Q", "W", "Tab", "Space"];
+  const CMD_ALIASES = ["Cmd", "Command", "CommandOrControl", "CmdOrCtrl"];
+  const forbiddenCombos = CMD_ALIASES.flatMap((mod) =>
+    RESERVED_KEYS.map((key) => new RegExp(`^${mod}\\+${key}$`, "i")),
+  );
   if (forbiddenCombos.some((r) => r.test(s))) return false;
 
   return true;
 };
+
+/**
+ * Validates a shortcut settings value. Accepts either:
+ *  - an empty string (sentinel for "use default shortcut", see AppSettings.shortcut)
+ *  - a valid Electron accelerator (see {@link isValidAccelerator})
+ *
+ * Single source of truth shared by {@link validateRawSettings} (disk load) and
+ * {@link VALIDATORS.shortcut} (incremental updates).
+ */
+export const isValidShortcutSetting = (v: unknown): v is string =>
+  v === "" || isValidAccelerator(v);
 
 export const validateBoolean = (value: unknown, defaultValue: boolean): boolean =>
   isBoolean(value) ? value : defaultValue;
@@ -84,7 +103,7 @@ export function validateRawSettings(raw: Record<string, unknown>): AppSettings {
       raw.batteryThreshold,
       DEFAULT_SETTINGS.batteryThreshold,
     ),
-    shortcut: validateNonEmptyString(raw.shortcut, DEFAULT_SETTINGS.shortcut),
+    shortcut: isValidShortcutSetting(raw.shortcut) ? raw.shortcut : DEFAULT_SETTINGS.shortcut,
   };
 }
 
@@ -106,7 +125,7 @@ export const VALIDATORS: { [K in keyof AppSettings]: SettingsValidator<K> } = {
     return isPositiveNumber(v) ? v : f;
   },
   batteryThreshold: (v, f) => (isClamped0to100(v) ? v : f),
-  shortcut: (v, f) => (isValidAccelerator(v) ? v : f),
+  shortcut: (v, f) => (isValidShortcutSetting(v) ? v : f),
 };
 
 function applyValidator<K extends keyof AppSettings>(

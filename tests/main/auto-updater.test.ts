@@ -506,6 +506,20 @@ describe("auto-updater", () => {
     it("is safe to call without init", () => {
       expect(() => stopAutoUpdater()).not.toThrow();
     });
+
+    it("cancels pending initial delayed check", () => {
+      initAutoUpdater();
+
+      // Stop before the 3s initial check fires.
+      stopAutoUpdater();
+
+      vi.advanceTimersByTime(3000);
+      expect(mockCheckForUpdates).not.toHaveBeenCalled();
+
+      // Periodic interval also should not fire.
+      vi.advanceTimersByTime(4 * 60 * 60 * 1000);
+      expect(mockCheckForUpdates).not.toHaveBeenCalled();
+    });
   });
 
   describe("registerAutoUpdaterIpc", () => {

@@ -12,6 +12,7 @@ let runningSessionDuration: number | null = null;
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
 let errorMessage: string | null = null;
 let isSaving = false;
+let pendingSaveIndicatorId: string | null = null;
 const saveIndicatorTimers = new Map<string, ReturnType<typeof setTimeout>>();
 let isRecordingShortcut = false;
 let shortcutKeydownHandler: ((e: KeyboardEvent) => void) | null = null;
@@ -353,6 +354,26 @@ function showSaveIndicator(id: string, text: string): void {
   saveIndicatorTimers.set(id, timer);
 }
 
+async function flushSave(indicatorId: string): Promise<void> {
+  isSaving = true;
+  try {
+    const snapshot: AppSettings = { ...settings };
+    await window.api.settings.set(snapshot);
+    setErrorMessage(null);
+    showSaveIndicator(indicatorId, SAVED_INDICATOR);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Failed to save settings";
+    setErrorMessage(message);
+  } finally {
+    isSaving = false;
+    if (pendingSaveIndicatorId !== null) {
+      const nextId = pendingSaveIndicatorId;
+      pendingSaveIndicatorId = null;
+      void flushSave(nextId);
+    }
+  }
+}
+
 async function saveSettings(
   partial: Partial<AppSettings>,
   indicatorId: string = "launch-save-indicator",
@@ -360,22 +381,17 @@ async function saveSettings(
   // Merge partial into settings immediately for UI responsiveness
   settings = { ...settings, ...partial };
 
-  // Debounce the actual persistence
+  // Debounce the actual persistence. If a save is already in flight when the
+  // debounce fires, queue the latest snapshot to be persisted once it settles
+  // so user changes are never silently dropped.
   if (saveTimer) clearTimeout(saveTimer);
-  saveTimer = setTimeout(async () => {
+  saveTimer = setTimeout(() => {
     saveTimer = null;
-    if (isSaving) return;
-    isSaving = true;
-    try {
-      await window.api.settings.set(settings);
-      setErrorMessage(null);
-      showSaveIndicator(indicatorId, SAVED_INDICATOR);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to save settings";
-      setErrorMessage(message);
-    } finally {
-      isSaving = false;
+    if (isSaving) {
+      pendingSaveIndicatorId = indicatorId;
+      return;
     }
+    void flushSave(indicatorId);
   }, 300);
 }
 
