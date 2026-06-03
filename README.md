@@ -23,7 +23,7 @@ _Configure launch-at-login, sleep prevention, session duration, battery threshol
 ## Requirements
 
 - macOS 11 or later (Apple Silicon arm64 or Intel x64)
-- Bun ≥ 1.3.14 (recommended) or Node.js ≥ 22
+- Bun ≥ 1.3.14 (recommended) or Node.js `>=26 <27`
 
 ## Development
 
@@ -155,7 +155,7 @@ Amphetamine/
 | Runtime     | Electron 42                                      |
 | Language    | TypeScript 6.0 (strict, ESM source → CJS output) |
 | Build       | Rslib (main + preload), Rsbuild (renderer)       |
-| Package Mgr | Bun 1.3.14 (`engines`: Bun ≥ 1.3.14, Node ≥ 22)  |
+| Package Mgr | Bun 1.3.14 (`engines`: Bun ≥ 1.3.14, Node `>=26 <27`)  |
 | Test        | Vitest 4 workspace (~391 tests across 23 files)  |
 | Lint/Format | ESLint 10 (flat config) + Prettier 3             |
 | UI          | Vanilla TypeScript, no UI framework              |
