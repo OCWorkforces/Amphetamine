@@ -40,6 +40,20 @@ let unsubscribeSettings: (() => void) | null = null;
 let sessionTimer: SessionTimerHandle | null = null;
 let batteryMonitor: BatteryMonitorHandle | null = null;
 let sessionActiveCache = false;
+let effectiveActive = false;
+const effectiveActiveListeners = new Set<() => void>();
+
+function notifyEffectiveActiveChange(next: boolean): void {
+  if (next === effectiveActive) return;
+  effectiveActive = next;
+  for (const listener of effectiveActiveListeners) {
+    try {
+      listener();
+    } catch (err) {
+      log.error("[coordinator] effective-active listener threw:", err);
+    }
+  }
+}
 
 /**
  * Compute the effective sleep-prevention state and apply it.
@@ -55,6 +69,7 @@ function recomputeSleepPrevention(userIntentOverride?: boolean): void {
   if (prev !== next) {
     batteryMonitor?.onPreventSleepChange(next);
   }
+  notifyEffectiveActiveChange(next);
 }
 
 function togglePreventSleep(): void {
@@ -99,6 +114,7 @@ export async function initCoordinator(): Promise<void> {
   syncAutoLaunch(settings.launchAtLogin);
   // Initial sleep state derives from user intent only (no session yet on init).
   sessionActiveCache = false;
+  effectiveActive = false;
   recomputeSleepPrevention();
 
   // Construct the session timer with explicit, required dependencies. The
@@ -215,6 +231,8 @@ export function cleanupCoordinator(): void {
   sessionTimer = null;
   setActiveSessionTimer(null);
   sessionActiveCache = false;
+  effectiveActive = false;
+  effectiveActiveListeners.clear();
   prevSettings = null;
   stopPreventingSleep();
   unregisterGlobalShortcut();
@@ -228,11 +246,18 @@ export function cleanupCoordinator(): void {
 export function getTrayDeps(): TrayDeps {
   return {
     getPreventSleep: () => getSettings().preventSleep,
+    getEffectiveActive: () => effectiveActive,
     togglePreventSleep,
     onSettingsChanged: (cb: () => void) =>
       onSettingsChanged((_settings) => {
         cb();
       }),
+    onActiveStateChanged: (cb: () => void) => {
+      effectiveActiveListeners.add(cb);
+      return () => {
+        effectiveActiveListeners.delete(cb);
+      };
+    },
     openSettings: () => createSettingsWindow(),
   };
 }

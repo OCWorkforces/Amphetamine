@@ -499,4 +499,85 @@ describe("coordinator", () => {
       expect(() => cleanupCoordinator()).not.toThrow();
     });
   });
+
+  describe("getTrayDeps (effective active state)", () => {
+    it("exposes getEffectiveActive and onActiveStateChanged", async () => {
+      await initCoordinator();
+      const { getTrayDeps } = await import("../../src/main/coordinator.js");
+      const deps = getTrayDeps();
+      expect(typeof deps.getEffectiveActive).toBe("function");
+      expect(typeof deps.onActiveStateChanged).toBe("function");
+    });
+
+    it("getEffectiveActive reflects userIntent OR session active state", async () => {
+      mockGetSettings.mockReturnValue({ ...defaultSettings, preventSleep: false });
+      await initCoordinator();
+      const { getTrayDeps } = await import("../../src/main/coordinator.js");
+      const deps = getTrayDeps();
+
+      expect(deps.getEffectiveActive()).toBe(false);
+
+      // Simulate session-timer signaling active state.
+      const timerDeps = firstCallArg<{ onSessionActiveChange: (active: boolean) => void }>(
+        mockCreateSessionTimer,
+      );
+      timerDeps.onSessionActiveChange(true);
+
+      expect(deps.getEffectiveActive()).toBe(true);
+    });
+
+    it("notifies tray listeners when effective active state flips on session start with preventSleep=false", async () => {
+      mockGetSettings.mockReturnValue({ ...defaultSettings, preventSleep: false });
+      await initCoordinator();
+      const { getTrayDeps } = await import("../../src/main/coordinator.js");
+      const deps = getTrayDeps();
+
+      const listener = vi.fn();
+      deps.onActiveStateChanged(listener);
+
+      const timerDeps = firstCallArg<{ onSessionActiveChange: (active: boolean) => void }>(
+        mockCreateSessionTimer,
+      );
+      timerDeps.onSessionActiveChange(true);
+
+      expect(listener).toHaveBeenCalledTimes(1);
+      expect(deps.getEffectiveActive()).toBe(true);
+    });
+
+    it("does not notify when effective state is unchanged", async () => {
+      mockGetSettings.mockReturnValue({ ...defaultSettings, preventSleep: true });
+      await initCoordinator();
+      const { getTrayDeps } = await import("../../src/main/coordinator.js");
+      const deps = getTrayDeps();
+
+      const listener = vi.fn();
+      deps.onActiveStateChanged(listener);
+
+      // userIntent already true → effective already true. Session going active
+      // should not re-notify (no change).
+      const timerDeps = firstCallArg<{ onSessionActiveChange: (active: boolean) => void }>(
+        mockCreateSessionTimer,
+      );
+      timerDeps.onSessionActiveChange(true);
+
+      expect(listener).not.toHaveBeenCalled();
+    });
+
+    it("onActiveStateChanged returns an unsubscribe function", async () => {
+      await initCoordinator();
+      const { getTrayDeps } = await import("../../src/main/coordinator.js");
+      const deps = getTrayDeps();
+
+      const listener = vi.fn();
+      const unsubscribe = deps.onActiveStateChanged(listener);
+      unsubscribe();
+
+      const timerDeps = firstCallArg<{ onSessionActiveChange: (active: boolean) => void }>(
+        mockCreateSessionTimer,
+      );
+      timerDeps.onSessionActiveChange(true);
+
+      expect(listener).not.toHaveBeenCalled();
+    });
+  });
 });

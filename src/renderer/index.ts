@@ -56,11 +56,12 @@ function computeRemainingSeconds(expiresAtPerf: PerfTimestamp | null): number | 
   return Math.floor(remainingMs / 1000);
 }
 
-function formatTimerValue(): string {
-  if (!settings.preventSleep) {
-    return " Indefinitely";
-  }
+/** Effective active state: true if persisted preventSleep OR a session is actively running. */
+function isEffectivelyActive(): boolean {
+  return settings.preventSleep || Boolean(sessionStatus?.isRunning);
+}
 
+function formatTimerValue(): string {
   if (!sessionStatus?.isRunning || sessionStatus.durationMinutes === null) {
     return " Indefinitely";
   }
@@ -115,11 +116,12 @@ function updateStatusUI(): void {
   const currentTimerText = formatTimerValue();
   if (currentTimerText === lastRenderedTimerText) {
     // Still update status dot/error since those can change independently
+    const active = isEffectivelyActive();
     if (statusDotEl) {
-      statusDotEl.classList.toggle("active", settings.preventSleep);
+      statusDotEl.classList.toggle("active", active);
     }
     if (statusTextEl) {
-      statusTextEl.textContent = settings.preventSleep
+      statusTextEl.textContent = active
         ? STATUS_PREVENTING_SLEEP
         : STATUS_SLEEP_PREVENTION_OFF;
     }
@@ -135,9 +137,10 @@ function updateStatusUI(): void {
   rafId = requestAnimationFrame(() => {
     rafId = null;
     lastRenderedTimerText = currentTimerText;
-    statusDotEl?.classList.toggle("active", settings.preventSleep);
+    const active = isEffectivelyActive();
+    statusDotEl?.classList.toggle("active", active);
     if (statusTextEl) {
-      statusTextEl.textContent = settings.preventSleep
+      statusTextEl.textContent = active
         ? STATUS_PREVENTING_SLEEP
         : STATUS_SLEEP_PREVENTION_OFF;
     }
@@ -152,14 +155,6 @@ function updateStatusUI(): void {
 }
 
 async function refreshSessionStatus(): Promise<void> {
-  if (!settings.preventSleep) {
-    sessionStatus = null;
-    updateSessionAnchors(null);
-    statusError = null;
-    updateStatusUI();
-    return;
-  }
-
   try {
     sessionStatus = await window.api.session.getStatus();
     updateSessionAnchors(sessionStatus);
@@ -223,8 +218,8 @@ function render(version: string): void {
       </header>
 
       <section class="popover-status" aria-live="polite">
-        <span id="status-dot" class="status-dot${settings.preventSleep ? " active" : ""}"></span>
-        <span id="status-text" class="status-text">${settings.preventSleep ? STATUS_PREVENTING_SLEEP : STATUS_SLEEP_PREVENTION_OFF}</span>
+        <span id="status-dot" class="status-dot${isEffectivelyActive() ? " active" : ""}"></span>
+        <span id="status-text" class="status-text">${isEffectivelyActive() ? STATUS_PREVENTING_SLEEP : STATUS_SLEEP_PREVENTION_OFF}</span>
       </section>
 
       <p id="status-error" class="status-error${statusError !== null ? " visible" : ""}">${statusError ?? ""}</p>
@@ -297,11 +292,6 @@ async function loadInitialData(): Promise<{ settings: AppSettings; version: stri
 function setupPushSubscriptions(): void {
   unsubscribeSettings = window.api.onSettingsChanged((next) => {
     settings = next;
-
-    if (!settings.preventSleep) {
-      sessionStatus = null;
-      updateSessionAnchors(null);
-    }
     updateStatusUI();
   });
 

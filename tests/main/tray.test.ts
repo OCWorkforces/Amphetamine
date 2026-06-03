@@ -61,11 +61,14 @@ vi.mock("electron-log", () => ({
 
 describe("tray", () => {
   let preventSleep: boolean;
+  let effectiveActive: boolean;
   let settingsChangeCallbacks: Array<() => void>;
+  let activeStateChangeCallbacks: Array<() => void>;
 
   function createTrayDeps(): TrayDeps {
     return {
       getPreventSleep: () => preventSleep,
+      getEffectiveActive: () => effectiveActive,
       togglePreventSleep: () => {
         preventSleep = !preventSleep;
       },
@@ -76,6 +79,13 @@ describe("tray", () => {
           if (idx >= 0) settingsChangeCallbacks.splice(idx, 1);
         };
       },
+      onActiveStateChanged: (cb: () => void) => {
+        activeStateChangeCallbacks.push(cb);
+        return () => {
+          const idx = activeStateChangeCallbacks.indexOf(cb);
+          if (idx >= 0) activeStateChangeCallbacks.splice(idx, 1);
+        };
+      },
       openSettings: vi.fn(),
     };
   }
@@ -84,7 +94,9 @@ describe("tray", () => {
     vi.resetModules();
     vi.clearAllMocks();
     preventSleep = false;
+    effectiveActive = false;
     settingsChangeCallbacks = [];
+    activeStateChangeCallbacks = [];
 
     mockTrayConstructor.mockImplementation(function (
       this: Record<string, ReturnType<typeof vi.fn>>,
@@ -158,9 +170,45 @@ describe("tray", () => {
       const setImageCalls = trayInstance.setImage.mock.calls.length;
 
       preventSleep = true;
+      effectiveActive = true;
       settingsChangeCallbacks[0]!();
 
       expect(trayInstance.setImage.mock.calls.length).toBeGreaterThan(setImageCalls);
+    });
+
+    it("icon shows active when session is active even if settings.preventSleep is false", async () => {
+      // Regression: tray icon must reflect effective sleep-prevention state,
+      // not just persisted user intent. A live session with preventSleep=false
+      // should still render the active icon.
+      const { setupTray } = await import("../../src/main/tray.js");
+      setupTray(createTrayDeps());
+
+      const trayInstance = mockTrayConstructor.mock.results[0]!.value;
+      const setImageCalls = trayInstance.setImage.mock.calls.length;
+
+      // Session starts: preventSleep stays false, effective flips true.
+      effectiveActive = true;
+      activeStateChangeCallbacks[0]!();
+
+      expect(trayInstance.setImage.mock.calls.length).toBeGreaterThan(setImageCalls);
+      // Last setImage call should have used the active icon — verify by checking
+      // that a non-inactive asset path was requested at least once.
+      const activePathRequested = mockCreateFromPath.mock.calls.some(
+        (call) => typeof call[0] === "string" && !(call[0] as string).includes("inactive-"),
+      );
+      expect(activePathRequested).toBe(true);
+    });
+
+    it("initial icon uses effective active state, not just preventSleep", async () => {
+      // preventSleep=false but session already active before tray setup.
+      effectiveActive = true;
+      const { setupTray } = await import("../../src/main/tray.js");
+      setupTray(createTrayDeps());
+
+      const activePathRequested = mockCreateFromPath.mock.calls.some(
+        (call) => typeof call[0] === "string" && !(call[0] as string).includes("inactive-"),
+      );
+      expect(activePathRequested).toBe(true);
     });
 
     it("icon updates when nativeTheme changes", async () => {
@@ -297,6 +345,35 @@ describe("tray", () => {
       expect(mockBuildFromTemplate.mock.calls.length).toBeGreaterThan(callsBefore);
     });
 
+    it("menu is NOT rebuilt when only effective active state changes (session-only)", async () => {
+      // Regression: checkbox must stay bound to user intent. A session-only
+      // active-state change must not rebuild the menu (user intent unchanged).
+      const { setupTray } = await import("../../src/main/tray.js");
+      setupTray(createTrayDeps());
+
+      const callsBefore = mockBuildFromTemplate.mock.calls.length;
+
+      effectiveActive = true;
+      activeStateChangeCallbacks[0]!();
+
+      expect(mockBuildFromTemplate.mock.calls.length).toBe(callsBefore);
+    });
+
+    it("Prevent Sleep checkbox stays false during session-only active state", async () => {
+      // Regression: even though icon goes active, the checkbox should remain
+      // false (user intent has not changed).
+      effectiveActive = true;
+      preventSleep = false;
+      const { setupTray } = await import("../../src/main/tray.js");
+      setupTray(createTrayDeps());
+
+      const template = mockBuildFromTemplate.mock.calls[0]![0];
+      const preventSleepItem = template.find(
+        (item: { label?: string }) => item.label === MENU_PREVENT_SLEEP,
+      );
+      expect(preventSleepItem.checked).toBe(false);
+    });
+
     it("click on tray pops up context menu", async () => {
       const { setupTray } = await import("../../src/main/tray.js");
       setupTray(createTrayDeps());
@@ -325,6 +402,17 @@ describe("tray", () => {
       cleanup();
 
       expect(settingsChangeCallbacks.length).toBe(0);
+    });
+
+    it("unsubscribes from effective active-state changes", async () => {
+      const { setupTray } = await import("../../src/main/tray.js");
+      const cleanup = setupTray(createTrayDeps());
+
+      expect(activeStateChangeCallbacks.length).toBe(1);
+
+      cleanup();
+
+      expect(activeStateChangeCallbacks.length).toBe(0);
     });
 
     it("removes nativeTheme listener", async () => {
