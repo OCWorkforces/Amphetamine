@@ -6,7 +6,7 @@ macOS tray-only Electron app. Prevents system sleep. Session timer, battery-awar
 
 | Layer    | Tech                                      |
 |----------|-------------------------------------------|
-| Runtime  | Bun 1.3.14+ / Node 22+                    |
+| Runtime  | Bun 1.3.14+ / Node `>=26 <27`             |
 | Electron | 42                                        |
 | Build    | Rslib (main/preload) + Rsbuild (renderer) |
 | Test     | Vitest 4 workspace, ~391 tests            |
