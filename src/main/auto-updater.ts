@@ -16,6 +16,7 @@ import { typedHandle, validateSender } from "./ipc-utils.js";
 import { categorizeUpdaterError, getReleaseUrlBase } from "./auto-updater-utils.js";
 
 let checkIntervalId: ReturnType<typeof setInterval> | null = null;
+let initialCheckTimerId: ReturnType<typeof setTimeout> | null = null;
 
 let broadcastFn: (<K extends PushChannel>(channel: K, data: IpcResponse<K>) => void) | null = null;
 
@@ -142,11 +143,12 @@ function rescheduleCheckLoop(): void {
 /** Start initial delayed check and periodic update check loop */
 function startUpdateCheckLoop(): void {
   // Initial check after 3-second delay (avoid startup slowdown) — not subject to backoff
-  const initialCheckTimer = setTimeout(() => {
+  initialCheckTimerId = setTimeout(() => {
+    initialCheckTimerId = null;
     log.info("[auto-updater] Running initial update check...");
     void autoUpdater.checkForUpdates();
   }, INITIAL_UPDATE_CHECK_DELAY_MS);
-  initialCheckTimer.unref();
+  initialCheckTimerId.unref();
 
   // Periodic check (base 4 hours, exponential backoff on failures up to 24 hours)
   checkIntervalId = setInterval(() => {
@@ -184,6 +186,10 @@ export function initAutoUpdater(): void {
  * Clears the periodic check interval and removes all event listeners.
  */
 export function stopAutoUpdater(): void {
+  if (initialCheckTimerId !== null) {
+    clearTimeout(initialCheckTimerId);
+    initialCheckTimerId = null;
+  }
   if (checkIntervalId !== null) {
     clearInterval(checkIntervalId);
     checkIntervalId = null;
