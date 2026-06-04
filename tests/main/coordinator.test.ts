@@ -62,19 +62,15 @@ const mockSetActiveSessionTimer = vi.hoisted(() => vi.fn());
 
 const mockCreateSettingsWindow = vi.hoisted(() => vi.fn());
 
-vi.mock("electron", async (importOriginal) => {
-  const actual = (await importOriginal()) as Record<string, unknown>;
-  return {
-    ...actual,
-    app: { isPackaged: false },
-    BrowserWindow: { getAllWindows: mockGetAllWindows },
-    powerMonitor: {
-      on: vi.fn(),
-      off: vi.fn(),
-      isOnBatteryPower: vi.fn().mockReturnValue(false),
-    },
-  };
-});
+vi.mock("electron", () => ({
+  app: { isPackaged: false },
+  BrowserWindow: { getAllWindows: mockGetAllWindows },
+  powerMonitor: {
+    on: vi.fn(),
+    off: vi.fn(),
+    isOnBatteryPower: vi.fn().mockReturnValue(false),
+  },
+}));
 
 vi.mock("electron-log", () => ({
   default: { info: mockLogInfo, error: vi.fn(), warn: vi.fn() },

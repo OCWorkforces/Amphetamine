@@ -2,29 +2,25 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { IPC_CHANNELS, DEFAULT_SETTINGS } from "../../src/shared/types.js";
 
 // Mock electron first - must be done before importing ipc
-const mockGetVersion = vi.fn().mockReturnValue("1.0.0");
-const mockGetAppPath = vi.fn().mockReturnValue("/mock/app");
-const mockIpcMainHandle = vi.fn();
-const mockIpcMainOn = vi.fn();
-const mockBrowserWindowGetAllWindows = vi.fn().mockReturnValue([]);
+const mockGetVersion = vi.hoisted(() => vi.fn().mockReturnValue("1.0.0"));
+const mockGetAppPath = vi.hoisted(() => vi.fn().mockReturnValue("/mock/app"));
+const mockIpcMainHandle = vi.hoisted(() => vi.fn());
+const mockIpcMainOn = vi.hoisted(() => vi.fn());
+const mockBrowserWindowGetAllWindows = vi.hoisted(() => vi.fn().mockReturnValue([]));
 
-vi.mock("electron", async (importOriginal) => {
-  const actual = (await importOriginal()) as Record<string, unknown>;
-  return {
-    ...actual,
-    app: {
-      getVersion: mockGetVersion,
-      getAppPath: mockGetAppPath,
-    },
-    ipcMain: {
-      handle: mockIpcMainHandle,
-      on: mockIpcMainOn,
-    },
-    BrowserWindow: {
-      getAllWindows: vi.fn().mockReturnValue(mockBrowserWindowGetAllWindows()),
-    },
-  };
-});
+vi.mock("electron", () => ({
+  app: {
+    getVersion: mockGetVersion,
+    getAppPath: mockGetAppPath,
+  },
+  ipcMain: {
+    handle: mockIpcMainHandle,
+    on: mockIpcMainOn,
+  },
+  BrowserWindow: {
+    getAllWindows: mockBrowserWindowGetAllWindows,
+  },
+}));
 
 // Mock dependencies
 const mockGetSettings = vi.fn().mockReturnValue({ ...DEFAULT_SETTINGS });
