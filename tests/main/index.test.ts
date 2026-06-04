@@ -24,53 +24,49 @@ const mockOn = vi.hoisted(() => vi.fn());
 const mockProcessOn = vi.hoisted(() => vi.fn());
 
 // Mock electron
-vi.mock("electron", async (importOriginal) => {
-  const actual = (await importOriginal()) as Record<string, unknown>;
-  return {
-    ...actual,
-    app: {
-      getVersion: mockGetVersion,
-      quit: vi.fn(),
-      isPackaged: false,
-      setAboutPanelOptions: mockSetAboutPanelOptions,
-      whenReady: mockWhenReady,
-      on: mockOn,
-      getAppPath: mockGetAppPath,
-      setActivationPolicy: mockSetActivationPolicy,
-      exit: mockExit,
-      requestSingleInstanceLock: mockRequestSingleInstanceLock,
-    },
-    BrowserWindow: vi.fn().mockImplementation(function (this: Record<string, unknown>) {
-      this.loadURL = vi.fn();
-      this.loadFile = vi.fn();
-      this.show = vi.fn();
-      this.hide = vi.fn();
-      this.focus = vi.fn();
-      this.destroy = vi.fn();
-      this.isVisible = vi.fn().mockReturnValue(false);
-      this.isDestroyed = vi.fn().mockReturnValue(false);
-      this.getBounds = vi.fn().mockReturnValue({ x: 0, y: 0, width: 360, height: 480 });
-      this.setPosition = vi.fn();
-      this.setSize = vi.fn();
-      this.setAlwaysOnTop = vi.fn();
-      this.on = vi.fn();
-      this.removeListener = vi.fn();
-      this.webContents = {
-        send: vi.fn(),
-        on: vi.fn(),
-        setWindowOpenHandler: vi.fn(),
-      };
+vi.mock("electron", () => ({
+  app: {
+    getVersion: mockGetVersion,
+    quit: vi.fn(),
+    isPackaged: false,
+    setAboutPanelOptions: mockSetAboutPanelOptions,
+    whenReady: mockWhenReady,
+    on: mockOn,
+    getAppPath: mockGetAppPath,
+    setActivationPolicy: mockSetActivationPolicy,
+    exit: mockExit,
+    requestSingleInstanceLock: mockRequestSingleInstanceLock,
+  },
+  BrowserWindow: vi.fn().mockImplementation(function (this: Record<string, unknown>) {
+    this.loadURL = vi.fn();
+    this.loadFile = vi.fn();
+    this.show = vi.fn();
+    this.hide = vi.fn();
+    this.focus = vi.fn();
+    this.destroy = vi.fn();
+    this.isVisible = vi.fn().mockReturnValue(false);
+    this.isDestroyed = vi.fn().mockReturnValue(false);
+    this.getBounds = vi.fn().mockReturnValue({ x: 0, y: 0, width: 360, height: 480 });
+    this.setPosition = vi.fn();
+    this.setSize = vi.fn();
+    this.setAlwaysOnTop = vi.fn();
+    this.on = vi.fn();
+    this.removeListener = vi.fn();
+    this.webContents = {
+      send: vi.fn(),
+      on: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
+    };
+  }),
+  nativeImage: {
+    createFromPath: vi.fn().mockReturnValue({
+      toPNG: vi.fn().mockReturnValue(Buffer.alloc(0)),
     }),
-    nativeImage: {
-      createFromPath: vi.fn().mockReturnValue({
-        toPNG: vi.fn().mockReturnValue(Buffer.alloc(0)),
-      }),
-    },
-    dialog: {
-      showErrorBox: mockShowErrorBox,
-    },
-  };
-});
+  },
+  dialog: {
+    showErrorBox: mockShowErrorBox,
+  },
+}));
 
 vi.mock("electron-log", () => ({
   default: {
