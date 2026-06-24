@@ -1,6 +1,6 @@
 {
   "name": "amphetamine",
-  "version": "1.8.5",
+  "version": "1.8.6",
   "author": "OCWorkforces Engineers",
   "authorEmail": "kennydizi@ocworkforces.com",
   "description": "A macOS menu bar app that keeps your Mac awake. Lives in the system tray, prevents the system from going to sleep, and stays out of the Dock.",
@@ -20,7 +20,7 @@
     "@vitest/browser": "^4.1.9",
     "@vitest/coverage-v8": "^4.1.9",
     "@vitest/ui": "^4.1.9",
-    "electron": "^42.4.1",
+    "electron": "^42.5.0",
     "electron-builder": "^26.15.3",
     "eslint": "^10.5.0",
     "eslint-config-prettier": "^10.1.8",
