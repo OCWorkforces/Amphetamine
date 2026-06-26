@@ -545,6 +545,62 @@ describe("battery-monitor", () => {
       setIntervalSpy.mockRestore();
     });
 
+    it("auto-stops on resume before the periodic interval fires", async () => {
+      mockPowerMonitor.isOnBatteryPower.mockReturnValue(true);
+      mockIsActive.mockReturnValue(true);
+      mockGetThreshold.mockReturnValue(80);
+
+      await handle.initBatteryMonitoring();
+
+      const resumeCall = mockPowerMonitor.on.mock.calls.find(
+        (call: unknown[]) => call[0] === "resume",
+      );
+      expect(resumeCall).toBeDefined();
+      if (resumeCall === undefined) {
+        throw new Error("resume listener was not registered");
+      }
+
+      const resumeCallback = resumeCall[1];
+      expect(typeof resumeCallback).toBe("function");
+      if (typeof resumeCallback !== "function") {
+        throw new Error("resume listener was not callable");
+      }
+
+      resumeCallback();
+
+      await vi.advanceTimersByTimeAsync(50);
+
+      expect(mockOnAutoStop).toHaveBeenCalledTimes(1);
+    });
+
+    it("does NOT auto-stop on resume while on AC power", async () => {
+      mockPowerMonitor.isOnBatteryPower.mockReturnValue(false);
+      mockIsActive.mockReturnValue(true);
+      mockGetThreshold.mockReturnValue(80);
+
+      await handle.initBatteryMonitoring();
+
+      const resumeCall = mockPowerMonitor.on.mock.calls.find(
+        (call: unknown[]) => call[0] === "resume",
+      );
+      expect(resumeCall).toBeDefined();
+      if (resumeCall === undefined) {
+        throw new Error("resume listener was not registered");
+      }
+
+      const resumeCallback = resumeCall[1];
+      expect(typeof resumeCallback).toBe("function");
+      if (typeof resumeCallback !== "function") {
+        throw new Error("resume listener was not callable");
+      }
+
+      resumeCallback();
+
+      await vi.advanceTimersByTimeAsync(50);
+
+      expect(mockOnAutoStop).not.toHaveBeenCalled();
+    });
+
     it("clears interval when on-ac fires", async () => {
       mockPowerMonitor.isOnBatteryPower.mockReturnValue(true);
       mockIsActive.mockReturnValue(true);
