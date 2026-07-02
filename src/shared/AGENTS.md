@@ -1,80 +1,56 @@
-# Shared Types — Cross-Process Contracts
+# Shared Types - Cross-Process Contracts
 
-Type definitions shared across main, preload, and renderer processes. Single source of truth for IPC channels and data models. Zero dependencies.
+Zero-runtime-dependency contracts shared by main, preload, renderer, scripts, and tests. Treat this directory as the source of truth for IPC, settings, sessions, updater status, and benchmark payload shapes.
 
 ## Files
 
 | File | Role |
 |------|------|
-| `types.ts` | IPC channels, interfaces, discriminated unions, branded types |
-| `settings-validators.ts` | Pure predicates + `VALIDATORS` dispatch table — reusable across processes |
+| `types.ts` | IPC channels, push channels, channel map, settings, session/updater unions, `PerfTimestamp` |
+| `settings-validators.ts` | Runtime predicates, disk settings guard, `VALIDATORS` dispatch table |
+| `benchmark-types.ts` | Benchmark env name, renderer counter type/defaults, runtime guard |
 
-## IPC Channels
+## IPC Contract
 
-15 channels total. 5 are one-way push channels (main-to-renderer).
+- `IPC_CHANNELS` contains 15 channel literals.
+- `PUSH_CHANNELS` contains the main-to-renderer push-only subset.
+- `IpcChannelMap` maps every channel to request and response types.
+- Adding a channel requires updates in shared types, preload `api`, preload `WiredChannels`, main `registerIpcHandlers()`, and tests.
+- Push-only channels still need response payload types because preload listeners and broadcasts are typed.
 
-| Channel | Direction | Request | Response |
-|---------|-----------|---------|----------|
-| `WINDOW_SET_HEIGHT` | req/res | `number` | `void` |
-| `WINDOW_HIDE` | push | — | — |
-| `APP_GET_VERSION` | req/res | `void` | `string` |
-| `SETTINGS_GET` | req/res | `void` | `AppSettings` |
-| `SETTINGS_SET` | req/res | `Partial<AppSettings>` | `{ settings, rejectedKeys }` |
-| `SESSION_START` | req/res | `{ durationMinutes }` | `SessionStartResponse` |
-| `SESSION_CANCEL` | req/res | `undefined` | `{ cancelled }` |
-| `SESSION_STATUS` | req/res | `undefined` | `SessionStatusResponse` |
-| `SESSION_STATUS_UPDATE` | push | — | `SessionStatusResponse` |
-| `SETTINGS_CHANGED` | push | — | `AppSettings` |
-| `SETTINGS_OPEN` | req/res | `undefined` | `void` |
-| `APP_QUIT` | req/res | `undefined` | `void` |
-| `AUTO_UPDATER_CHECK` | req/res | `undefined` | `{ version, releaseDate } \| null` |
-| `AUTO_UPDATER_STATUS` | push | — | `AutoUpdaterStatus` |
-| `SHORTCUT_REGISTRATION_FAILED` | push | — | `{ accelerator }` |
+## Settings Contract
 
-Push channels: `WINDOW_HIDE`, `SESSION_STATUS_UPDATE`, `SETTINGS_CHANGED`, `AUTO_UPDATER_STATUS`, `SHORTCUT_REGISTRATION_FAILED`.
+`AppSettings` fields:
 
-## Data Models
+| Field | Meaning |
+|-------|---------|
+| `launchAtLogin` | macOS login item toggle |
+| `preventSleep` | user sleep-prevention intent |
+| `sessionDuration` | minutes or `null` for indefinite |
+| `batteryThreshold` | low-battery auto-disable percent; 0 disables |
+| `shortcut` | accelerator string; empty means default |
 
-### AppSettings
+- `DEFAULT_SETTINGS` is `Readonly<AppSettings>`; always clone with spread.
+- `mergeValidatedPartial()` uses `VALIDATORS`; extend the table for new fields.
+- `validateRawSettings()` is the only inline per-field validator because disk JSON starts unknown.
+- Shortcut validation rejects reserved Cmd aliases for Q, W, Tab, and Space.
 
-```typescript
-interface AppSettings {
-  launchAtLogin: boolean;        // macOS login item toggle
-  preventSleep: boolean;         // powerSaveBlocker enable/disable (user intent)
-  sessionDuration: number | null; // null = indefinite, number = minutes
-  batteryThreshold: number;      // auto-disable on battery below this %. 0 = disabled
-  shortcut: string;              // global shortcut accelerator string. Empty = use default
-}
-```
+## Data Model Rules
 
-`DEFAULT_SETTINGS` is defined in `types.ts` and is `Readonly<AppSettings>` — always clone via spread.
+- `SessionStatusResponse` is a 3-arm discriminated union: stopped, timed, indefinite.
+- `SessionStartResponse` is ok/fail; handle both explicitly.
+- `AutoUpdaterStatus` is a discriminated union for checking, available, not-available, downloaded, downloading, and errors.
+- `PerfTimestamp` is `performance.now()` branded via `asPerf(n)`. Never raw-cast.
 
-### SessionStatusResponse (3-arm discriminated union)
+## Benchmark Contract
 
-- **Not running:** `isRunning: false`, all fields `null`
-- **Timed session:** `isRunning: true`, all fields populated (`expiresAt`, `remainingSeconds`, `durationMinutes`)
-- **Indefinite session:** `isRunning: true`, `startedAt` only, rest `null`
+- `BENCHMARK_ENV_NAME` is `AMPHETAMINE_BENCHMARK`.
+- Renderer countdown counters are exposed by `benchmark-countdown.ts` and read by main benchmark mode.
+- Use `isRendererCountdownTimerCounters()` before trusting data returned from renderer JavaScript.
 
-### SessionStartResponse (ok/fail discriminated union)
+## Anti-Patterns
 
-- **Ok:** `{ ok: true, startedAt, durationMinutes, expiresAt }`
-- **Fail:** `{ ok: false, reason: "invalid-duration" | "rejected" | "Duration cannot exceed 24 hours" }`
-
-### AutoUpdaterStatus (5-arm discriminated union)
-
-- `checking`
-- `available` + `UpdateMeta`
-- `not-available` + `UpdateMeta`
-- `downloaded` + `UpdateMeta`
-- `downloading` + progress info
-- `check-error` | `download-error` | `error` + error `category`
-
-### PerfTimestamp (Branded type)
-
-`number & { readonly __brand: unique symbol }` — compile-time branding for `performance.now()` values. Use `asPerf(n)` to cast, never raw `as PerfTimestamp`.
-
-### Validation
-
-`IPC_CHANNELS`, `PUSH_CHANNELS`, `IpcChannelMap`, `AppSettings`, and `DEFAULT_SETTINGS` all live in `types.ts`.
-
-`settings-validators.ts` uses a `VALIDATORS` dispatch table — one entry per `AppSettings` key. Adding a new settings field requires adding a validator entry. `validateRawSettings()` is the only allowed inline per-field validator because disk JSON starts as `Record<string, unknown>`.
+- Never put Electron imports here.
+- Never encode process-specific behavior in shared types.
+- Never widen shared contracts with `unknown`/`Record` unless a runtime guard narrows them immediately.
+- Never add generated benchmark artifacts here; output belongs under `artifacts/`.
