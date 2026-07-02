@@ -1,38 +1,26 @@
-# Preload — Context Bridge (Sandboxed)
+# Preload - Context Bridge
 
-Electron preload script in sandboxed renderer context. Exposes a typed IPC API to the renderer via `contextBridge.exposeInMainWorld`. **Security-critical boundary** — no Node.js APIs are exposed to the renderer.
+Sandboxed Electron preload script. Exposes the only renderer API surface through `contextBridge.exposeInMainWorld("api", api)`. Security-critical boundary: no Node.js APIs are exposed to renderer code.
 
-## Files
+## File
 
 | File | Role |
 |------|------|
-| `index.ts` | Context bridge: defines `window.api` object with all IPC methods |
+| `index.ts` | Defines typed `window.api`, `invoke<K>()`, push subscriptions, benchmark env helper, channel exhaustiveness check |
 
 ## API Shape
 
-`contextBridge.exposeInMainWorld("api", api)` exposes `window.api` with these namespaces:
-
-| Namespace | Method | IPC Pattern |
-|-----------|--------|-------------|
-| `window.setHeight` | `setHeight(n)` | `ipcRenderer.send` (fire-and-forget) |
-| `app.getVersion` | `getVersion()` | `ipcRenderer.invoke` |
-| `app.quit` | `quit()` | `ipcRenderer.invoke` |
-| `settings.get` | `get()` | `ipcRenderer.invoke` |
-| `settings.set` | `set(partial)` | `ipcRenderer.invoke` |
-| `settings.open` | `open()` | `ipcRenderer.invoke` |
-| `session.start` | `start(durationMinutes)` | `ipcRenderer.invoke` |
-| `session.cancel` | `cancel()` | `ipcRenderer.invoke` |
-| `session.getStatus` | `getStatus()` | `ipcRenderer.invoke` |
-| `onSettingsChanged` | `(callback) => unsubscribe()` | `ipcRenderer.on` + cleanup |
-| `onWindowHide` | `(callback) => unsubscribe()` | `ipcRenderer.on` + cleanup |
-| `onSessionStatusUpdate` | `(callback) => unsubscribe()` | `ipcRenderer.on` + cleanup |
-| `onShortcutRegistrationFailed` | `(callback) => unsubscribe()` | `ipcRenderer.on` + cleanup |
-| `autoUpdater.checkForUpdates` | `checkForUpdates()` | `ipcRenderer.invoke` |
-| `autoUpdater.onStatus` | `(callback) => unsubscribe()` | `ipcRenderer.on` + cleanup |
+| Namespace | Methods | Pattern |
+|-----------|---------|---------|
+| `window` | `setHeight(n)` | validated fire-and-forget send |
+| `app` | `getVersion()`, `quit()` | `ipcRenderer.invoke` |
+| `settings` | `get()`, `set(partial)`, `open()` | `ipcRenderer.invoke` |
+| `session` | `start(durationMinutes)`, `cancel()`, `getStatus()` | `ipcRenderer.invoke` |
+| `autoUpdater` | `checkForUpdates()`, `onStatus(cb)` | invoke + push subscription |
+| `benchmark` | `isEnabled()` | reads benchmark env bridge value |
+| root callbacks | `onSettingsChanged`, `onWindowHide`, `onSessionStatusUpdate`, `onShortcutRegistrationFailed` | push subscriptions |
 
 ## Push Subscription Pattern
-
-Five push channels use the same pattern:
 
 ```typescript
 onXxx: (callback: (data: T) => void) => {
@@ -42,22 +30,20 @@ onXxx: (callback: (data: T) => void) => {
 };
 ```
 
-Always return an unsubscribe function. Renderer is responsible for calling cleanup.
+- Always return an unsubscribe function.
+- Listener payload types come from `IpcChannelMap` or push-channel response types.
+- Renderer owns cleanup; preload owns narrow exposure.
 
 ## Type Safety
 
-The `Api` type is derived from the `api` object. Each method signature is parameterized by `IpcChannelMap` in `shared/types.ts` — never hand-write IPC request/response shapes.
+- The exported `Api` type is derived from the concrete `api` object.
+- `invoke<K>()` is parameterized by shared `IpcChannelMap`; never hand-write request/response shapes.
+- `WiredChannels` plus `_ExhaustivenessCheck` intentionally fails typecheck if shared channels are not wired here.
+- `benchmark.isEnabled()` should remain read-only and side-effect free.
 
-`WiredChannels` + `_ExhaustivenessCheck` at the bottom of `index.ts` intentionally list every channel literal. Adding a channel in `shared/types.ts` without adding it here breaks the build.
+## Anti-Patterns
 
-## Conventions
-
-- **No direct `require` or `import` of `electron`** in renderer code — all IPC goes through `window.api`
-- **`contextBridge` is mandatory** — never disable `contextIsolation`
-- **Return unsubscribe functions** from all `on*` methods
-- **Typed events only** — no stringly channel names in renderer
-- **Main validates senders** with `validateSender()`; preload still exposes only the narrow `window.api` surface
-
-## Commands
-
-Same as root: `bun run dev`, `bun run build`, `bun run test`
+- Never expose `ipcRenderer`, `shell`, `fs`, `process`, or arbitrary channel names.
+- Never disable `contextIsolation` to simplify renderer code.
+- Never add a push listener without a cleanup return.
+- Never make renderer import Electron directly; fix preload API instead.

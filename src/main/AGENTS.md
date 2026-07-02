@@ -1,97 +1,77 @@
-# Main Process — Electron Backend
+# Main Process - Electron Backend
 
-Electron main process (Bun / Node.js). App lifecycle, system tray, IPC routing, session timer, power-saver, battery monitoring, global shortcut, settings persistence, and auto-updater. Orchestrated entirely through `coordinator.ts` via DI.
+Electron main process for lifecycle, tray, IPC, settings persistence, sleep prevention, sessions, battery policy, global shortcut, auto-updater, and benchmark mode. `coordinator.ts` owns settings-to-system synchronization.
 
 ## Files
 
 | File | Role |
 |------|------|
-| `index.ts` | App bootstrap, BrowserWindow factory, lifecycle, `--hidden` arg |
-| `coordinator.ts` | Central hub: subscribes to settings, syncs sleep/launch/shortcut/broadcast |
-| `session-timer.ts` | State machine (`idle` / `timed` / `indefinite`); `performance.now()` monotonic |
-| `sleep-prevention.ts` | `powerSaveBlocker` wrapper — `syncPreventSleep()` only entry point |
-| `battery-monitor.ts` | pmset polling; auto-stops session below `batteryThreshold` |
-| `auto-launch.ts` | macOS login items via `app.setLoginItemSettings` |
-| `global-shortcut.ts` | `Cmd+Shift+A` hotkey; `ShortcutDeps` interface for DI |
-| `tray.ts` | Cached Tray + Menu; SVG fallback hoisted at module scope |
-| `ipc.ts` | 15 typed IPC channels; `typedHandle()` + `validateSender()` |
-| `ipc-utils.ts` | `validateSender`, `validateSenderUrl`, `typedHandle` — origin allowlist via NFC-normalized `path.resolve()` |
-| `settings.ts` | Async JSON persistence; `EventEmitter`; `writeChain` mutex; corrupt backup |
-| `settings-window.ts` | `BrowserWindow` singleton; shows in Dock when open |
-| `auto-updater.ts` | GitHub release polling; exp backoff (3s to 24h); `lastNotifiedVersion` guard |
-| `auto-updater-utils.ts` | Pure utilities: `categorizeUpdaterError`, `getReleaseUrlBase` |
-| `constants.ts` | Window dims, `DEV_ORIGINS`, tray colors, menu label strings |
-| `security.ts` | Navigation allowlist; `hardenWebContents()` |
-| `about-window.ts` | Native About panel via `app.setAboutPanelOptions` |
-| `utils/broadcast.ts` | `broadcastToWindows<K>(channel, data)` — generic push helper with `isDestroyed` guard |
-| `utils/packageInfo.ts` | Cached `package.json` reader + `isPackageInfo` runtime guard |
+| `index.ts` | App bootstrap, window creation, security hooks, benchmark entry |
+| `coordinator.ts` | Central hub: settings diffing, sleep/session/tray/shortcut/battery sync |
+| `session-timer.ts` | Idle/timed/indefinite state machine; monotonic timing |
+| `sleep-prevention.ts` | Only `powerSaveBlocker` wrapper |
+| `battery-monitor.ts` | `pmset` polling; pure threshold detector |
+| `tray.ts` | Tray icon/menu cache, theme debounce, benchmark menu proxy |
+| `ipc.ts` | Typed IPC handler registration via `typedHandle()` |
+| `ipc-utils.ts` | Sender allowlist and typed handler utilities |
+| `settings.ts` | Async JSON settings, EventEmitter, write mutex, corrupt backup |
+| `settings-window.ts` | BrowserWindow singleton; Dock visibility while open |
+| `auto-updater.ts` | GitHub release polling, backoff, one-open-per-version guard |
+| `auto-updater-utils.ts` | Pure updater helpers |
+| `benchmark.ts` | Benchmark-mode measurement flow and stdout result artifact |
+| `benchmark-env.ts` | Benchmark env names and mode guard |
+| `benchmark-metrics.ts` | Pure benchmark artifact summaries |
+| `global-shortcut.ts` | Accelerator registration and toggle behavior |
+| `auto-launch.ts` | macOS login item integration |
+| `security.ts` | WebContents hardening and navigation allowlist |
+| `about-window.ts` | Native About panel options |
+| `utils/broadcast.ts` | Generic typed push helper |
+| `utils/packageInfo.ts` | Cached package metadata with runtime guard |
 
-## Entry Point
+## Coordinator Rules
 
-`index.ts:40` — `createWindow()` called on `app.whenReady()`.
+- Initialize settings before reading them; `getSettings()` throws before `initSettings()`.
+- Effective sleep prevention is `settings.preventSleep || sessionActiveCache`.
+- Low-battery auto-stop persists `preventSleep: false` and cancels any active session.
+- Battery monitor detects only; coordinator owns policy and side effects.
+- Session active changes recompute sleep prevention and tray state without clobbering user intent.
+- Settings changes diff previous values before touching launch item, shortcut, session, tray, or renderer broadcasts.
 
-## Coordinator Pattern
+## IPC and Security
 
-`coordinator.ts` wires everything via constructor injection:
+- Use `typedHandle()` for invoke channels. It validates senders before calling handlers.
+- Raw `ipcMain.on()` is acceptable only for fire-and-forget channels with explicit `validateSender()`.
+- Packaged sender URLs exact-match normalized renderer HTML paths; dev senders must match `DEV_ORIGINS`.
+- Renderer-facing updates use `broadcastToWindows<K>()`; skip destroyed windows.
+- Never expose Node APIs outside preload.
 
-1. Calls `initSettings()`, reads initial snapshot, stores `prevSettings`.
-2. Syncs system state: `syncAutoLaunch()`, `syncPreventSleep()`.
-3. Constructs `createSessionTimer({onStateChange, getSettings, broadcast, onSessionActiveChange})` — **throws** on missing deps.
-4. Constructs `createBatteryMonitor({getThreshold, onAutoStop, isPreventingSleep, stopPreventingSleep})`.
-5. Subscribes to `onSettingsChanged` — diffs against `prevSettings`, dispatches:
-   - `sessionTimer.reconcileSessionState()`
-   - `recomputeSleepPrevention()` (if `preventSleep` changed)
-   - `syncAutoLaunch()` (if `launchAtLogin` changed)
-   - `registerGlobalShortcut()` (if `shortcut` changed)
-   - `broadcastToWindows(SETTINGS_CHANGED, settings)`
-6. Updates `prevSettings` after each cycle.
+## Timing and State
 
-**Recursion guard:** `prevPreventSleep` is set before `cancelSession()`, preventing `cancelSession -> updateSettings -> subscriber -> cancelSession` loops.
+- Session elapsed timing uses `performance.now()` branded with `asPerf(n)`.
+- `Date.now()` is allowed only for the wall-clock expiry anchor in `session-timer.ts`.
+- Timer and polling handles should call `.unref()` so they do not pin the event loop.
+- `createSessionTimer()` and module-level delegators fail fast if deps/active handle are missing.
+- Auto-updater waits 3s after startup, repeats every 4h, and backs off failures to 24h max.
 
-## DI Interfaces
+## Benchmark Mode
 
-- **`SessionTimerDeps`** — `onStateChange`, `getSettings`, `broadcast`, `onSessionActiveChange?`
-- **`ShortcutDeps`** — `getShortcut`, `getPreventSleep`, `togglePreventSleep`
-- **`TrayDeps`** — `getPreventSleep`, `togglePreventSleep`, `onSettingsChanged`, `openSettings`
-- **`IpcDeps`** — `getSettings`, `updateSettings`, `createSettingsWindow`, `sessionTimer`
-
-## Conventions
-
-- **ESM source -> CJS output** (`.js` extensions on all imports)
-- **`performance.now()`** for all timing, branded as `PerfTimestamp` via `asPerf(n)`
-- **Never `Date.now()`** for session duration — EXCEPTION: `session-timer.ts` captures a `Date.now()` wall-clock anchor for sleep-resilient expiry.
-- **`typedHandle()`** wraps all IPC; validates sender origin via exact path match
-- **`writeChain` mutex** serializes concurrent `updateSettings()` calls
-- **Settings corruption**: backup to `settings.corrupt-{timestamp}.json`, fall back to defaults
-- **`unref()`** on `setTimeout` so session timer doesn't pin the event loop
-- **Tray icon**: `nativeImage.createFromPath()` only — `fs.readFileSync()` breaks asar virtual paths
-- **`__dirname` polyfill**: `path.dirname(fileURLToPath(import.meta.url))`
+- `index.ts` calls `configureBenchmarkEnvironment()` and `installBenchmarkTimerCounters()` at module startup.
+- Benchmark mode skips auto-updater, samples popover/tray/settings responsiveness, then prints `AMPHETAMINE_BENCHMARK_RESULT:` JSON and quits.
+- `benchmark.ts` may dynamically import tray/settings modules for measurement; do not move those helpers into renderer code.
 
 ## Anti-Patterns
 
-- **Never** call `powerSaveBlocker.start()`/`stop()` directly — use `sleep-prevention.ts` wrappers
-- **Never** bypass `validateSender()` in IPC handlers
-- **Never** expose mutable `settingsCache` ref — always return `{ ...settingsCache }`
-- **Never** use `Date.now()` for session timing — use `perfNow()`. EXCEPTION: wall-clock anchor in `session-timer.ts` for sleep resilience.
-- **Never** use raw `as PerfTimestamp` — use `asPerf(n)`
-- **Never** add per-field `if/else` to `mergeValidatedPartial` — extend `VALIDATORS` table
-- **Never** hardcode UI strings — use `constants.ts` menu label constants
-- **Never** mutate `DEFAULT_SETTINGS` — it is `Readonly<AppSettings>`
+- Never call `powerSaveBlocker.start/stop` outside `sleep-prevention.ts`.
+- Never bypass sender validation for IPC.
+- Never expose mutable `settingsCache`; return `{ ...settingsCache }`.
+- Never add settings validation branches in main; extend shared `VALIDATORS`.
+- Never load tray icons with `fs.readFileSync()`; use `nativeImage.createFromPath()` for asar compatibility.
+- Never hardcode tray/menu UI strings outside `constants.ts`.
 
 ## Commands
 
 ```bash
-bun run dev              # Dev: 3 rslib/rsbuild processes + Electron
-bun run build            # Build all (main + preload -> CJS, renderer -> static)
-bun run test             # Vitest (~391 tests)
-bun run typecheck        # tsc -b
+bun run test -- tests/main
+bun run typecheck
+bun run benchmark:performance  # after bun run build
 ```
-
-## Notes
-
-- `prevPreventSleep` updated *before* `cancelSession()` to prevent infinite recursion
-- Tray SVG fallback buffer hoisted to module scope; theme updates debounced 50ms
-- Settings window `show()` adds app to Dock; `close()` removes it
-- Popover hides on blur via typed `window:hide` push channel, not DOM events
-- `DEV_SERVER_URL` is the renamed successor of the Vite-era `VITE_DEV_SERVER_URL`
-- Runtime deps externalized: `electron-log`, `electron-updater` (not bundled)

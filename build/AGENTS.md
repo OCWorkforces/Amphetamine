@@ -1,6 +1,6 @@
-# Build Resources — Packaging & Signing
+# Build Resources - Packaging and Signing
 
-macOS packaging resources for electron-builder. This directory controls app icons, entitlements, notarization hook, after-pack optimizations, and Electron fuse hardening.
+Source-controlled macOS packaging resources for electron-builder. This directory is not disposable output; `dist/` is output.
 
 ## Files
 
@@ -8,53 +8,51 @@ macOS packaging resources for electron-builder. This directory controls app icon
 |------|------|
 | `icon.icns` | macOS app icon consumed by electron-builder |
 | `entitlements.mac.plist` | App entitlements: JIT + unsigned executable memory |
-| `entitlements.mac.inherit.plist` | Child-process entitlements, mirrors app entitlements |
-| `after-pack.cjs` | ARM64-only strip/locales optimization hook |
+| `entitlements.mac.inherit.plist` | Child-process entitlements matching app needs |
+| `after-pack.cjs` | ARM64 strip/locales optimization hook |
 | `flip-fuses.cjs` | Post-package Electron fuse hardening |
-| `notarize.cjs` | Optional Apple notarization hook; skipped unless Apple env vars exist |
+| `notarize.cjs` | Optional notarization hook; currently disabled by config |
 
 ## Packaging Flow
 
-Root package scripts:
+Package scripts use:
 
 1. `bun run build`
 2. `electron-builder --mac --<arch>`
-3. `node build/flip-fuses.cjs <arch>` for distributable packages
+3. `node build/flip-fuses.cjs <arch>` for distributable package scripts
 
-`build-macOS-dmg.sh` is the local macOS wrapper: install deps, clean `dist/`, build, package DMG, sign Developer ID if available, otherwise deep ad-hoc re-sign without hardened runtime, then rename with environment suffix.
+`package:dir` builds an unpacked app only and does not automatically flip fuses.
 
-Ad-hoc path: `CSC_IDENTITY_AUTO_DISCOVERY=false` → electron-builder DMG → `codesign --force --deep --sign -` on the `.app` without `--runtime` → ad-hoc sign DMG → append `--environment` suffix. This avoids dyld Team ID mismatch for unsigned local builds.
+`build-macOS-dmg.sh` is the local wrapper: install deps, clean `dist/`, build, package, sign Developer ID if available, otherwise deep ad-hoc re-sign the `.app` without hardened runtime, ad-hoc sign the DMG, and append the environment suffix.
 
 ## electron-builder Constraints
 
-- `hardenedRuntime: false` is intentional. Re-enable only with notarization + JIT entitlements.
-- `notarize: false` by default. `build/notarize.cjs` requires `APPLE_ID`, `APPLE_TEAM_ID`, `APPLE_APP_PASSWORD`.
-- `LSUIElement: true` keeps the app tray-only with no Dock icon.
-- `dmg.sign: false`; the app bundle is signed, DMG signing is avoided unless the local script ad-hoc signs for quarantine compatibility.
-- `electronLanguages: [en]` and `afterPack` locale stripping keep bundles small.
+- `hardenedRuntime: false` is intentional. Re-enable only with notarization and JIT entitlements.
+- `notarize: false` by default. `notarize.cjs` requires `APPLE_ID`, `APPLE_TEAM_ID`, `APPLE_APP_PASSWORD`.
+- `LSUIElement: true` keeps the app tray-only; settings window temporarily shows Dock icon at runtime.
+- `dmg.sign: false`; local wrapper owns ad-hoc DMG signing for quarantine compatibility.
+- `electronLanguages: [en]` and after-pack locale stripping keep bundles small.
+- `after-pack.cjs` must handle electron-builder ARM64 arch enum `3` as well as string `arm64`.
 
 ## Flip Fuses
 
-`flip-fuses.cjs` applies after packaging:
+`flip-fuses.cjs` disables RunAsNode, inspect args, and `NODE_OPTIONS`; requires app load from ASAR; enables ASAR integrity and cookie encryption.
 
-- Disable RunAsNode, `--inspect`, and `NODE_OPTIONS`.
-- Require app load from ASAR.
-- Enable ASAR integrity validation.
-- Enable cookie encryption and fuse layers.
+CI currently invokes raw `electron-builder` in workflow packaging. If changing release packaging, ensure the CI/CD path and local package scripts have equivalent fuse/signing behavior.
 
 ## Anti-Patterns
 
-- Never distribute an app bundle before `flip-fuses.cjs` has run.
-- Never enable hardened runtime alone; pair it with notarization + correct JIT entitlements.
-- Never remove JIT/unsigned executable memory entitlements without verifying Electron/V8 launch on macOS.
-- Never assume `context.arch` is a string in `after-pack.cjs`; electron-builder may pass enum value `3` for ARM64.
-- Never sign the DMG by default in `electron-builder.yml`; keep signing behavior in `build-macOS-dmg.sh`.
+- Never distribute an app bundle before the intended fuse hardening path has run.
+- Never enable hardened runtime alone; pair it with notarization and verified Electron/V8 entitlements.
+- Never remove JIT/unsigned executable memory entitlements without testing macOS launch.
+- Never sign DMG by default in `electron-builder.yml`; keep local ad-hoc behavior in `build-macOS-dmg.sh`.
+- Never write generated package output under `build/`; use `dist/`.
 
 ## Commands
 
 ```bash
-bun run package          # arm64 DMG/ZIP + flip-fuses
-bun run package:x64      # x64 DMG/ZIP + flip-fuses
-bun run package:dir      # app bundle only; flip-fuses not automatic
+bun run package
+bun run package:x64
+bun run package:dir
 ./build-macOS-dmg.sh --environment stable --arch arm64
 ```

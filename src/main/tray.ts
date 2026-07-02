@@ -207,3 +207,10 @@ export function setupTray(deps: TrayDeps): () => void {
     iconCache.clear();
   };
 }
+
+export function measureBenchmarkTrayMenuProxy(): number | null {
+  if (tray === null || cachedMenu === null) return null;
+  const started = performance.now();
+  tray.popUpContextMenu(cachedMenu);
+  return performance.now() - started;
+}

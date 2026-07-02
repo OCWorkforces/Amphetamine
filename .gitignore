@@ -143,6 +143,7 @@ lib/
 dist/
 .sisyphus/
 .opencode/
+artifacts/
 # CocoIndex Code (ccc)
 /.cocoindex_code/
 .omo/

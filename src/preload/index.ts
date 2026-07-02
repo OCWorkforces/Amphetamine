@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type { IpcRendererEvent } from "electron";
+import { BENCHMARK_ENV_NAME } from "../shared/benchmark-types.js";
 import { IPC_CHANNELS } from "../shared/types.js";
 import type {
   AppSettings,
@@ -126,6 +127,10 @@ const api = {
         ipcRenderer.removeListener(IPC_CHANNELS.AUTO_UPDATER_STATUS, listener);
       };
     },
+  },
+
+  benchmark: {
+    isEnabled: (): boolean => process.env[BENCHMARK_ENV_NAME] === "1",
   },
 };
 

@@ -1,46 +1,56 @@
-# Scripts — Local Tooling
+# Scripts - Local Tooling
 
-Developer-only Bun/Node scripts. No application runtime code imports from here. Keep scripts deterministic, macOS-aware, and explicit about generated outputs.
+Developer-only Bun/Node scripts. Runtime app code must not import from here. Scripts own dev orchestration, generated assets, and benchmark harness execution.
 
 ## Files
 
 | File | Role |
 |------|------|
-| `dev.ts` | Starts rslib watch for main + preload, starts rsbuild dev server, waits for outputs and TCP port 5173, then launches Electron |
-| `generate-app-icon.mjs` | Generates `build/icon.icns` and `src/assets/settings-hero-icon.png` via `sharp` + macOS `iconutil` |
-| `generate-coffee-tray-icons.mjs` | Generates 8 tray PNGs for active/inactive × light/dark × 1x/2x |
+| `dev.ts` | Starts Rslib main/preload watchers, Rsbuild dev server, waits for readiness, launches Electron |
+| `benchmark-performance.ts` | Runs built app in benchmark mode and writes harness JSON artifact |
+| `generate-app-icon.mjs` | Generates `build/icon.icns` and `src/assets/settings-hero-icon.png` |
+| `generate-coffee-tray-icons.mjs` | Generates 8 tray PNGs for active/inactive x light/dark x scale |
 
 ## Dev Orchestration
 
 `dev.ts` flow:
 
-1. `bun x rslib build --watch -c rslib.config.ts` (`NODE_ENV=development`)
-2. `bun x rslib build --watch -c rslib.config.preload.ts`
-3. `bun x rsbuild dev --port 5173`
-4. Wait for `lib/main/index.cjs` and `lib/preload/index.cjs` (30s max, 500ms poll)
-5. TCP-connect to `localhost:5173` before launching Electron
-6. Launch `bun x electron . --disable-gpu-sandbox --log-level=3` with `DEV_SERVER_URL=http://localhost:5173`
-7. On Electron exit/SIGINT/SIGTERM, kill spawned children
+1. Start `bun x rslib build --watch -c rslib.config.ts`.
+2. Start `bun x rslib build --watch -c rslib.config.preload.ts`.
+3. Start `bun x rsbuild dev --port 5173`.
+4. Wait for `lib/main/index.cjs` and `lib/preload/index.cjs`.
+5. TCP-connect to `localhost:5173` before Electron launch.
+6. Launch `bun x electron . --disable-gpu-sandbox --log-level=3` with `DEV_SERVER_URL`.
+7. Kill child processes on Electron exit or signals.
+
+## Benchmark Harness
+
+- Run `bun run build` before `bun run benchmark:performance`; the script requires built `lib/main/index.cjs` and `lib/renderer/index.html`.
+- It launches Electron with `NODE_ENV=production`, `AMPHETAMINE_BENCHMARK=1`, a temp user-data dir, and GPU sandbox disabled.
+- It waits for stdout line prefix `AMPHETAMINE_BENCHMARK_RESULT:` and wraps it with harness metadata.
+- It writes JSON to `--out`, supports optional `--baseline`, and removes temp user-data in cleanup.
+- Benchmark artifacts belong under `artifacts/`, not source directories.
 
 ## Conventions
 
-- Use `#!/usr/bin/env bun` for TypeScript dev scripts.
-- `Date.now()` is OK here for process wait timeouts; session timing rules apply only to app session logic.
-- Use raw TCP readiness checks for rsbuild dev server — do not revert to fixed sleeps.
-- Icon scripts use ESM `fileURLToPath(import.meta.url)` for `__dirname`.
-- Generated icon assets are checked-in source/build resources; see `src/assets/AGENTS.md` for filenames and consumers.
+- TypeScript scripts use `#!/usr/bin/env bun`.
+- `Date.now()` is acceptable for process wait timeouts; app session timing rules do not apply here.
+- Use TCP readiness checks for the dev server. Do not replace with fixed sleeps.
+- Icon scripts use ESM `fileURLToPath(import.meta.url)` for dirname behavior.
+- Generated icon assets are checked-in runtime/build resources; see `src/assets/AGENTS.md`.
 
 ## Anti-Patterns
 
 - Never launch Electron before both CJS build outputs exist.
-- Never replace TCP readiness with arbitrary timeout-only startup.
-- Never add runtime app dependencies on files under `scripts/`.
-- Never change tray icon filenames without updating `src/main/tray.ts` asset lookups.
+- Never add runtime app dependencies on `scripts/` files.
+- Never rename tray icon outputs without updating generator scripts, `src/assets/AGENTS.md`, and `src/main/tray.ts`.
+- Never treat benchmark output as source; it is generated evidence.
 
 ## Commands
 
 ```bash
 bun run dev
+bun run build && bun run benchmark:performance
 bun scripts/generate-app-icon.mjs
 bun scripts/generate-coffee-tray-icons.mjs
 ```

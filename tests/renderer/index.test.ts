@@ -28,6 +28,9 @@ const mockApi = {
     checkForUpdates: vi.fn(),
     onStatus: vi.fn(() => vi.fn()),
   },
+  benchmark: {
+    isEnabled: vi.fn(() => false),
+  },
 };
 
 function setupDom(): void {
@@ -44,6 +47,55 @@ function getStatusText(): string | null {
 
 function getStatusDot(): HTMLElement | null {
   return document.querySelector("#status-dot");
+}
+
+function timedSessionStatus(remainingSeconds = 25 * 60): SessionStatusResponse {
+  const now = performance.now();
+  return {
+    isRunning: true,
+    startedAt: asPerf(now),
+    expiresAt: asPerf(now + remainingSeconds * 1000),
+    remainingSeconds,
+    durationMinutes: 30,
+  };
+}
+
+async function bootRenderer(): Promise<void> {
+  vi.resetModules();
+  const domContentLoadedListeners: EventListenerOrEventListenerObject[] = [];
+  const addEventListener = document.addEventListener.bind(document);
+  const addEventListenerSpy = vi
+    .spyOn(document, "addEventListener")
+    .mockImplementation((type, listener, options) => {
+      if (type === "DOMContentLoaded") {
+        domContentLoadedListeners.push(listener);
+        return;
+      }
+
+      addEventListener(type, listener, options);
+    });
+
+  await import("../../src/renderer/index.js");
+  addEventListenerSpy.mockRestore();
+
+  const domContentLoadedListener = domContentLoadedListeners[0];
+  expect(domContentLoadedListener).toBeDefined();
+
+  const domContentLoadedEvent = new Event("DOMContentLoaded");
+  if (typeof domContentLoadedListener === "function") {
+    domContentLoadedListener(domContentLoadedEvent);
+  } else {
+    domContentLoadedListener?.handleEvent(domContentLoadedEvent);
+  }
+
+  await vi.advanceTimersByTimeAsync(0);
+}
+
+function setDocumentVisibility(visibilityState: DocumentVisibilityState): void {
+  Object.defineProperty(document, "visibilityState", {
+    value: visibilityState,
+    configurable: true,
+  });
 }
 
 describe("renderer popover (index.ts)", () => {
@@ -333,6 +385,79 @@ describe("renderer popover (index.ts)", () => {
       expect(mockApi.window.setHeight).toHaveBeenCalled();
     });
 
+  });
+
+  describe("countdown ticker", () => {
+    it("does not create a countdown interval on idle init", async () => {
+      // Given: no timed session exists when the popover initializes.
+      mockApi.session.getStatus.mockResolvedValue(null);
+      const setIntervalSpy = vi.spyOn(globalThis, "setInterval");
+
+      // When: the renderer initializes.
+      await bootRenderer();
+
+      // Then: no countdown interval is scheduled for idle state.
+      expect(setIntervalSpy).not.toHaveBeenCalled();
+    });
+
+    it("creates exactly one interval for visible timed init and updates through the timer path", async () => {
+      // Given: a visible popover starts with a timed session.
+      mockApi.session.getStatus.mockResolvedValue(timedSessionStatus());
+      const setIntervalSpy = vi.spyOn(globalThis, "setInterval");
+
+      // When: the renderer initializes and the countdown interval ticks.
+      await bootRenderer();
+      await vi.advanceTimersByTimeAsync(16);
+      expect(getTimerText()).toContain("25m remaining");
+      await vi.advanceTimersByTimeAsync(60_000);
+      await vi.advanceTimersByTimeAsync(16);
+
+      // Then: exactly one interval exists and the existing timer path updates the label.
+      expect(setIntervalSpy).toHaveBeenCalledOnce();
+      expect(getTimerText()).toContain("24m remaining");
+    });
+
+    it("clears on hide and resumes exactly one interval for a timed session", async () => {
+      // Given: a timed session initialized with one countdown interval.
+      mockApi.session.getStatus.mockResolvedValue(timedSessionStatus());
+      const setIntervalSpy = vi.spyOn(globalThis, "setInterval");
+      const clearIntervalSpy = vi.spyOn(globalThis, "clearInterval");
+      await bootRenderer();
+      expect(setIntervalSpy).toHaveBeenCalledOnce();
+
+      // When: the popover hides, then becomes visible again twice.
+      const windowHideCallback = mockApi.onWindowHide.mock.calls[0]?.[0];
+      expect(windowHideCallback).toBeDefined();
+      windowHideCallback?.();
+      setDocumentVisibility("visible");
+      document.dispatchEvent(new Event("visibilitychange"));
+      document.dispatchEvent(new Event("visibilitychange"));
+
+      // Then: hide clears once and visible resume schedules only one replacement interval.
+      expect(clearIntervalSpy).toHaveBeenCalledOnce();
+      expect(setIntervalSpy).toHaveBeenCalledTimes(2);
+    });
+
+    it("starts the ticker when a timed-session push arrives while visible and no ticker exists", async () => {
+      // Given: the popover is visible with no timed session and no countdown interval.
+      mockApi.session.getStatus.mockResolvedValue(null);
+      const setIntervalSpy = vi.spyOn(globalThis, "setInterval");
+      await bootRenderer();
+      const windowHideCallback = mockApi.onWindowHide.mock.calls[0]?.[0];
+      expect(windowHideCallback).toBeDefined();
+      windowHideCallback?.();
+      setDocumentVisibility("visible");
+      document.dispatchEvent(new Event("visibilitychange"));
+      setIntervalSpy.mockClear();
+
+      // When: a timed-session status push arrives while the popover is visible.
+      const sessionCallback = mockApi.onSessionStatusUpdate.mock.calls[0]?.[0];
+      expect(sessionCallback).toBeDefined();
+      sessionCallback?.(timedSessionStatus());
+
+      // Then: the push starts exactly one countdown interval.
+      expect(setIntervalSpy).toHaveBeenCalledOnce();
+    });
   });
   describe("push subscriptions", () => {
     it("subscribes to onSettingsChanged on init", async () => {
