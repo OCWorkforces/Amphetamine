@@ -45,6 +45,7 @@
   "scripts": {
     "dev": "bun run scripts/dev.ts",
     "build": "NODE_ENV=production bun run build:main && NODE_ENV=production bun run build:preload && NODE_ENV=production bun run build:renderer",
+    "benchmark:performance": "bun run scripts/benchmark-performance.ts",
     "build:main": "NODE_ENV=production rslib build -c rslib.config.ts",
     "build:preload": "NODE_ENV=production rslib build -c rslib.config.preload.ts",
     "build:renderer": "NODE_ENV=production rsbuild build",
