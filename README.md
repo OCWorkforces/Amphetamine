@@ -13,6 +13,7 @@ A macOS menu bar app that keeps your Mac awake. Lives in the system tray, preven
 - **Settings Window**: configure launch-at-login, sleep prevention default, session duration, battery threshold, and the keyboard shortcut.
 - **Auto-Updater**: checks GitHub releases via `electron-updater` shortly after launch and every 4 hours, with exponential backoff up to 24h on failure. Manual "Check for Updates" available from the tray menu.
 - **Secure IPC**: sandboxed preload exposes a strictly typed `window.api` bridge. Main-side handlers validate sender origin against an allowlist; all 15 channels are typed end-to-end.
+- **Benchmark Harness**: production-only benchmark mode measures startup, idle samples, popover/tray/settings responsiveness, and renderer countdown timer counters.
 
 ## Screenshots
 
@@ -39,6 +40,7 @@ bun run typecheck:tests   # tsc for tests/
 bun run test              # Run Vitest workspace (~391 tests across 23 files)
 bun run test:watch        # Vitest in watch mode
 bun run test:coverage     # Vitest with v8 coverage
+bun run benchmark:performance -- --out artifacts/perf/latest.json
 bun run lint              # ESLint over src/ tests/
 bun run lint:fix          # ESLint with --fix
 bun run format            # Prettier write
@@ -55,6 +57,18 @@ bun run clean             # Remove lib/ and dist/
 
 It waits until both CJS outputs exist on disk and the renderer's TCP port is accepting connections, then launches Electron with `--disable-gpu-sandbox`.
 
+### Performance Benchmark
+
+`bun run benchmark:performance` runs the built app in production benchmark mode. Run `bun run build` first because the harness requires `lib/main/index.cjs` and `lib/renderer/index.html`.
+
+```bash
+bun run build
+bun run benchmark:performance -- --label local --out artifacts/perf/local.json
+bun run benchmark:performance -- --label compare --out artifacts/perf/compare.json --baseline artifacts/perf/local.json
+```
+
+The script launches Electron with `AMPHETAMINE_BENCHMARK=1` and an isolated temporary user-data directory. The app prints an `AMPHETAMINE_BENCHMARK_RESULT:` JSON payload, then quits; the harness wraps that payload with run metadata and writes the requested artifact.
+
 ## Build & Packaging
 
 Packaging is handled by `electron-builder`, configured in `electron-builder.yml`. Build resources (icon, entitlements, after-pack hook, fuse flipper) live under `build/`.
@@ -67,7 +81,7 @@ bun run package:dir         # Unpacked .app directory only (faster, for local te
 bun run flip-fuses arm64    # Apply fuses manually if needed
 ```
 
-Outputs are written to `dist/` (e.g. `Amphetamine-1.7.5-arm64.dmg`, `Amphetamine-1.7.5-arm64-mac.zip`).
+Outputs are written to `dist/` (for current version `1.9.0`, e.g. `Amphetamine-1.9.0-arm64.dmg`, `Amphetamine-1.9.0-arm64-mac.zip`).
 
 For local DMG builds, `./build-macOS-dmg.sh --arch arm64 --environment prd` wraps the same build, handles ad-hoc signing when no Developer ID certificate is available, and appends the environment suffix to the DMG name.
 
@@ -78,6 +92,8 @@ Notes on packaging:
 - **Fuses**: after packaging, `build/flip-fuses.cjs` disables `RunAsNode` and enables cookie encryption + ASAR integrity checks.
 - **Targets**: DMG (`ULFO` format) and ZIP for both `arm64` and `x64`. Minimum macOS 11.
 - **Updates**: published to GitHub releases (`OCWorkforces/Amphetamine`).
+
+CI builds arm64 and x64 artifacts only for pushes to `main` after lint and tests pass. CD runs from the successful CI workflow, tags `v<package.json version>` when missing, downloads those artifacts, and publishes the GitHub release.
 
 ### Install to Applications
 
@@ -133,14 +149,16 @@ sudo xattr -rd com.apple.quarantine "/Applications/Amphetamine.app"
 Amphetamine/
 ├── src/
 │   ├── main/        # Electron main process: tray, IPC, settings, session timer,
-│   │                # sleep prevention, battery monitor, global shortcut, auto-updater
+│   │                # sleep prevention, battery monitor, global shortcut, auto-updater,
+│   │                # benchmark mode and metrics
 │   ├── preload/     # Sandboxed context bridge exposing typed window.api
-│   ├── renderer/    # Vanilla TS UI (popover + settings window, two rsbuild entries)
+│   ├── renderer/    # Vanilla TS UI (popover + settings window, benchmark counters)
 │   ├── assets/      # Generated tray icons and settings hero image packaged at runtime
-│   └── shared/      # Cross-process types, IPC channel map, settings validators
+│   └── shared/      # Cross-process IPC, settings, session, benchmark contracts
 ├── tests/           # Vitest workspace (main + renderer projects)
-├── scripts/         # dev orchestration + icon generators
+├── scripts/         # dev orchestration, benchmark harness, icon generators
 ├── build/           # electron-builder resources (icon, entitlements, hooks, fuses)
+├── .github/workflows/       # CI builds artifacts; CD publishes releases
 ├── rslib.config.ts          # Main process build
 ├── rslib.config.preload.ts  # Preload build
 ├── rsbuild.config.ts        # Renderer build (two envs)
@@ -152,11 +170,11 @@ Amphetamine/
 
 | Layer       | Tech                                             |
 | ----------- | ------------------------------------------------ |
-| Runtime     | Electron 42                                      |
-| Language    | TypeScript 6.0 (strict, ESM source → CJS output) |
+| Runtime     | Electron 43                                      |
+| Language    | TypeScript 6.0.3 (strict, ESM source → CJS output) |
 | Build       | Rslib (main + preload), Rsbuild (renderer)       |
 | Package Mgr | Bun 1.3.14 (`engines`: Bun ≥ 1.3.14, Node `>=26 <27`)  |
-| Test        | Vitest 4 workspace (~391 tests across 23 files)  |
+| Test        | Vitest 4.1.9 workspace (~391 tests across 23 files) |
 | Lint/Format | ESLint 10 (flat config) + Prettier 3             |
 | UI          | Vanilla TypeScript, no UI framework              |
 | Updates     | electron-updater (GitHub provider)               |
@@ -166,6 +184,7 @@ Amphetamine/
 - `bun run test` runs the Vitest workspace with two projects: `main/` (Node env, Electron mocked via `vi.hoisted`) and `renderer/` (jsdom).
 - ESLint flat config enforces strict rules: `no-explicit-any`, `no-floating-promises`, `strict-boolean-expressions`, `consistent-type-imports` (all `error`).
 - TypeScript runs in strict mode with `exactOptionalPropertyTypes`, `verbatimModuleSyntax`, `noUncheckedIndexedAccess`, `noImplicitOverride`, and `noImplicitReturns`.
+- Benchmark output is generated evidence under `artifacts/`; source and release packages use built `lib/` output and packaged runtime assets.
 
 ## Contact
 
