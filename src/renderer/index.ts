@@ -1,6 +1,14 @@
 import "./styles/main.css";
 import type { AppSettings, PerfTimestamp, SessionStatusResponse } from "../shared/types.js";
 import { asPerf, DEFAULT_SETTINGS } from "../shared/types.js";
+import {
+  installRendererBenchmarkCounters,
+  recordCountdownCallback,
+  recordCountdownClear,
+  recordCountdownSchedule,
+  recordCountdownStart,
+  recordCountdownStop,
+} from "./benchmark-countdown.js";
 import { STATUS_PREVENTING_SLEEP, STATUS_SLEEP_PREVENTION_OFF } from "./constants.js";
 
 type SessionStatus = SessionStatusResponse | null;
@@ -19,6 +27,8 @@ let unsubscribeSessionStatus: (() => void) | null = null;
 let isPopoverVisible = false;
 let isLoading = true;
 let countdownIntervalId: ReturnType<typeof setInterval> | null = null;
+
+installRendererBenchmarkCounters();
 
 const TIMER_ICON_SVG = `<svg class="popover-timer-icon" aria-hidden="true" width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="6" cy="6" r="5"/><path d="M6 3v3l2 2"/></svg><span class="visually-hidden">Timer</span>`;
 
@@ -85,21 +95,39 @@ function formatTimerValue(): string {
 let lastRenderedTimerText: string | null = null;
 
 function startCountdownTicker(): void {
+  recordCountdownStart();
   if (countdownIntervalId !== null) return;
   countdownIntervalId = setInterval(() => {
+    recordCountdownCallback();
     // Only refresh display when a timed session is active locally.
     if (sessionExpiresAtPerf === null) return;
     updateStatusUI();
   }, COUNTDOWN_TICK_MS);
+  recordCountdownSchedule();
 }
 
 function stopCountdownTicker(): void {
+  recordCountdownStop();
   if (countdownIntervalId !== null) {
     clearInterval(countdownIntervalId);
     countdownIntervalId = null;
+    recordCountdownClear();
   }
   // Clear cache so next tick forces a fresh render.
   lastRenderedTimerText = null;
+}
+
+function syncCountdownTicker(): void {
+  if (isPopoverVisible && sessionExpiresAtPerf !== null) {
+    if (countdownIntervalId === null) {
+      startCountdownTicker();
+    }
+    return;
+  }
+
+  if (countdownIntervalId !== null) {
+    stopCountdownTicker();
+  }
 }
 
 function resizeToContent(): void {
@@ -257,7 +285,7 @@ function handlePopoverHide(): void {
 
   isPopoverVisible = false;
   app.classList.remove("visible");
-  stopCountdownTicker();
+  syncCountdownTicker();
 }
 
 function handleVisibilityChange(): void {
@@ -267,16 +295,14 @@ function handleVisibilityChange(): void {
   if (document.visibilityState === "visible") {
     isPopoverVisible = true;
     app.classList.add("visible");
-    // Resume countdown ticker when popover becomes visible and session is active
-    if (sessionExpiresAtPerf !== null) {
-      updateStatusUI();
-      startCountdownTicker();
-    }
+    updateStatusUI();
+    syncCountdownTicker();
     return;
   }
 
-  // Pause countdown ticker when popover is hidden to avoid unnecessary work
-  stopCountdownTicker();
+  isPopoverVisible = false;
+  app.classList.remove("visible");
+  syncCountdownTicker();
 }
 
 /** Load settings and version from main process */
@@ -298,6 +324,7 @@ function setupPushSubscriptions(): void {
   unsubscribeSessionStatus = window.api.onSessionStatusUpdate((status) => {
     sessionStatus = status;
     updateSessionAnchors(status);
+    syncCountdownTicker();
     updateStatusUI();
   });
 }
@@ -343,7 +370,7 @@ async function init(): Promise<void> {
 
     setupPushSubscriptions();
     attachWindowEvents();
-    startCountdownTicker();
+    syncCountdownTicker();
   } catch {
     // Render fallback UI on init failure
     isLoading = false;
