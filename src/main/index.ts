@@ -13,6 +13,12 @@ import { initAutoUpdater, registerAutoUpdaterIpc } from "./auto-updater.js";
 import * as sessionTimer from "./session-timer.js";
 import { stopPreventingSleep } from "./sleep-prevention.js";
 import { broadcastToWindows } from "./utils/broadcast.js";
+import {
+  configureBenchmarkEnvironment,
+  installBenchmarkTimerCounters,
+  runBenchmarkIfRequested,
+} from "./benchmark.js";
+import { isBenchmarkMode } from "./benchmark-env.js";
 import { IPC_CHANNELS } from "../shared/types.js";
 import {
   MAIN_WINDOW_WIDTH,
@@ -24,6 +30,10 @@ import {
 import { hardenWebContents } from "./security.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const mainProcessStartMs = performance.now();
+
+configureBenchmarkEnvironment();
+installBenchmarkTimerCounters();
 
 process.on("uncaughtException", (error: Error) => {
   log.error("[main] Uncaught exception:", error);
@@ -122,6 +132,7 @@ if (!app.requestSingleInstanceLock()) {
   process.exit(0);
 }
 void app.whenReady().then(async () => {
+  const appReadyMs = performance.now() - mainProcessStartMs;
   // Register as accessory app — no Dock icon, no menu bar
   app.setActivationPolicy("accessory");
   mainWindow = createWindow();
@@ -139,7 +150,17 @@ void app.whenReady().then(async () => {
   registerIpcHandlers(mainWindow, ipcDeps);
   await initCoordinator();
   cleanupTray = setupTray(getTrayDeps());
-  initAutoUpdater();
+  if (!isBenchmarkMode()) {
+    initAutoUpdater();
+  }
+  void runBenchmarkIfRequested({
+    mainWindow,
+    appReadyMs,
+    bootstrapReadyMs: performance.now() - mainProcessStartMs,
+  }).catch((err: unknown) => {
+    log.error("[benchmark] Benchmark run failed:", err);
+    app.exit(1);
+  });
 });
 app.on("window-all-closed", () => {
   // Tray-only app stays alive when all windows close

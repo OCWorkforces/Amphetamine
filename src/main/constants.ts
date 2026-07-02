@@ -1,4 +1,5 @@
 import { app } from "electron";
+import { isBenchmarkMode } from "./benchmark-env.js";
 
 // === Window Dimensions ===
 export const MAIN_WINDOW_WIDTH = 360;
@@ -43,7 +44,7 @@ export function getDevServerUrl(): string {
 
 // === Environment ===
 // NOTE (security): electron pinned to ^41.3.0 — satisfies CVE-2026-34780 patch (>= 41.0.2).
-export const isDev = !app.isPackaged;
+export const isDev = !app.isPackaged && !isBenchmarkMode();
 
 // === Tray Menu Labels ===
 /** Tray context-menu labels. */
