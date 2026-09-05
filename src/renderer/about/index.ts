@@ -72,7 +72,6 @@ async function bootstrap(): Promise<void> {
   const versionEl = requireEl<HTMLDivElement>("version");
   const descriptionEl = requireEl<HTMLDivElement>("description");
   const copyrightEl = requireEl<HTMLDivElement>("copyright");
-  const closeBtn = requireEl<HTMLButtonElement>("close-btn");
 
   icon.src = heroIcon;
 
@@ -103,18 +102,12 @@ async function bootstrap(): Promise<void> {
     copyrightEl.textContent = `Copyright © ${new Date().getFullYear()}`;
   }
 
-  const close = (): void => {
-    window.close();
-  };
-  closeBtn.addEventListener("click", close);
   window.addEventListener("keydown", (e: KeyboardEvent) => {
     if (e.key === "Escape") {
       e.preventDefault();
-      close();
+      window.close();
     }
   });
-
-  closeBtn.focus();
 }
 
 void bootstrap().catch((err: unknown) => {
