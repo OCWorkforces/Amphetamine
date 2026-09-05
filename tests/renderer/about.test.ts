@@ -43,7 +43,6 @@ function setupDom(): void {
       <div id="version" class="version"></div>
       <div id="description" class="description"></div>
       <div id="copyright" class="copyright"></div>
-      <button type="button" id="close-btn">OK</button>
     </div>
   `;
 }
@@ -117,15 +116,12 @@ describe("renderer about", () => {
     expect(document.title).toBe("About Amphetamine");
   });
 
-  it("closes on OK and Escape", async () => {
+  it("closes on Escape", async () => {
     vi.resetModules();
     await import("../../src/renderer/about/index.js");
     await vi.advanceTimersByTimeAsync(0);
 
-    document.getElementById("close-btn")?.click();
-    expect(mockClose).toHaveBeenCalled();
-
-    mockClose.mockClear();
+    expect(document.getElementById("close-btn")).toBeNull();
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
     expect(mockClose).toHaveBeenCalled();
   });

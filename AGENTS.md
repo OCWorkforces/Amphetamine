@@ -1,5 +1,9 @@
 # Amphetamine
 
+**Generated:** 2026-09-05
+**Commit:** 588e9bf
+**Branch:** develop
+
 Tray-only Electron app for **macOS and Windows**. Prevents system sleep through user intent or timed sessions. Battery-aware auto-disable, global shortcut, settings window, auto-updater, and benchmark harness.
 
 ## Overview
@@ -8,9 +12,9 @@ Tray-only Electron app for **macOS and Windows**. Prevents system sleep through 
 |------|------|
 | Runtime | Bun 1.4.1+ / Node `>=26 <27` |
 | TypeScript | Dual: native **7.x** (`@typescript/native` owns workspace `tsc`) for typecheck; **6.x** (`typescript@6`) for the JS API / ESLint until 7.1 programmatic API lands |
-| Electron | `^43.3.0` (package pin; do not downgrade below patched 43.x) |
+| Electron | `^44.2.0` (package pin; do not downgrade below patched 44.x) |
 | Build | Rslib main/preload to CJS + Rsbuild renderer (popover + settings + about + utility-dialog) |
-| Test | Vitest 4 workspace: domain + application + main (Node) + renderer (jsdom) |
+| Test | Vitest 5 workspace: domain + application + main (Node) + renderer (jsdom) |
 | Lint | ESLint 10 flat; sticky type-safety rules as errors for `src/` |
 | Layers | Clean Architecture Lite: `domain` → `application` → `infrastructure` / presentation (`main`, `preload`, `renderer`) |
 
@@ -20,25 +24,17 @@ Product platforms: **darwin** and **win32**. OS differences go through thin main
 
 ```text
 src/domain/               Pure types and rules (no Electron, no Node I/O)
-src/application/          Use cases + port interfaces (no Electron)
-src/infrastructure/       Electron/Node adapters + hybrid updater + benchmark harness
-src/main/                 Composition root, IPC, tray, windows, process façades
-  index.ts                app lifecycle events; delegates graph to AppShell
-  app-shell.ts            createAppShell — process-graph root (windows/IPC/tray/composition)
-  process/                WindowGraph + shared secure webPreferences
-  composition-root.ts     createAppComposition — wire ports, use cases, reactions
-  platform/               OS adapters + utility-presentation; public entry platform/index.ts
-  utils/                  broadcastToWindows, packageInfo guard
-src/preload/              sandboxed contextBridge API (public `api` + utility-dialog preload)
-src/renderer/             popover + settings + about + utility-dialog (built HTML entries)
-  styles/                 popover main.css + utility-tokens.css + icon-aurora.css (utility surfaces)
-  icon-aurora-pause.ts    Shared warm-cache pause for fancy aurora stages
-src/shared/               IPC transport contracts; utility-dialog private channels; domain re-exports
-src/assets/               checked-in generated PNGs consumed at runtime
-scripts/                  Bun tooling, icons, dev, benchmarks, sticky/layer guards
-build/                    electron-builder resources, entitlements, fuses
-.github/workflows/        CI/CD + develop beta packaging
-lib/, dist/, artifacts/   generated outputs; do not add AGENTS.md here
+src/application/          Use cases + 12 port interfaces (no Electron)
+src/infrastructure/       Adapters + hybrid updater + benchmark harness
+src/main/                 AppShell, WindowGraph, composition, façades, platform/
+src/preload/              window.api + utility-dialog preload
+src/renderer/             popover + settings + about + utility-dialog
+src/shared/               IPC contracts; private dialog channels; domain re-exports
+src/assets/               checked-in generated PNGs
+scripts/                  Bun tooling, icons, sticky/layer guards
+build/                    entitlements, fuses
+.github/workflows/        CI / CD / develop beta
+lib/, dist/, artifacts/   generated — do not add AGENTS.md
 ```
 
 Dependency rule: **domain** and **application** must not import `electron` / `electron-log` / process roots. Enforced by `bun run typecheck:layers` and ESLint restricted imports.
@@ -52,11 +48,10 @@ Dependency rule: **domain** and **application** must not import `electron` / `el
 | Domain pure rules | `src/domain/` | `isEffectivelyActive`, duration validation, threshold, `PerfTimestamp` |
 | Application use cases | `src/application/` | Session engine, recompute/toggle sleep, settings reactions, low-battery, shortcut |
 | Port interfaces | `src/application/ports/` | Closed budget of **12** ports; see `ports/index.ts` |
-| Process graph / windows | `src/main/app-shell.ts`, `src/main/process/` | AppShell ready/quit; WindowGraph owns all BrowserWindows; Settings/About/utility-dialog **hide-on-close warm cache** |
+| Process graph / windows | `src/main/app-shell.ts`, `src/main/process/` | AppShell ready/quit (composition before IPC); WindowGraph sole `BrowserWindow` factory; hide-on-close warm cache |
 | Main→renderer push | `MainToRendererNotifierPort` + `broadcast-notifier` | Application publishes `AppPushEvent`; adapter maps to `PUSH_CHANNELS` |
-| OS user notifications | `UserNotifierPort` + `os-user-notifier` | Low-battery feedback via Electron `Notification` (not a renderer push) |
-| Wire app / quit | `src/main/app-shell.ts`, `src/main/index.ts` | AppShell owns ready/quit graph; composition before IPC; quit: flush → tray → composition → destroy windows |
-| Settings persistence | `src/infrastructure/settings/`, façade `src/main/settings.ts` | Atomic write; coalesced one-in-flight + one pending batch; save-failure dialog |
+| OS user notifications | `UserNotifierPort` + `os-user-notifier` | Low-battery OS `Notification` (not a renderer push) |
+| Settings persistence | `src/infrastructure/settings/`, façade `src/main/settings.ts` | Atomic write; coalesced one-in-flight + one pending batch |
 | Sleep blocker | `src/infrastructure/sleep/`, façade `src/main/sleep-prevention.ts` | Sole `powerSaveBlocker` owner |
 | Session runtime | `src/application/session/`, façade `src/main/session-timer.ts` | Handle injection only; no module-level session globals |
 | Settings → system side effects | `SettingsReactionService` (application), wired in composition | Single `onChange` subscriber; UpdateSettings is persist-only |
@@ -64,37 +59,36 @@ Dependency rule: **domain** and **application** must not import `electron` / `el
 | Tray/menu | `src/main/tray.ts`, `src/assets/AGENTS.md` | Icon = effective active; checkbox = user intent |
 | Renderer popover | `src/renderer/index.ts` | Domain `isEffectivelyActive`; mode-stable session actions; chips start session only |
 | Settings UI | `src/renderer/settings/AGENTS.md` | System Settings groups; debounced saves; shortcut recorder; warm-cache focus clear |
-| About window | `src/renderer/about/`, WindowGraph `showAbout` | Built `about.html`; `app:get-about` (+ `author`); coffee-brown icon aurora; github allowlist; hide-on-close cache |
-| Utility surface color | `src/renderer/styles/utility-tokens.css` | Shared `--utility-window-bg` (`#0D1117`) for Settings + About + utility-dialog `#app` fills |
-| Icon aurora | `src/renderer/styles/icon-aurora.css` + `icon-aurora-pause.ts` | GogMeet-style fancy aurora (core/blobs, dual rings, sheen, flare) on About/dialog; static wash on Settings; pause leaf loops when warm-cached hidden |
-| Utility dialog | `src/renderer/utility-dialog/`, WindowGraph `presentUtilityDialog` | Aurora alert for Check for Updates; dedicated preload; single-flight; **hide-on-close warm cache**; height settle before fade-in |
+| About window | `src/renderer/about/`, WindowGraph `showAbout` | Built `about.html`; dismiss Close/Escape (no OK); github allowlist |
+| Utility dialog | `src/renderer/utility-dialog/`, WindowGraph `presentUtilityDialog` | Dedicated preload; single-flight; height settle before fade-in |
 | Hybrid auto-updater | `src/infrastructure/updater/` (+ main IPC façade) | `showUserDialog` inject; `setFeedURL` from package repo; single-flight checks; needs `latest-mac.yml` / `latest.yml` on release |
-| Utility Dock / dialogs | `src/main/platform/utility-presentation.ts` | Refcounted macOS foreground for Settings, About, and utility dialogs |
-| Benchmark mode | `src/infrastructure/benchmark/`, `src/renderer/benchmark-countdown.ts`, `scripts/benchmark-performance.ts` | Scenarios `idle` \| `active-session`; requires built `lib/` |
-| Platform OS gates | `src/main/platform/` | Prefer `isDarwin` / `isWin32` |
+| Utility Dock / dialogs | `src/main/platform/utility-presentation.ts` | Refcounted macOS foreground; prefer `isDarwin` / `isWin32` |
+| Benchmark mode | `src/infrastructure/benchmark/`, `scripts/benchmark-performance.ts` | `idle` \| `active-session`; requires built `lib/` |
 | Test mocking | `tests/AGENTS.md` (+ main/renderer) | Domain/application pure; main mocks Electron |
 | Dev/build/CI | `scripts/`, `build/`, `.github/workflows/` | Parallel prod build; CI must publish mac update feeds |
 
+## Code map
+
+Sentrux DSM: 163 nodes, 325 edges, all below-diagonal (downward layering). LSP unconfigured — refs from import search.
+
+| Symbol | Type | Location | Refs | Role |
+|--------|------|----------|------|------|
+| `createAppShell` | fn | `src/main/app-shell.ts` | index + tests | Ready/quit topology |
+| `createAppComposition` | fn | `src/main/composition-root.ts` | AppShell | Ports, reactions, updater inject |
+| WindowGraph | module | `src/main/process/window-graph.ts` | 4 façades + tests | Sole `BrowserWindow` factory |
+| `IPC_CHANNELS` | const | `src/shared/types.ts` | ~18 | Public 16-name wire budget |
+| `AppPushEvent` | union | `src/application/ports/` | application | Semantic push (no channel literals) |
+| `AppSettings` | type | `src/domain/settings/app-settings.ts` | ~11+ via shared | Settings contract |
+| `VALIDATORS` | const | `src/domain/settings-validation/` | store + tests | Disk load + merge |
+| `isEffectivelyActive` | fn | `src/domain/session/effective-active.ts` | tray/sleep/popover | Intent OR session |
+| `createSessionEngine` | fn | `src/application/session/` | session-timer façade | Handle injection |
+| `SettingsReactionService` | factory | `src/application/settings/` | composition only | Sole `onChange` subscriber |
+| `configureHybridAutoUpdater` | fn | `src/infrastructure/updater/` | UpdaterPort | Single-flight + injected dialogs |
+| `presentUtilityDialog` | fn | WindowGraph | composition `showUserDialog` | Aurora alerts |
+
 ## Log tags (production)
 
-| Tag | Owner |
-| --- | --- |
-| `[main]` | Bootstrap / quit (`index.ts`) |
-| `[app-shell]` | Process-graph shell init and quit cleanup |
-| `[composition]` | Composition root wiring and lifecycle |
-| `[settings-reactions]` | `SettingsReactionService` field reactions |
-| `[session]` | Session engine; SESSION_START validation in IPC |
-| `[settings]` | File settings store |
-| `[sleep]` | Power-save blocker adapter |
-| `[battery]` | Battery monitor (detector only) |
-| `[low-battery]` | Application low-battery auto-stop use case (default tag) |
-| `[shortcut]` | Global shortcut adapter / register use case |
-| `[ipc]` | Sender validation and non-session IPC |
-| `[auto-launch]` | Login items |
-| `[auto-updater]` | Hybrid updater |
-| `[security]` | Navigation / window-open hardening |
-| `[benchmark]` | Production benchmark harness |
-| `[notify]` | OS user notifications (`UserNotifierPort` / low-battery) |
+`[main]` bootstrap · `[app-shell]` graph · `[composition]` wiring · `[settings-reactions]` · `[session]` · `[settings]` store · `[sleep]` · `[battery]` detector · `[low-battery]` use case · `[shortcut]` · `[ipc]` · `[auto-launch]` · `[auto-updater]` · `[security]` · `[benchmark]` · `[notify]` OS toasts
 
 ## Conventions
 
@@ -102,44 +96,27 @@ Dependency rule: **domain** and **application** must not import `electron` / `el
 - Type-safe IPC: `typedHandle()` in main, typed `invoke<K>()` in preload, exhaustive `WiredChannels` check.
 - Main/infrastructure import Electron via `electron/main` (and `electron/common` for `shell`/`nativeImage`); preload uses `electron`.
 - Application never imports `IPC_CHANNELS`; publish `AppPushEvent` through `MainToRendererNotifierPort`.
-- Process graph: AppShell owns lifecycle; WindowGraph is the sole BrowserWindow factory (popover/settings/about/utility-dialog).
-- Side effects isolated via ports and factory deps (`SessionTimerDeps`, `BatteryDeps`, `TrayDeps`, `IpcDeps`, port interfaces).
-- Settings validation uses domain `VALIDATORS` for disk load and partial merge.
 - Session **preference** is `defaultSessionDuration`; live session state is engine handle + `SESSION_STATUS*` pushes only.
 - `PerfTimestamp` values come from `asPerf(n)`. Do not raw-cast timestamps.
 - `SessionStatusResponse`, `SessionStartResponse`, updater status, and benchmark guards are discriminated/runtime-checked contracts.
 - Settings init is async; writes use UUID temp file + rename with **coalesced batching** (one active write + one pending merge); quit flushes via `flushSettingsWriteChain()`.
 - Settings→renderer pushes (`settings-changed`) only when a renderer-visible key changes (`preventSleep` \| `batteryThreshold` \| `shortcut`).
 - Popover `#session-actions` rebuilds only on running/idle **mode** change (stable cancel-button identity); hide transitions are coalesced in WindowGraph.
-- Push broadcasts use `broadcastToWindows<K>()`; renderer subscribes with `window.api.on*()` and cleanup functions.
-- UI strings live in constants files. Styling lives in CSS. No inline renderer styles.
-- Format: double quotes, semicolons, 2-space indent, Prettier print width 100.
-- Sticky TS (non-negotiable for `src/`): strict family + `exactOptionalPropertyTypes`, `verbatimModuleSyntax`, `noUncheckedIndexedAccess`, `noImplicitOverride`, `noImplicitReturns`. Asserted by `bun run typecheck:sticky`.
-- Sticky ESLint for `src/`: `no-explicit-any`, `no-unsafe-*`, `no-floating-promises`, `strict-boolean-expressions`, `ban-ts-comment`, `no-non-null-assertion`, `no-unnecessary-condition` (all error).
+- UI strings in constants files; styles in CSS. Format: double quotes, semicolons, 2-space, print width 100.
+- Sticky TS (`bun run typecheck:sticky`): strict family + `exactOptionalPropertyTypes`, `verbatimModuleSyntax`, `noUncheckedIndexedAccess`, `noImplicitOverride`, `noImplicitReturns`.
+- Sticky ESLint `src/`: `no-explicit-any`, `no-unsafe-*`, `no-floating-promises`, `strict-boolean-expressions`, `ban-ts-comment`, `no-non-null-assertion`, `no-unnecessary-condition`.
 
 ## Anti-Patterns
 
-- Never call `powerSaveBlocker.start/stop` outside `src/infrastructure/sleep` (main façade: `sleep-prevention.ts`).
-- Never bypass `validateSender()` for IPC. `ipcMain.on()` only with explicit sender validation.
-- Never expose mutable settings state; return cloned settings snapshots.
-- Never use `Date.now()` for elapsed session timing. Exception: wall-clock expiry via `ClockPort.wallNow()` for sleep-resilient timed sessions.
-- Never call macOS-only Electron APIs without an `isDarwin()` guard.
-- Never shell out to `pmset` or PowerShell battery queries outside `src/main/platform/battery-percent.ts`.
-- Never use `JSON.parse(...) as T`; parse to `unknown` and guard.
-- Never mutate `DEFAULT_SETTINGS`.
-- Never use `as any`, `@ts-ignore`, or `@ts-expect-error` in `src/`.
-- Never hardcode renderer/tray UI strings in logic.
-- Never import Electron in renderer; all Electron access goes through preload.
-- Never make runtime code import from `scripts/`.
-- Never import Electron into `domain` or `application` (layer guard).
-- Never import `IPC_CHANNELS` into `application` (use `AppPushEvent`).
+- Never call `powerSaveBlocker.start/stop` outside `src/infrastructure/sleep`. Never bypass `validateSender()`.
+- Never expose mutable settings; clone snapshots. Never mutate `DEFAULT_SETTINGS`.
+- Never use `Date.now()` for elapsed session timing (`ClockPort.wallNow()` for sleep-resilient expiry).
+- Never call macOS-only Electron APIs without `isDarwin()`. Battery shell-outs only in `platform/battery-percent.ts`.
+- Never `JSON.parse(...) as T`, `as any`, `@ts-ignore`, or `@ts-expect-error` in `src/`.
+- Never import Electron in renderer (preload only) or into domain/application. Never import `scripts/` from runtime. Never import `IPC_CHANNELS` into application.
 - Never create BrowserWindows outside `main/process/window-graph` (except tests).
-- Never dual-subscribe settings reactions (only `SettingsReactionService` via store `onChange`).
-- Never reintroduce module-level session delegators (`setActiveSessionTimer` and friends).
-- Never mirror runtime session state into settings.
-- Never add or edit source docs under generated `lib/`, `dist/`, `artifacts/`, coverage, or tool-state directories.
-- Never distribute packaged output before the intended fuse/signing path has run.
-- Never remove sticky `strict` / sticky ESLint pins without updating CI deliberately.
+- Never dual-subscribe settings reactions. Never reintroduce `setActiveSessionTimer` or mirror session into settings.
+- Never add docs under `lib/` / `dist/` / `artifacts/`. Never ship before fuse/signing. Never drop sticky pins without a CI change.
 
 ## Commands
 
@@ -149,9 +126,7 @@ bun run test                   # Vitest workspace
 bun run test:coverage          # v8 coverage
 bun run build                  # parallel main + preload + renderer (scripts/build-production.ts)
 bun run benchmark:performance  # requires build; optional --scenario idle|active-session
-bun run package                # arm64 DMG/ZIP + flip-fuses; also :x64, :universal, :dir
-bun run package:win            # Windows x64 NSIS + portable + flip-fuses; also :win:dir
-bun run package:win:arm64      # Windows arm64 NSIS + portable + flip-fuses; also :win:dir:arm64
+bun run package                # mac arm64 DMG/ZIP + fuses; also :x64, :universal, :dir, :win, :win:arm64
 bun run typecheck              # native tsc -b (TypeScript 7 via @typescript/native)
 bun run typecheck:tests        # native tsc tests project
 bun run typecheck:sticky       # assert sticky strict compiler flags
@@ -163,28 +138,12 @@ bun run clean                  # remove lib/dist outputs
 
 ## Notes
 
-- **Version:** `1.11.2` in root `package.json` (release tags `v1.11.2`; beta `v1.11.2-beta.N`).
-- Effective sleep prevention is user `preventSleep` intent **OR** active session. Low-battery auto-stop disables both.
-- Tray icon reflects effective active state; tray menu checkbox reflects user intent only.
-- Tray menu: Prevent Sleep, **Cancel session** (only while a session is active), Settings…, About Amphetamine, Check for Updates…, Quit.
-- Popover is the primary control surface: prevent-sleep toggle, duration chips (start only; do not write preference), cancel session, Settings/Quit.
-- Settings UI is System Settings–style grouped lists (General / Session / Power). Duration select still starts a session **and** updates `defaultSessionDuration`. Hero icon uses the **static** shared coffee-brown aurora (`icon-aurora--static`).
-- Settings, About, and the updater utility dialog share a fixed dark canvas via `styles/utility-tokens.css` (`--utility-window-bg: #0D1117` on `#app`). Do not re-hardcode that hex in entry stylesheets.
-- Sleep block mode defaults to `prevent-display-sleep`; `prevent-app-suspension` allows display sleep.
-- Login items: macOS uses `openAsHidden: true`; Windows uses `openAtLogin` without that flag.
-- Settings and About share refcounted macOS Dock presentation via `acquireUtilityForeground` / `releaseUtilityForeground` (`platform/utility-presentation`). Windows shows a taskbar button while open (`skipTaskbar: false` + `titleBarOverlay` caption buttons). Tray-only mode returns when the last utility ref is released.
-- Settings/About/utility-dialog **warm cache**: first open creates+loads the BrowserWindow; user close **hides** (renderer stays warm); quit/composition `close*Window` force-**destroy**s. `*WantsVisible` blocks late `ready-to-show` after dismiss. Settings reopen clears control focus (no autofocus on Launch at Login).
-- Icon aurora (About + utility-dialog): GogMeet-style fancy multi-layer wash (core + 3 blobs, dual rings, sheen, flare; coffee palette from `generate-app-icon.mjs`). Bloom on `.icon-aurora` only (not the stage that owns the app icon). Ambient leaf motion delayed after bloom. Settings stays static.
-- Fancy aurora pause: `bindIconAuroraStagePause()` (`icon-aurora-pause.ts`) toggles `.is-paused` from `document.hidden` / visibility, re-sync on focus/blur/pageshow + short timeouts (Electron `show:false` race). Pause freezes leaf loops only (not bloom). Wire **before** any await in About bootstrap.
-- Updater dialogs use WindowGraph `presentUtilityDialog` (built `utility-dialog.html` + fancy aurora + opaque `#0D1117` chrome). Own utility-foreground ref; **hide-on-close warm cache** (re-apply payload via `utility-dialog:apply`); single-flight. Info-only alerts hide the OK row — dismiss via system Close / Esc / Enter. Multi-button alerts follow HIG left-secondary / right-primary; check-failed Esc dismisses OK, not Open Releases. Content height shrink-wraps via private `set-height` IPC **before** the open fade (avoids first-open aurora edge fringe). `#app` clips corona (`overflow: hidden`); no focus outline on the dialog surface.
-- Low-battery auto-stop clears intent + cancels session and shows an OS notification via `UserNotifierPort` (`createOsUserNotifier`).
-- Popover hide on blur uses typed `window:hide`, not DOM `CustomEvent`.
-- About is a built renderer (`about.html`) with shared preload; not inline `data:` HTML. Copyright uses `AboutInfo.author` from package metadata. Open animation is **opacity-only** (scale lives on aurora bloom). App icon is a GitHub control over the fancy aurora stage.
-- Utility dialog is a fourth built renderer (`utility-dialog.html`) with dedicated preload (`lib/preload/utility-dialog.cjs`); private channels in `shared/utility-dialog.ts` (not in public `IPC_CHANNELS` budget of 16).
-- `hardenWebContents` denies all `window.open`; About overrides with a package-repository allowlist on `github.com` that opens via `shell.openExternal`.
-- Auto-updater is hybrid: feed from package.json `repository` via `setFeedURL`; concurrent checks single-flight. **Check for Updates** tries in-app download/install when possible; falls back to the GitHub release page. Background checks do not auto-download. Presentation via injected `showUserDialog` (no native `dialog.showMessageBox`).
-- GitHub Releases must publish **`latest-mac.yml`** (mac) and **`latest.yml`** (win) or macOS Check for Updates fails with a false network-error dialog. Repo: `iWorkforces/Amphetamine`.
-- Electron pin is `^43.3.0` in package.json; do not downgrade below the patched 43.x line referenced by security comments.
-- Runtime deps are only `electron-log` and `electron-updater`; externalized in Rslib. Renderer must not import `electron-log`.
-- Production Rslib/Rsbuild builds drop console output. `bun run build` runs targets in parallel (outputs include `utility-dialog.html` + `utility-dialog.cjs`).
-- Develop pushes/merges: CI lint/test; **Beta** workflow packages `*-beta-{N}.*` and publishes prerelease tag `vX.Y.Z-beta.N`.
+- **Version:** `1.12.1` (tags `v1.12.1`; beta `v1.12.1-beta.N`). Electron pin `^44.2.0`. Runtime deps: `electron-log` + `electron-updater` only.
+- Effective sleep = `preventSleep` **OR** session. Tray **icon** = effective; checkbox = intent. Low-battery auto-stop clears both + OS `UserNotifierPort`.
+- Popover chips start a session only (do not write preference). Settings duration select starts **and** writes `defaultSessionDuration`.
+- Utility surfaces share `--utility-window-bg` (`#0D1117` only in `utility-tokens.css`). Fancy aurora bloom on `.icon-aurora` only; `bindIconAuroraStagePause` before any About await. Settings stays `icon-aurora--static`.
+- Settings/About/utility-dialog: **hide-on-close** warm cache; `*WantsVisible`; refcounted Dock via `utility-presentation`. Windows: taskbar + `titleBarOverlay`. About dismisses via system Close / Escape (no in-content OK).
+- Updater: injected `showUserDialog` → `presentUtilityDialog` (not `dialog.showMessageBox`). Info-only hides the OK row. Releases must publish `latest-mac.yml` + `latest.yml`. Repo: `iWorkforces/Amphetamine`.
+- Utility-dialog private channels stay out of the public 16-name `IPC_CHANNELS` budget. `hardenWebContents` denies `window.open`; About allowlists the package GitHub repo via `shell.openExternal`.
+- Login items: darwin `openAsHidden: true`; win32 `openAtLogin` only. Sleep default `prevent-display-sleep`.
+- Develop CI: lint/test. **Beta** on `develop` publishes `vX.Y.Z-beta.N` (`prerelease: true`). Production CD is `workflow_run` on `main` only.

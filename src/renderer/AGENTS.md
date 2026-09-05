@@ -48,11 +48,11 @@ Electron renderer web context. Vanilla TypeScript only. Four built entries (Rsbu
 ## About flow
 
 - Built entry `about.html` (Rsbuild env `about`); loaded by WindowGraph with shared preload.
-- Classic macOS About panel: icon, name, version, description, copyright (`AboutInfo.author`), **OK** button (default focus on first open).
-- Shared fixed dark surface (`--utility-window-bg` from `styles/utility-tokens.css`) + **opacity-only** open (scale lives on aurora bloom only); press feedback on icon/button under `prefers-reduced-motion: no-preference`.
+- Classic macOS About panel: icon, name, version, description, copyright (`AboutInfo.author`). Dismiss via system Close / Escape (no in-content OK).
+- Shared fixed dark surface (`--utility-window-bg` from `styles/utility-tokens.css`) + **opacity-only** open (scale lives on aurora bloom only); press feedback on icon under `prefers-reduced-motion: no-preference`.
 - Bootstrap: `bindIconAuroraStagePause(root)` **before** any `await`, then `startOpenAnimation`, then `window.api.app.getAbout()`.
 - Icon click / Enter / Space uses `window.open(repository)` — main allowlists the package repository URL (and paths under it on `github.com`) via `setWindowOpenHandler` + `shell.openExternal`.
-- OK / Escape uses `window.close()` → main **hide-on-close** warm cache (same as Settings); quit force-destroys.
+- Escape uses `window.close()` → main **hide-on-close** warm cache (same as Settings); quit force-destroys. System Close chrome does the same.
 - Safe visibility: shell materializes even if `getAbout` fails (fallback copy).
 - Hero icon: bundled `settings-hero-icon.png` via `import.meta.url` (not a main-process data URI); size via stage `--icon-size` (80px).
 - Icon sits in `.icon-aurora-stage` with fancy coffee-brown aurora; decorative core/blobs/rings/sheen/flare are `aria-hidden` (GogMeet app-icon-aurora model).

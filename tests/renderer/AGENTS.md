@@ -8,7 +8,7 @@ Renderer Vitest suites run in jsdom and assert DOM behavior for vanilla TypeScri
 |------|------|
 | `index.test.ts` | Popover render, status/timer, controls, pushes, effective-active OR matrix, session-action identity, hide dedupe, benchmark API mock |
 | `settings.test.ts` | Settings form, sections, debounced save, rejectedKeys, sleep mode, shortcut-failure subscription |
-| `about.test.ts` | About metadata fill, copyright/author, OK/Escape close, icon open, fancy aurora leaf fixture + warm-cache `.is-paused` toggle, getAbout failure visibility |
+| `about.test.ts` | About metadata fill, copyright/author, Escape close (no in-content OK), icon open, fancy aurora leaf fixture + warm-cache `.is-paused` toggle, getAbout failure visibility |
 | `utility-dialog.test.ts` | Payload apply, fancy aurora leaf fixture, warm-cache `.is-paused` toggle |
 | `delegation.test.ts` | Event delegation on `#app` |
 
