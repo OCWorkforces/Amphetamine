@@ -6,7 +6,7 @@ Tray-only Electron app for **macOS and Windows**. Prevents system sleep through 
 
 | Layer | Tech |
 |------|------|
-| Runtime | Bun 1.4.0+ / Node `>=26 <27` |
+| Runtime | Bun 1.4.1+ / Node `>=26 <27` |
 | TypeScript | Dual: native **7.x** (`@typescript/native` owns workspace `tsc`) for typecheck; **6.x** (`typescript@6`) for the JS API / ESLint until 7.1 programmatic API lands |
 | Electron | `^43.3.0` (package pin; do not downgrade below patched 43.x) |
 | Build | Rslib main/preload to CJS + Rsbuild renderer (popover + settings + about + utility-dialog) |
